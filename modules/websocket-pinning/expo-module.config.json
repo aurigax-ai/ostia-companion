@@ -1,0 +1,16 @@
+{
+  "platforms": [
+    "ios",
+    "android"
+  ],
+  "ios": {
+    "modules": [
+      "WebSocketPinningModule"
+    ]
+  },
+  "android": {
+    "modules": [
+      "expo.modules.websocketpinning.WebSocketPinningModule"
+    ]
+  }
+}
