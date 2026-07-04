@@ -10,6 +10,10 @@
 - **The desktop is the source of truth.** The phone is a remote view/controller; it holds no durable workspace state beyond its device credential + UI prefs.
 - **Least privilege.** A paired phone gets a **capability subset**; terminal input and destructive actions are **off by default** and require explicit elevation/confirmation.
 
+## 0.1 The gateway is an ADAPTER (not a passthrough)
+
+This phone-facing protocol is intentionally **different** from Pine's internal *local* control socket (a Unix socket with `{token}→{externalId}` auth and different method shapes). The desktop **gateway translates** between this contract and the internal control plane, and **adds the PTY stream** (which internally exists as renderer IPC + a `PtySession` observer-role + cursor-replay ring buffer, not yet as a socket method). The **capability names here are phone-facing** and map to internal desktop capabilities. So: **this document is the stable target the desktop gateway (Phase C) implements to** — do not expect the internal socket to already match it verbatim.
+
 ## 1. Architecture
 
 ```
