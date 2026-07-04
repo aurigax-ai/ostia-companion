@@ -142,8 +142,8 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
             className="min-h-11 flex-row items-center px-1.5"
           >
             <ChevronLeft size={22} color="#a78bfa" />
-            <View className="bg-pine-accentDark/30 border border-pine-accent/40 w-5 h-5 rounded-full justify-center items-center ml-1">
-              <Text className="text-pine-accent text-[10px] font-extrabold">3</Text>
+            <View style={{ backgroundColor: 'rgba(167, 139, 250, 0.12)', borderColor: 'rgba(167, 139, 250, 0.3)' }} className="border w-5 h-5 rounded-full justify-center items-center ml-1">
+              <Text style={{ color: '#a78bfa' }} className="text-[10px] font-extrabold">3</Text>
             </View>
           </Pressable>
 
@@ -167,7 +167,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
               className="p-2"
             >
               <View className={`border rounded-lg p-1.5 justify-center items-center ${
-                role === 'owner' ? 'bg-[#073b2d]/60 border-emerald-500/50' : 'bg-[#161821] border-[#1f212a]'
+                role === 'owner' ? 'bg-[#022c22] border-emerald-500' : 'bg-[#161821] border-[#1f212a]'
               }`}>
                 {role === 'owner' ? (
                   <Unlock size={13} color="#10b981" />
@@ -234,13 +234,13 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
               </TouchableOpacity>
               <View className="w-1.5 h-1.5 rounded-full bg-emerald-500 mx-2" />
               
-              <TouchableOpacity onPress={() => handleTerminalInput('\x03')} className="bg-pine-bg border border-pine-border/60 px-3 py-0.5 rounded-full">
+              <TouchableOpacity onPress={() => handleTerminalInput('\x03')} className="bg-pine-bg border border-pine-border px-3 py-0.5 rounded-full">
                 <Text className="text-pine-text text-[10px] font-mono font-bold">Ctrl+C</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('\t')} className="bg-pine-bg border border-pine-border/60 px-3 py-0.5 rounded-full">
+              <TouchableOpacity onPress={() => handleTerminalInput('\t')} className="bg-pine-bg border border-pine-border px-3 py-0.5 rounded-full">
                 <Text className="text-pine-text text-[10px] font-mono font-bold">Tab</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('\x1b')} className="bg-pine-bg border border-pine-border/60 px-3 py-0.5 rounded-full">
+              <TouchableOpacity onPress={() => handleTerminalInput('\x1b')} className="bg-pine-bg border border-pine-border px-3 py-0.5 rounded-full">
                 <Text className="text-pine-text text-[10px] font-mono font-bold">Esc</Text>
               </TouchableOpacity>
               
@@ -325,8 +325,8 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
                 <View className="w-12 h-1.5 rounded-full bg-pine-border self-center mb-5" />
 
                 <View className="flex-row items-start">
-                  <View className="h-12 w-12 rounded-xl bg-amber-950/30 border border-amber-800/50 items-center justify-center mr-3">
-                    <Shield size={24} color={colors.warning} />
+                  <View style={{ backgroundColor: 'rgba(251, 191, 36, 0.08)', borderColor: 'rgba(251, 191, 36, 0.25)' }} className="h-12 w-12 rounded-xl border items-center justify-center mr-3">
+                    <Shield size={24} color="#fbbf24" />
                   </View>
                   <View className="flex-1">
                     <Text className="text-pine-text text-lg font-bold">Input permission needed</Text>

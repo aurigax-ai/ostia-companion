@@ -285,10 +285,14 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
         <MotiView
           from={{ opacity: 0, translateY: -8 }}
           animate={{ opacity: 1, translateY: 0 }}
-          className="mx-4 mt-4 p-3 rounded-lg bg-amber-950/25 border border-amber-800/50 flex-row items-center"
+          style={{
+            backgroundColor: 'rgba(251, 191, 36, 0.08)',
+            borderColor: 'rgba(251, 191, 36, 0.25)',
+          }}
+          className="mx-4 mt-4 p-3 rounded-lg border flex-row items-center animate-pulse"
         >
-          <Wifi size={16} color={colors.warning} />
-          <Text className="text-amber-200 text-xs font-medium ml-2 flex-1 leading-4">
+          <AlertTriangle size={16} color="#fbbf24" />
+          <Text style={{ color: '#fde68a' }} className="text-xs font-semibold ml-2 flex-1 leading-4">
             Connecting to the desktop gateway. Keep Pine open on the same LAN or tailnet.
           </Text>
         </MotiView>

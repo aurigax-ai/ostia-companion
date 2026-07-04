@@ -150,27 +150,27 @@ export function Pill({
   tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
   className?: string;
 }) {
-  const containerToneClass = {
-    neutral: 'bg-pine-card border-pine-border',
-    accent: 'bg-pine-accentDark/30 border-pine-accent/40',
-    success: 'bg-emerald-950/40 border-emerald-700/50',
-    warning: 'bg-amber-950/40 border-amber-700/50',
-    danger: 'bg-red-950/40 border-red-800/60',
-    info: 'bg-cyan-950/35 border-cyan-800/50',
+  const containerStyle = {
+    neutral: { backgroundColor: '#111218', borderColor: '#252836' },
+    accent: { backgroundColor: 'rgba(167, 139, 250, 0.12)', borderColor: 'rgba(167, 139, 250, 0.3)' },
+    success: { backgroundColor: 'rgba(52, 211, 153, 0.12)', borderColor: 'rgba(52, 211, 153, 0.3)' },
+    warning: { backgroundColor: 'rgba(251, 191, 36, 0.12)', borderColor: 'rgba(251, 191, 36, 0.3)' },
+    danger: { backgroundColor: 'rgba(251, 113, 133, 0.12)', borderColor: 'rgba(251, 113, 133, 0.3)' },
+    info: { backgroundColor: 'rgba(103, 232, 249, 0.12)', borderColor: 'rgba(103, 232, 249, 0.3)' },
   };
 
-  const textToneClass = {
-    neutral: 'text-pine-muted',
-    accent: 'text-pine-accent',
-    success: 'text-emerald-300',
-    warning: 'text-amber-300',
-    danger: 'text-red-300',
-    info: 'text-cyan-200',
+  const textStyle = {
+    neutral: { color: '#9ba1b0' },
+    accent: { color: '#a78bfa' },
+    success: { color: '#34d399' },
+    warning: { color: '#fbbf24' },
+    danger: { color: '#fb7185' },
+    info: { color: '#67e8f9' },
   };
 
   return (
-    <View className={cn('rounded-full border px-2.5 py-1', containerToneClass[tone], className)}>
-      <Text className={cn('text-[11px] font-bold capitalize', textToneClass[tone])}>
+    <View style={containerStyle[tone]} className={cn('rounded-full border px-2.5 py-1', className)}>
+      <Text style={textStyle[tone]} className="text-[11px] font-bold capitalize">
         {label}
       </Text>
     </View>
