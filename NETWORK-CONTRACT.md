@@ -1,4 +1,6 @@
-# Pine Companion — Network Contract (v1, contract-first)
+# Pine Companion — Network Contract (v1.1, contract-first)
+
+> **v1.1 (2026-09-28)** is wire-compatible with v1: the pairing payload is still `"v": 1`. It adds desktop-side capability grants, live cap changes (`caps.changed` event, close code `4004`), `device.caps`, the effective `role` in `pty.attach`, stricter `0x02`/`0x03` gating, and the event→cap mapping. See §11 for the full changelog.
 
 > The desktop↔phone interface. Both the Pine desktop **control gateway** and this **mobile companion** implement to this document. Grounded in Pine's existing local control plane (a per-pane-token-authenticated `pine.sock`); the gateway re-exposes that same command layer over a network transport, plus a live PTY stream.
 
@@ -106,6 +108,26 @@ Mirrors the desktop's pane-scoped-trust broker, but a **phone gets a strict subs
 
 - Elevated caps are granted by an explicit desktop action (per device) or a phone-initiated request the desktop approves. A command the device lacks caps for returns `-32003 needs-elevation` with `data: { cap }` — the client should surface a "request access" affordance, never silently no-op.
 
+### 5.1 How grants work (desktop, v1.1)
+
+- **Only a human at the desktop grants.** Settings → Remote lists paired devices with a switch per grantable cap: `command`, `input`, `board.write`, `destructive`. There is no network, CLI, or agent-facing method that changes a device's caps, and there is **no phone-initiated elevation request** yet. "Request access" on the phone should tell the user to open Settings → Remote on the desktop.
+- **Base caps are fixed:** `read`, `board.read`, `notify` are always present and can't be removed (revoke the device instead).
+- **`destructive` requires `command`.** The desktop refuses `destructive` without `command`, drops `destructive` when `command` is removed, and asks the desktop user to confirm before granting it. The phone must still confirm destructive commands on-device (§8).
+- **`input` never implies `command`** (and vice versa). `input` only gates `pty.attach` owner role and `0x02`/`0x03` frames; `command.exec` always needs `command`.
+- Caps are always returned in the canonical order `read, board.read, notify, command, input, board.write, destructive` (subset).
+- **Live changes:**
+  - **Caps added** → every live socket of that device receives `event` `caps.changed` with `payload: { caps: [...] }`. New caps are effective on the next frame; no reconnect needed. An existing `observer` attachment does **not** become `owner` — re-send `pty.attach` with `role: "owner"`.
+  - **Any cap removed** → every live socket of that device is **closed with code `4004` (`caps-changed`)** and its pty attachment dropped. Reconnect normally (backoff, `hello`, re-attach with your last cursor); `hello` returns the reduced caps.
+  - The desktop re-reads the device's caps on **every** frame, so a stale client-side cap list can never grant more than the desktop currently allows.
+
+### 5.2 WebSocket close codes
+
+| code | reason | client action |
+|---|---|---|
+| `4001` | `unauthenticated` / `hello timeout` (no valid `hello` within 10 s) | re-pair if the token is rejected; otherwise send `hello` first |
+| `4003` | `revoked` — the device was removed on the desktop | wipe the token, go back to pairing |
+| `4004` | `caps-changed` — a cap was removed | reconnect; `hello` returns the new caps |
+
 ## 6. PTY streaming (the terminal mirror)
 
 Reuses the desktop's multi-subscriber pty model (a sequence-numbered ring buffer + cursor replay + observer/owner roles already exist in the control plane).
@@ -117,8 +139,10 @@ Reuses the desktop's multi-subscriber pty model (a sequence-numbered ring buffer
     "role": "observer",            // "observer" (read-only, default) | "owner" (needs `input` cap)
     "sinceCursor": 0               // resume point; 0 = full retained history
 } }
-→ result: { "cursor": 12345, "dropped": false, "cols": 80, "rows": 24 }
+→ result: { "cursor": 12345, "dropped": false, "cols": 80, "rows": 24, "role": "observer" }
 ```
+- `role` in the result is the **effective** role. Asking for `owner` without the `input` cap is not an error: you get `"role": "observer"`. Only show the keyboard/input UI when the result says `owner`.
+- One pane per socket: attaching another pane detaches the previous one (O3 resolved, see §10).
 - `dropped:true` ⇒ `sinceCursor` predated retained history; treat the following stream as a fresh full replay (clear the local xterm first).
 - `pty.detach { paneId }` to stop the stream.
 
@@ -127,15 +151,19 @@ Every **binary** WS frame is: **`[1-byte type][payload]`**.
 
 | type byte | direction | payload |
 |---|---|---|
-| `0x00` | server→client | **control JSON** (UTF-8): `{ "paneId", "kind": "resize"|"cursor"|"meta", ... }` — e.g. server tells the client the pty resized. |
-| `0x01` | server→client | **raw pty output bytes** for the most-recently-attached pane on this socket (if multiplexing multiple panes, prefix a paneId — see note). |
-| `0x02` | client→server | **raw input bytes** (keystrokes) — only honored if the client attached as `owner` with `input` cap; otherwise dropped + a `-32003` event. |
-| `0x03` | client→server | **resize**: control JSON `{ "paneId", "cols", "rows" }` → server calls `pty.resize` (→ SIGWINCH). |
+| `0x00` | server→client | **control JSON** (UTF-8): `{ "paneId", "kind": "resize"|"cursor"|"meta", ... }` — reserved; the v1.1 desktop does not send it yet. |
+| `0x01` | server→client | **raw pty output bytes** (UTF-8) for the pane attached on this socket. No paneId prefix. |
+| `0x02` | client→server | **raw input bytes** (UTF-8 keystrokes, e.g. `"ls\r"`, `"\x03"` for Ctrl-C) written to the pty verbatim. |
+| `0x03` | client→server | **resize**: UTF-8 JSON `{ "paneId"?, "cols", "rows" }` → server calls `pty.resize` (→ SIGWINCH). |
 
-> **Multiplexing note:** for v1, keep it simple — one attached pane's stream per WS is acceptable, OR prefix output/input frames with a 1-byte-length paneId. Decide with the desktop side; the contract's open question O3 tracks this. The client MUST strip the type byte (and paneId prefix if used) before writing to xterm, or metadata renders as visible garbage.
+**Gating for `0x02` and `0x03` (v1.1):** both require (a) a current `owner` attachment on this socket and (b) `input` in the device's **current** caps. Otherwise the frame is dropped and the server sends a JSON-RPC error with `id: null`: `{ "jsonrpc":"2.0", "id": null, "error": { "code": -32003, "message": "needs-elevation", "data": { "cap": "input" } } }`. Observers never resize: resizing SIGWINCHes the desktop's shell and reflows the desktop user's terminal, so it counts as a write. An observer renders at the `cols`/`rows` from `pty.attach`.
+
+**Resize validation:** `cols` and `rows` must be integers in `1..1000`; invalid frames are silently ignored. `paneId` is optional; if present it must be the attached pane's `externalId`, otherwise the frame is ignored.
+
+> **Multiplexing (decided, v1.1):** one attached pane per WebSocket, no paneId prefix on binary frames. To watch two panes, open two sockets. The client MUST strip the type byte before writing to xterm.
 
 ### 6.3 Resize, reconnect, heartbeat
-- **Resize:** on the phone, `FitAddon.fit()` → send a `0x03` resize frame (**debounce** ~150 ms; the on-screen keyboard + `ResizeObserver` fire bursts).
+- **Resize:** only when attached as `owner`: on the phone, `FitAddon.fit()` → send a `0x03` resize frame (**debounce** ~150 ms; the on-screen keyboard + `ResizeObserver` fire bursts). Note that this resizes the desktop's pane too. As an observer, keep the attach-time `cols`/`rows`.
 - **Heartbeat:** server sends WS ping every ~15 s; client replies pong. If no traffic for ~30 s, treat as dead and reconnect.
 - **Reconnect:** on drop, reconnect with **exponential backoff** (e.g. 0.5→8 s), re-`hello`, then `pty.attach` with the **last `cursor`** you received as `sinceCursor` to resume without gaps. Keep a local scrollback so a `dropped:true` full-replay is seamless.
 
@@ -152,10 +180,11 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `cwd.get` | `read` | `{ paneId }` → `{ cwd: string \| null }` |
 | `command.list` | `read` | `{}` → `{ commands: [ CommandDescriptor ] }` (id, title, argsSchema, capabilities, target) |
 | `command.exec` | `command` (+ the command's own caps) | `{ id, args?, target? }` → `CommandResult` = `{ ok:true, result } \| { ok:false, error:{ code, message } }` |
-| `pty.attach` / `pty.detach` | `read` / `input` for owner | §6.1 |
+| `pty.attach` / `pty.detach` | `read` (owner role needs `input`, else downgraded) | §6.1 |
 | `board.get` | `board.read` | `{ scope? }` → `{ columns: [...], cards: [ Card ] }` (Kanban — desktop Phase B; may be stubbed until then) |
 | `board.update` | `board.write` | `{ cardId, patch }` → `{ ok }` |
-| `device.caps` | — | `{}` → `{ caps: [...] }` (refresh after an elevation grant) |
+| `device.caps` | — | `{}` → `{ caps: [...] }` (the device's current caps; implemented v1.1) |
+| `whoami` | — | `{}` → `{ deviceId, caps }` |
 
 ### Server→client events (JSON-RPC notifications, no `id`)
 ```json
@@ -164,8 +193,21 @@ All require a prior successful `hello`. Capability-gated as noted.
     "payload": { ... } } }
 ```
 - `agent.needs-input` / `agent.done` drive push notifications (a session in state `waiting`/`done`).
-- `caps.changed` ⇒ re-fetch `device.caps` and re-render gated UI.
+- `caps.changed` ⇒ re-render gated UI (the payload already has the caps; `device.caps` also works).
 - `pane.state` carries the same shape as `pane.info` so the client can live-update without polling.
+
+**Event payloads and required caps (as implemented, v1.1).** A device only receives events its caps allow:
+
+| type | cap | payload | fires when |
+|---|---|---|---|
+| `agent.needs-input` | `notify` | `{ sessionId }` | a session enters `waiting` (an agent needs the user) |
+| `agent.done` | `notify` | `{ sessionId }` | a session enters `done` |
+| `notify` | `notify` | `{ title, body?, from }` — `from` is the sending pane's `externalId`, or `null` | an agent runs `pine notify` |
+| `session.state` | `read` | `{ sessionId, state: "idle"\|"working"\|"waiting"\|"done" }` | any session state change (also sent alongside `agent.*`) |
+| `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
+| `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
+
+`sessionId` matches `session.list`'s ids; `paneId`/`from` match `pane.list`'s `externalId`s. `board.changed` is reserved and not emitted yet. Events are not replayed: after a reconnect, re-fetch `session.list`/`pane.list` for current state.
 
 ### `CommandDescriptor` (for `command.list`, verbatim from the desktop contract)
 ```ts
@@ -204,10 +246,25 @@ interface CommandDescriptor {
 
 - **O1 — Pairing endpoint auth over self-signed TLS:** confirm TOFU fingerprint-pinning is acceptable for v1 vs. a bundled CA. (Leaning: TOFU pin from the QR.)
 - **O2 — PWA secure storage** for `deviceToken` on iOS Safari (no Keychain) — acceptable for LAN MVP? Or push toward Expo for secure storage sooner.
-- **O3 — PTY multiplexing:** one pane per WS (simple) vs. paneId-prefixed frames (multi-pane on one socket). Contract allows either; pick with the desktop side.
+- **O3 — PTY multiplexing:** ~~open~~ **resolved v1.1:** one pane per WS, no prefix (§6.2).
 - **O4 — Board (Kanban) schema:** finalize `Card`/`columns` shape when desktop Phase B lands; treat `board.*` as provisional until then.
 - **O5 — mDNS discovery:** optional convenience (auto-find the desktop on LAN) vs. QR-only. QR is the baseline; mDNS is additive.
 
 ---
 
-*This is v1. The desktop gateway (Pine Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
+*This is v1.1. The desktop gateway (Pine Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
+
+## 11. Changelog
+
+### v1.1 — 2026-09-28 (desktop Phase 7 "Remote")
+
+Wire-compatible with v1; pairing payload stays `"v": 1`.
+
+- **Grants (§5.1):** the desktop user can grant `command`, `input`, `board.write`, `destructive` per device in Settings → Remote. Only the desktop UI can do it. `destructive` requires `command`. No phone-initiated elevation request yet.
+- **Live caps:** added caps arrive as `event` `caps.changed { caps }`; a removed cap closes the socket with **`4004 caps-changed`** (§5.2). The desktop re-checks caps on every frame.
+- **`device.caps`** is implemented.
+- **`pty.attach`** result now includes the effective `role`; `owner` without `input` is downgraded to `observer`, not rejected.
+- **`0x02` input and `0x03` resize** need an owner attachment + `input`; a denial is an `id: null` `-32003 {cap:"input"}` error. Resize is validated (`1..1000`, optional `paneId` must match). Observers can no longer resize.
+- **Events:** `agent.needs-input`/`agent.done` now need `notify` (were `read`); `notify.from` is a pane `externalId` or `null`. Full table in §7.
+- **O3 resolved:** one pane per socket.
+- **Remote beyond LAN:** the desktop picks a bind address from loopback, LAN interfaces, or a detected Tailscale address (`tailscale ip -4`, else a `100.64.0.0/10` interface). Still no relay; the pairing QR carries whichever host was chosen.
