@@ -1,4 +1,6 @@
-# Pine Companion — Network Contract (v1.1, contract-first)
+# Pine Companion — Network Contract (v1.2, contract-first)
+
+> **v1.2 (2026-09-28)** removes the board: `board.get`, `board.update`, the `board.read`/`board.write` caps and the reserved `board.changed` event are gone (the desktop dropped its kanban; boards now live in Trellis). See §11.
 
 > **v1.1 (2026-09-28)** is wire-compatible with v1: the pairing payload is still `"v": 1`. It adds desktop-side capability grants, live cap changes (`caps.changed` event, close code `4004`), `device.caps`, the effective `role` in `pty.attach`, stricter `0x02`/`0x03` gating, and the event→cap mapping. See §11 for the full changelog.
 
@@ -72,7 +74,7 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 4. **Desktop:** verifies `pairCode` (unexpired, unused) → registers the device (stores `pubkey`, `name`, a new `deviceId`) → returns a **device token**:
    ```json
    { "deviceId": "dev_01J...", "deviceToken": "OPAQUE-BEARER",
-     "caps": ["read", "board.read", "notify"], "expiresAt": null }
+     "caps": ["read", "notify"], "expiresAt": null }
    ```
    - `deviceToken` is an opaque, revocable bearer credential the phone stores in secure storage. `caps` = the phone's initial capability subset (§5).
    - The desktop shows the new device in a **"Paired devices"** list with a **revoke** button (revocation is immediate; the token stops working).
@@ -88,7 +90,7 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
   { "jsonrpc": "2.0", "id": 1, "method": "hello",
     "params": { "deviceToken": "OPAQUE-BEARER", "client": "pine-companion/1.0" } }
   ```
-  - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","board.read","notify"], "desktop": { "name": "...", "version": "..." } } }`.
+  - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","notify"], "desktop": { "name": "...", "version": "..." } } }`.
   - Any method before a successful `hello` → error `-32001 unauthenticated`, connection closed.
 - The connection's capability set is derived from the device's grants (server-side). The client must treat `caps` as authoritative and hide/disable UI it lacks caps for.
 
@@ -99,22 +101,20 @@ Mirrors the desktop's pane-scoped-trust broker, but a **phone gets a strict subs
 | cap | grants |
 |---|---|
 | `read` | list sessions/panes, `pane.info`, `cwd.get`, **read-only** pty stream (observer) |
-| `board.read` | read the Kanban/status board |
 | `notify` | receive push/notification events |
 | `command` | run **non-destructive** commands (`command.exec` for commands whose descriptor caps ⊆ granted) |
 | `input` | send keystrokes to a pty (owner mode) — **elevated**, off by default |
-| `board.write` | create/move/edit board cards — elevated |
 | `destructive` | commands flagged destructive — elevated, **always** requires an on-device confirm |
 
 - Elevated caps are granted by an explicit desktop action (per device) or a phone-initiated request the desktop approves. A command the device lacks caps for returns `-32003 needs-elevation` with `data: { cap }` — the client should surface a "request access" affordance, never silently no-op.
 
-### 5.1 How grants work (desktop, v1.1)
+### 5.1 How grants work (desktop, v1.2)
 
-- **Only a human at the desktop grants.** Settings → Remote lists paired devices with a switch per grantable cap: `command`, `input`, `board.write`, `destructive`. There is no network, CLI, or agent-facing method that changes a device's caps, and there is **no phone-initiated elevation request** yet. "Request access" on the phone should tell the user to open Settings → Remote on the desktop.
-- **Base caps are fixed:** `read`, `board.read`, `notify` are always present and can't be removed (revoke the device instead).
+- **Only a human at the desktop grants.** Settings → Remote lists paired devices with a switch per grantable cap: `command`, `input`, `destructive`. There is no network, CLI, or agent-facing method that changes a device's caps, and there is **no phone-initiated elevation request** yet. "Request access" on the phone should tell the user to open Settings → Remote on the desktop.
+- **Base caps are fixed:** `read`, `notify` are always present and can't be removed (revoke the device instead).
 - **`destructive` requires `command`.** The desktop refuses `destructive` without `command`, drops `destructive` when `command` is removed, and asks the desktop user to confirm before granting it. The phone must still confirm destructive commands on-device (§8).
 - **`input` never implies `command`** (and vice versa). `input` only gates `pty.attach` owner role and `0x02`/`0x03` frames; `command.exec` always needs `command`.
-- Caps are always returned in the canonical order `read, board.read, notify, command, input, board.write, destructive` (subset).
+- Caps are always returned in the canonical order `read, notify, command, input, destructive` (subset). A device paired before v1.2 has `board.read`/`board.write` silently dropped from its caps.
 - **Live changes:**
   - **Caps added** → every live socket of that device receives `event` `caps.changed` with `payload: { caps: [...] }`. New caps are effective on the next frame; no reconnect needed. An existing `observer` attachment does **not** become `owner` — re-send `pty.attach` with `role: "owner"`.
   - **Any cap removed** → every live socket of that device is **closed with code `4004` (`caps-changed`)** and its pty attachment dropped. Reconnect normally (backoff, `hello`, re-attach with your last cursor); `hello` returns the reduced caps.
@@ -181,22 +181,20 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `command.list` | `read` | `{}` → `{ commands: [ CommandDescriptor ] }` (id, title, argsSchema, capabilities, target) |
 | `command.exec` | `command` (+ the command's own caps) | `{ id, args?, target? }` → `CommandResult` = `{ ok:true, result } \| { ok:false, error:{ code, message } }` |
 | `pty.attach` / `pty.detach` | `read` (owner role needs `input`, else downgraded) | §6.1 |
-| `board.get` | `board.read` | `{ scope? }` → `{ columns: [...], cards: [ Card ] }` (Kanban — desktop Phase B; may be stubbed until then) |
-| `board.update` | `board.write` | `{ cardId, patch }` → `{ ok }` |
 | `device.caps` | — | `{}` → `{ caps: [...] }` (the device's current caps; implemented v1.1) |
 | `whoami` | — | `{}` → `{ deviceId, caps }` |
 
 ### Server→client events (JSON-RPC notifications, no `id`)
 ```json
 { "jsonrpc":"2.0", "method":"event", "params": {
-    "type": "pane.state" | "session.state" | "agent.needs-input" | "agent.done" | "board.changed" | "caps.changed" | "notify",
+    "type": "pane.state" | "session.state" | "agent.needs-input" | "agent.done" | "caps.changed" | "notify",
     "payload": { ... } } }
 ```
 - `agent.needs-input` / `agent.done` drive push notifications (a session in state `waiting`/`done`).
 - `caps.changed` ⇒ re-render gated UI (the payload already has the caps; `device.caps` also works).
 - `pane.state` carries the same shape as `pane.info` so the client can live-update without polling.
 
-**Event payloads and required caps (as implemented, v1.1).** A device only receives events its caps allow:
+**Event payloads and required caps (as implemented, v1.2).** A device only receives events its caps allow:
 
 | type | cap | payload | fires when |
 |---|---|---|---|
@@ -207,7 +205,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
 | `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
 
-`sessionId` matches `session.list`'s ids; `paneId`/`from` match `pane.list`'s `externalId`s. `board.changed` is reserved and not emitted yet. Events are not replayed: after a reconnect, re-fetch `session.list`/`pane.list` for current state.
+`sessionId` matches `session.list`'s ids; `paneId`/`from` match `pane.list`'s `externalId`s. Events are not replayed: after a reconnect, re-fetch `session.list`/`pane.list` for current state.
 
 ### `CommandDescriptor` (for `command.list`, verbatim from the desktop contract)
 ```ts
@@ -239,22 +237,30 @@ interface CommandDescriptor {
 3. Read-only terminal mirror: `pty.attach` (observer) + xterm.js render of `0x01` frames + resize (`0x03`) + reconnect/heartbeat + cursor-resume.
 4. Command palette from `command.list`; `command.exec` for non-destructive (respect caps).
 5. Notifications (`agent.needs-input`/`agent.done`).
-6. Elevation flow (`input`, `board.write`, `destructive`) + on-device confirm.
-7. Kanban view (`board.get`/`board.changed`) — may lag until desktop Phase B ships.
+6. Elevation flow (`input`, `destructive`) + on-device confirm.
 
 ## 10. Open questions (flag if these block you)
 
 - **O1 — Pairing endpoint auth over self-signed TLS:** confirm TOFU fingerprint-pinning is acceptable for v1 vs. a bundled CA. (Leaning: TOFU pin from the QR.)
 - **O2 — PWA secure storage** for `deviceToken` on iOS Safari (no Keychain) — acceptable for LAN MVP? Or push toward Expo for secure storage sooner.
 - **O3 — PTY multiplexing:** ~~open~~ **resolved v1.1:** one pane per WS, no prefix (§6.2).
-- **O4 — Board (Kanban) schema:** finalize `Card`/`columns` shape when desktop Phase B lands; treat `board.*` as provisional until then.
+- **O4 — Board (Kanban) schema:** ~~open~~ **withdrawn v1.2:** there is no board API.
 - **O5 — mDNS discovery:** optional convenience (auto-find the desktop on LAN) vs. QR-only. QR is the baseline; mDNS is additive.
 
 ---
 
-*This is v1.1. The desktop gateway (Pine Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
+*This is v1.2. The desktop gateway (Pine Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.2 — 2026-09-28 (board removed)
+
+The desktop removed its built-in kanban (and wiki); boards and cards live in Trellis now, outside Pine.
+
+- **Removed methods:** `board.get` and `board.update` now return `-32601 method not found`.
+- **Removed caps:** `board.read` (was a base cap) and `board.write` (was grantable). Base caps are `read`, `notify`; grantable caps are `command`, `input`, `destructive`. Existing device records keep working: the desktop drops unknown caps when it loads them, so `hello`/`device.caps` just return the smaller set.
+- **Removed event:** `board.changed` (was reserved, never emitted).
+- **Client:** hide any board/Kanban view and the `board.write` grant; nothing else changes. Pairing payload stays `"v": 1`.
 
 ### v1.1 — 2026-09-28 (desktop Phase 7 "Remote")
 
