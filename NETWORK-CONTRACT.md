@@ -203,7 +203,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `agent.needs-input` | `notify` | `{ sessionId }` | a session enters `waiting` (an agent needs the user) |
 | `agent.done` | `notify` | `{ sessionId }` | a session enters `done` |
 | `notify` | `notify` | `{ title, body?, from }` — `from` is the sending pane's `externalId`, or `null` | an agent runs `pine notify` |
-| `session.state` | `read` | `{ sessionId, state: "idle"\|"working"\|"waiting"\|"done" }` | any session state change (also sent alongside `agent.*`) |
+| `session.state` | `read` | `{ sessionId, state: "idle"\|"working"\|"waiting"\|"done"\|"error" }` | any session state change (also sent alongside `agent.*`) |
 | `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
 | `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
 
