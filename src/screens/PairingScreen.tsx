@@ -113,7 +113,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
           </View>
 
           <Text className="text-ostia-muted text-xs font-bold uppercase text-center">
-            Ostia Companion
+            Ostia
           </Text>
           <Text className="text-ostia-text text-2xl font-bold text-center mt-2">
             Connect to Ostia desktop
@@ -155,7 +155,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
 
       <View className="flex-1 px-5 justify-between">
         <View className="pt-4">
-          <Text className="text-white/70 text-xs font-bold uppercase">Ostia Companion</Text>
+          <Text className="text-white/70 text-xs font-bold uppercase">Ostia</Text>
           <Text className="text-white text-2xl font-bold mt-1">Scan pairing code</Text>
           <Text className="text-white/70 text-sm leading-5 mt-2 max-w-[320]">
             Open Ostia desktop settings and choose Connect phone.
