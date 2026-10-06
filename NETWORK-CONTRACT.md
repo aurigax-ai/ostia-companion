@@ -1,4 +1,6 @@
-# Ostia Companion — Network Contract (v1.2, contract-first)
+# Ostia Companion — Network Contract (v1.3, contract-first)
+
+> **v1.3 (2026-10-06)** makes the tailnet the only transport: the desktop gateway listens only on loopback and is reached through Ostia's embedded Tailscale node (tsnet). The pairing payload is unchanged (`"v": 1`), but its `host` is now always the desktop's tailnet IPv4 (`100.64.0.0/10`), so the phone must run Tailscale signed in to the same tailnet. See §11.
 
 > **v1.2 (2026-09-28)** removes the board: `board.get`, `board.update`, the `board.read`/`board.write` caps and the reserved `board.changed` event are gone (the desktop dropped its kanban; boards now live in Trellis). See §11.
 
@@ -8,7 +10,7 @@
 
 ## 0. Decided constraints (do not violate)
 
-- **LAN-first, bring-your-own-network for WAN.** The desktop runs a local server bound to a **user-selected interface**. For remote use, the user runs their **own Tailscale/VPN** — the same LAN server is reachable over the tailnet. **No hosted relay. No cloud rendezvous. No accounts/login.**
+- **The human's own tailnet, nothing else.** The desktop gateway listens only on loopback; Ostia's embedded Tailscale node (tsnet, signed in by the human with their own Tailscale account) forwards tailnet connections to it. Nothing listens on the LAN. The phone reaches the desktop by running Tailscale signed in to the same tailnet; Tailscale connects directly when both are on the same Wi-Fi. **No hosted relay. No cloud rendezvous. No Ostia account.**
 - **Off by default.** The gateway ships disabled; the user explicitly enables it and it shows an always-visible "remote active" indicator.
 - **Pairing is a menu action + QR.** No typing credentials.
 - **The desktop is the source of truth.** The phone is a remote view/controller; it holds no durable workspace state beyond its device credential + UI prefs.
@@ -24,11 +26,11 @@ This phone-facing protocol is intentionally **different** from Ostia's internal 
   ┌─────────────────────────── User's machine ───────────────────────────┐
   │  Ostia desktop (Electron)                                              │
   │   • control plane: per-pane tokens, capability broker, command layer  │
-  │   • CONTROL GATEWAY (this contract): HTTPS + WebSocket server         │
-  │        bound to a chosen interface (LAN IP, or the Tailscale addr)    │
+  │   • CONTROL GATEWAY (this contract): HTTPS + WebSocket on loopback    │
+  │   • ostia-tsnet: the desktop's own tailnet node, forwards to it       │
   └───────────────▲───────────────────────────────────────────────────────┘
-                  │  WSS (TLS) — same LAN, or over the user's Tailscale
-                  │  (no third party in the path)
+                  │  WSS (TLS end to end) over the user's tailnet
+                  │  (WireGuard; peer-to-peer, no third party in the path)
         ┌─────────┴─────────┐
         │  Ostia Companion    │  (this repo — phone: PWA or Expo/RN)
         │  xterm.js + control│
@@ -39,7 +41,7 @@ There is exactly one network hop, desktop↔phone. No broker.
 
 ## 2. Transport
 
-- **Base URL:** `https://<host>:<port>` where `<host>` is the LAN IP (or Tailscale IP/MagicDNS name) and `<port>` is the gateway port (default suggestion **`8722`**; the desktop may pick another and encodes it in the pairing payload).
+- **Base URL:** `https://<host>:<port>` where `<host>` is the desktop's tailnet IPv4 from the pairing payload (its MagicDNS name is also accepted) and `<port>` is the gateway port (default suggestion **`8722`**; the desktop may pick another and encodes it in the pairing payload).
 - **TLS:** WSS/HTTPS. The desktop presents a self-signed cert whose **fingerprint is included in the pairing QR** (§3) — the client pins it (TOFU: trust-on-first-use, pinned at pairing). Over Tailscale the tailnet is already encrypted, but keep TLS for uniformity and to bind the fingerprint.
 - **Two channels, one WebSocket** at `wss://<host>:<port>/ws`:
   - **Control**: newline-delimited **JSON-RPC 2.0** text frames (requests, responses, and server→client `event` notifications).
@@ -51,14 +53,14 @@ There is exactly one network hop, desktop↔phone. No broker.
 Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 
 1. **User action (desktop):** opens **"Connect a device / Pair phone"** in a Ostia menu. The desktop:
-   - ensures the gateway is running on the chosen interface,
+   - requires remote access on and its tailnet node signed in and running (no pairing code otherwise),
    - generates a **short-lived pairing code** (`pairCode`, ~120 s TTL, single-use),
    - renders a **QR** encoding the JSON payload below (also shown as a copyable `ostia-pair://` URI).
 2. **QR / pairing payload:**
    ```json
    {
      "v": 1,
-     "host": "100.87.x.y",        // LAN IP or Tailscale addr/MagicDNS
+     "host": "100.87.x.y",        // the desktop's tailnet IPv4
      "port": 8722,
      "fingerprint": "sha256/BASE64==",  // TLS cert fingerprint to pin
      "pairCode": "8-CHAR-ONE-TIME",
@@ -245,13 +247,19 @@ interface CommandDescriptor {
 - **O2 — PWA secure storage** for `deviceToken` on iOS Safari (no Keychain) — acceptable for LAN MVP? Or push toward Expo for secure storage sooner.
 - **O3 — PTY multiplexing:** ~~open~~ **resolved v1.1:** one pane per WS, no prefix (§6.2).
 - **O4 — Board (Kanban) schema:** ~~open~~ **withdrawn v1.2:** there is no board API.
-- **O5 — mDNS discovery:** optional convenience (auto-find the desktop on LAN) vs. QR-only. QR is the baseline; mDNS is additive.
+- **O5 — mDNS discovery:** ~~open~~ **withdrawn v1.3:** the desktop listens on no LAN interface; the QR carries its tailnet address.
 
 ---
 
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.3 — 2026-10-06 (tailnet only)
+
+- **Transport:** the desktop gateway no longer binds a LAN or Tailscale interface; it listens on loopback and Ostia's embedded tsnet node forwards tailnet connections to it, end to end TLS unchanged (same certificate, same fingerprint pin).
+- **Pairing payload:** unchanged shape (`"v": 1`); `host` is always the desktop's tailnet IPv4. A phone paired to a LAN address must pair again.
+- **Client:** when a `100.64.0.0/10` host is unreachable, tell the user to open Tailscale and sign in to the same tailnet.
 
 ### v1.2 — 2026-09-28 (board removed)
 

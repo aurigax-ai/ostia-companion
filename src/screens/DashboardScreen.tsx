@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MotiView } from 'moti';
 import { AlertTriangle, ChevronRight, Folder, Power, RefreshCw, Terminal } from 'lucide-react-native';
+import { connectionNotice } from '../services/connectionNotice';
+import { openTailscaleApp } from '../services/openTailscaleApp';
 import { ConnectionStatus, OstiaRpc } from '../services/rpc';
 import { clearPairingData, getPairingData } from '../services/storage';
 import { Button, EmptyState, IconButton, Pill, Screen, cn, colors } from '../components/ui';
@@ -42,6 +44,7 @@ const SESSION_STATE_TONE: Record<SessionState, 'neutral' | 'accent' | 'success' 
 
 export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps) {
   const [desktopName, setDesktopName] = useState('Ostia Desktop');
+  const [gatewayHost, setGatewayHost] = useState('');
   const [connStatus, setConnStatus] = useState<ConnectionStatus>(OstiaRpc.getStatus());
   const [sessions, setSessions] = useState<Session[]>([]);
   const [panes, setPanes] = useState<Pane[]>([]);
@@ -49,6 +52,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const notice = connectionNotice(connStatus, gatewayHost);
   const waitingCount = sessions.filter((session) => session.state === 'waiting').length;
   const runningCount = panes.filter((pane) => pane.running).length;
 
@@ -60,7 +64,10 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
 
   useEffect(() => {
     getPairingData().then((data) => {
-      if (data) setDesktopName(data.desktopName || 'Ostia Desktop');
+      if (data) {
+        setDesktopName(data.desktopName || 'Ostia Desktop');
+        setGatewayHost(data.gatewayHost);
+      }
     });
 
     const unsubscribeStatus = OstiaRpc.addStatusListener((status) => {
@@ -166,7 +173,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
         </View>
       </View>
 
-      {connStatus !== 'connected' ? (
+      {notice ? (
         <MotiView
           from={{ opacity: 0, translateY: -8 }}
           animate={{ opacity: 1, translateY: 0 }}
@@ -174,12 +181,29 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
             backgroundColor: 'rgba(251, 191, 36, 0.08)',
             borderColor: 'rgba(251, 191, 36, 0.25)',
           }}
-          className="mx-4 mt-4 p-3 rounded-lg border flex-row items-center"
+          className="mx-4 mt-4 p-3 rounded-lg border"
         >
-          <AlertTriangle size={16} color="#fbbf24" />
-          <Text style={{ color: '#fde68a' }} className="text-xs font-semibold ml-2 flex-1 leading-4">
-            Connecting to the desktop gateway. Keep Ostia open on the same LAN or tailnet.
-          </Text>
+          <View className="flex-row items-center">
+            <AlertTriangle size={16} color="#fbbf24" />
+            <Text style={{ color: '#fde68a' }} className="text-xs font-semibold ml-2 flex-1 leading-4">
+              {notice.text}
+            </Text>
+          </View>
+          {notice.actions.length > 0 ? (
+            <View className="flex-row mt-3">
+              {notice.actions.includes('open-tailscale') ? (
+                <Button
+                  label="Open Tailscale"
+                  variant="secondary"
+                  onPress={() => void openTailscaleApp()}
+                  className="mr-2"
+                />
+              ) : null}
+              {notice.actions.includes('pair-again') ? (
+                <Button label="Pair again" variant="secondary" onPress={handleUnpair} />
+              ) : null}
+            </View>
+          ) : null}
         </MotiView>
       ) : null}
 
