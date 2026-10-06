@@ -1,137 +1,158 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-} from 'react-native';
-import { AnimatePresence, MotiView } from 'moti';
-import {
-  Check,
-  ChevronLeft,
-  Lock,
-  Shield,
-  ShieldAlert,
-  Unlock,
-  MessageSquare,
-  Paperclip,
-  Mic,
-  ArrowUp,
-  Terminal,
-} from 'lucide-react-native';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Eye, Keyboard } from 'lucide-react-native';
 import { TerminalTheme, TerminalView, TerminalViewRef } from 'expo-libghostty';
+import { Button, Empty, HeaderIcon } from '../components/ui';
+import { ScreenProps } from '../navigation';
 import { AttachResult, OstiaRpc, Role } from '../services/rpc';
-import { Button, EmptyState, Pill, Screen, cn, colors } from '../components/ui';
-
-interface TerminalScreenProps {
-  paneId: string;
-  paneTitle: string;
-  onBack: () => void;
-}
+import { useCaps } from '../services/workspaceStore';
+import { TERMINAL_FONT_SIZE, watchFontSize } from '../model/terminalFit';
+import { colors, type } from '../theme';
 
 const RESIZE_DEBOUNCE_MS = 150;
+const SETTLE_FALLBACK_MS = 400;
 const FULL_RESET = '\x1bc';
+const RPC_NEEDS_ELEVATION = -32003;
 const TERMINAL_THEME: TerminalTheme = {
-  background: '#08090c',
-  foreground: '#e2e4e9',
-  cursorColor: '#a78bfa',
+  background: colors.bgSunken,
+  foreground: colors.fg,
+  cursorColor: colors.brand,
   palette: ['#16161a', '#ff6c6b', '#98be65', '#ecbe7b', '#51afef', '#c678dd', '#46d9ff', '#bbc2cf'],
 };
-const RPC_NEEDS_ELEVATION = -32003;
 
-export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProps) {
+export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
+  const { paneId } = route.params;
+  const insets = useSafeAreaInsets();
   const terminalRef = useRef<TerminalViewRef>(null);
+  const caps = useCaps();
+  const canInput = caps.includes('input');
   const [role, setRole] = useState<Role>('observer');
-  const [canInput, setCanInput] = useState(OstiaRpc.hasCap('input'));
-  const [connecting, setConnecting] = useState(true);
+  const [attaching, setAttaching] = useState(true);
+  const [fontSize, setFontSize] = useState(TERMINAL_FONT_SIZE);
+  const fontSizeRef = useRef(TERMINAL_FONT_SIZE);
+  const desktopCols = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  const [elevationVisible, setElevationVisible] = useState(false);
-  const [cmdInput, setCmdInput] = useState('');
   const roleRef = useRef<Role>('observer');
   const wantsOwner = useRef(true);
+  const explained = useRef(false);
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gridSize = useRef<{ cols: number; rows: number } | null>(null);
+  const held = useRef<string[] | null>([]);
+  const fontChanging = useRef(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () =>
+        role === 'owner' ? (
+          <HeaderIcon icon={Eye} label="Stop typing, only watch" onPress={watch} />
+        ) : (
+          <HeaderIcon icon={Keyboard} label="Type in this terminal" onPress={takeControl} color={colors.brand} />
+        ),
+    });
+  }, [navigation, role, canInput]);
 
   useEffect(() => {
-    const unsubscribePty = OstiaRpc.addPtyListener((base64Data) => {
-      terminalRef.current?.write(base64Data);
+    const unsubscribePty = OstiaRpc.addPtyListener((base64) => {
+      if (held.current) held.current.push(base64);
+      else terminalRef.current?.write(base64);
     });
-
     const unsubscribeEvents = OstiaRpc.addEventListener((type, payload) => {
       if (type === 'pty.attached') applyAttach(payload);
-      else if (type === 'rpc.error' && payload?.code === RPC_NEEDS_ELEVATION) setElevationVisible(true);
+      else if (type === 'rpc.error' && payload?.code === RPC_NEEDS_ELEVATION) explainInput();
     });
-
-    const unsubscribeCaps = OstiaRpc.addCapsListener((caps) => {
-      const hasInput = caps.includes('input');
-      setCanInput(hasInput);
-      if (hasInput && wantsOwner.current && roleRef.current === 'observer') {
-        setElevationVisible(false);
-        attach('owner');
-      }
-    });
-
-    attach(wantsOwner.current && OstiaRpc.hasCap('input') ? 'owner' : 'observer');
-
+    attach(OstiaRpc.hasCap('input') ? 'owner' : 'observer');
     return () => {
       unsubscribePty();
       unsubscribeEvents();
-      unsubscribeCaps();
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
-      OstiaRpc.detachPty(paneId).catch((err) => console.warn('Detaching PTY error:', err));
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      OstiaRpc.detachPty(paneId).catch(() => {});
     };
   }, [paneId]);
+
+  useEffect(() => {
+    if (canInput && wantsOwner.current && roleRef.current === 'observer') attach('owner');
+  }, [canInput]);
 
   const applyAttach = (result: AttachResult) => {
     if (result.dropped) terminalRef.current?.writeText(FULL_RESET);
     roleRef.current = result.role;
     setRole(result.role);
+    desktopCols.current = result.cols;
+    held.current ??= [];
+    settle();
     if (result.role === 'owner' && gridSize.current) {
       OstiaRpc.sendResize(paneId, gridSize.current.cols, gridSize.current.rows);
     }
   };
 
-  const attach = async (targetRole: Role) => {
-    setConnecting(true);
+  const attach = async (target: Role) => {
+    setAttaching(true);
     setError(null);
     try {
-      await OstiaRpc.attachPty(paneId, targetRole);
+      await OstiaRpc.attachPty(paneId, target);
     } catch (err: any) {
-      setError(err.message || 'Failed to attach to terminal');
+      setError(err?.message || 'Could not open this terminal');
     } finally {
-      setConnecting(false);
+      setAttaching(false);
     }
   };
 
-  const handleRoleToggle = () => {
-    if (role === 'owner') {
-      wantsOwner.current = false;
-      attach('observer');
-      return;
-    }
+  const explainInput = () => {
+    Alert.alert(
+      'Typing is off for this phone',
+      'On your desktop, open Ostia Settings → Remote and turn on Input for this phone. This terminal switches to typing as soon as it is on.',
+    );
+  };
+
+  function takeControl() {
     wantsOwner.current = true;
-    if (canInput) attach('owner');
-    else setElevationVisible(true);
+    if (OstiaRpc.hasCap('input')) attach('owner');
+    else explainInput();
+  }
+
+  function watch() {
+    wantsOwner.current = false;
+    attach('observer');
+  }
+
+  const handleInput = (base64: string) => {
+    if (roleRef.current === 'owner') return OstiaRpc.sendInput(base64);
+    if (explained.current) return;
+    explained.current = true;
+    if (OstiaRpc.hasCap('input')) takeControl();
+    else explainInput();
   };
 
-  const handleTerminalInput = (base64: string) => {
-    if (roleRef.current === 'owner') OstiaRpc.sendInput(base64);
-    else setElevationVisible(true);
+  const flush = () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    fontChanging.current = false;
+    const frames = held.current;
+    held.current = null;
+    frames?.forEach((frame) => terminalRef.current?.write(frame));
   };
 
-  const handleSendCommand = () => {
-    if (!cmdInput) return;
-    if (roleRef.current === 'owner') OstiaRpc.sendKeystroke(cmdInput + '\r');
-    else setElevationVisible(true);
-    setCmdInput('');
+  const settle = () => {
+    const measured = gridSize.current;
+    if (!measured) return;
+    const next =
+      roleRef.current === 'owner'
+        ? TERMINAL_FONT_SIZE
+        : watchFontSize({ cols: measured.cols, fontSize: fontSizeRef.current }, desktopCols.current);
+    if (next === fontSizeRef.current) return flush();
+    fontSizeRef.current = next;
+    fontChanging.current = true;
+    setFontSize(next);
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(flush, SETTLE_FALLBACK_MS);
   };
 
-  const handleTerminalResize = (cols: number, rows: number) => {
+  const handleResize = (cols: number, rows: number) => {
     gridSize.current = { cols, rows };
+    if (fontChanging.current) flush();
+    else if (held.current && desktopCols.current > 0) settle();
     if (roleRef.current !== 'owner') return;
     if (resizeTimer.current) clearTimeout(resizeTimer.current);
     resizeTimer.current = setTimeout(() => OstiaRpc.sendResize(paneId, cols, rows), RESIZE_DEBOUNCE_MS);
@@ -139,191 +160,58 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
 
   return (
     <KeyboardAvoidingView
+      style={styles.fill}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-ostia-bg"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
-      <Screen>
-        {/* CMUX Premium Navigation Header */}
-        <View className="flex-row items-center justify-between px-3 py-2 bg-ostia-bg border-b border-ostia-border">
-          <Pressable
-            accessibilityRole="button"
-            onPress={onBack}
-            className="min-h-11 flex-row items-center px-1.5"
-          >
-            <ChevronLeft size={22} color="#a78bfa" />
-            <View style={{ backgroundColor: 'rgba(167, 139, 250, 0.12)', borderColor: 'rgba(167, 139, 250, 0.3)' }} className="border w-5 h-5 rounded-full justify-center items-center ml-1">
-              <Text style={{ color: '#a78bfa' }} className="text-[10px] font-extrabold">3</Text>
-            </View>
-          </Pressable>
-
-          {/* Rounded title pill */}
-          <View className="bg-[#111218] border border-ostia-border px-4 py-1.5 rounded-full flex-row items-center max-w-[180]">
-            <Text className="text-ostia-text text-xs font-bold font-mono" numberOfLines={1}>
-              {paneTitle}
-            </Text>
+      <View style={[styles.fill, role === 'owner' && { paddingBottom: insets.bottom }]}>
+        <TerminalView
+          ref={terminalRef}
+          style={styles.fill}
+          theme={TERMINAL_THEME}
+          fontSize={fontSize}
+          onInput={({ nativeEvent }) => handleInput(nativeEvent.data)}
+          onResize={({ nativeEvent }) => handleResize(nativeEvent.cols, nativeEvent.rows)}
+        />
+        {attaching ? (
+          <View style={styles.overlay}>
+            <ActivityIndicator size="large" color={colors.brand} />
           </View>
-
-          {/* Right Status Actions */}
-          <View className="flex-row items-center">
-            <TouchableOpacity className="p-2 mr-1 relative">
-              <MessageSquare size={18} color="#7f8497" />
-              <View className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={handleRoleToggle}
-              disabled={connecting}
-              className="p-2"
-            >
-              <View className={`border rounded-lg p-1.5 justify-center items-center ${
-                role === 'owner' ? 'bg-[#022c22] border-emerald-500' : 'bg-[#161821] border-[#1f212a]'
-              }`}>
-                {role === 'owner' ? (
-                  <Unlock size={13} color="#10b981" />
-                ) : (
-                  <Lock size={13} color="#7f8497" />
-                )}
-              </View>
-            </TouchableOpacity>
+        ) : null}
+        {error ? (
+          <View style={styles.overlay}>
+            <Empty
+              title="Terminal unavailable"
+              body={error}
+              action={<Button label="Try again" variant="tonal" onPress={() => void attach(role)} />}
+            />
           </View>
+        ) : null}
+      </View>
+      {role === 'observer' && !attaching && !error ? (
+        <View style={[styles.watchBar, { paddingBottom: 12 + insets.bottom }]}>
+          <Text style={[type.bodyMuted, { flex: 1 }]}>You are watching this terminal.</Text>
+          <Button label="Type" variant="text" onPress={takeControl} />
         </View>
-
-        {/* Terminal Area */}
-        <View className="flex-1 bg-ostia-bg relative">
-          {connecting ? (
-            <View className="absolute inset-0 justify-center items-center bg-ostia-bg z-10">
-              <ActivityIndicator size="large" color={colors.accent} />
-              <Text className="text-ostia-muted text-sm mt-3">Attaching terminal stream</Text>
-            </View>
-          ) : null}
-
-          {error ? (
-            <View className="absolute inset-0 bg-ostia-bg z-10">
-              <EmptyState
-                icon={ShieldAlert}
-                title="Terminal unavailable"
-                body={error}
-                action={<Button label="Retry Connect" onPress={() => attach(role)} />}
-              />
-            </View>
-          ) : null}
-
-          <TerminalView
-            ref={terminalRef}
-            style={{ flex: 1 }}
-            theme={TERMINAL_THEME}
-            fontSize={13}
-            onInput={({ nativeEvent }) => handleTerminalInput(nativeEvent.data)}
-            onResize={({ nativeEvent }) => handleTerminalResize(nativeEvent.cols, nativeEvent.rows)}
-          />
-        </View>
-
-        {/* Micro Stats Bar */}
-        <View className="flex-row items-center justify-between px-4 py-2 border-t border-ostia-border bg-ostia-bg">
-          <View className="flex-row items-center">
-            <Text className="text-[#a78bfa] text-[10px] font-mono font-bold mr-1.5">$0.00</Text>
-            <Text className="text-ostia-muted text-[10px] font-mono">|</Text>
-            <Text className="text-ostia-muted text-[10px] font-mono ml-1.5">38% ctx</Text>
-          </View>
-          <View className="flex-row items-center">
-            <Text className="text-emerald-500 text-[9px] font-mono font-bold uppercase tracking-wider">
-              »» {role === 'owner' ? 'interactive mode' : 'observer mode'}
-            </Text>
-            <Text className="text-ostia-muted text-[10px] font-mono mx-1.5">·</Text>
-            <Text className="text-ostia-muted text-[9px] font-mono font-bold uppercase tracking-wider">
-              -- zsh
-            </Text>
-          </View>
-        </View>
-
-        {/* Message-Style Command Input Bar */}
-        {role === 'owner' ? (
-          <View className="flex-row items-center px-3 pb-6 pt-2 bg-ostia-bg border-t border-ostia-border">
-            <TouchableOpacity className="p-2 mr-1">
-              <Paperclip size={18} color="#7f8497" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity className="p-2 mr-2">
-              <Mic size={18} color="#7f8497" />
-            </TouchableOpacity>
-            
-            <View className="flex-1 flex-row items-center bg-[#111218] border border-ostia-border rounded-full px-4 h-10">
-              <TextInput
-                className="flex-1 text-ostia-text text-sm h-full"
-                placeholder="Message"
-                placeholderTextColor="#4e5165"
-                value={cmdInput}
-                onChangeText={setCmdInput}
-                onSubmitEditing={handleSendCommand}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                onPress={handleSendCommand}
-                className="w-7 h-7 rounded-full bg-ostia-accent justify-center items-center ml-2"
-              >
-                <ArrowUp size={14} color="#08090c" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <TouchableOpacity
-            onPress={handleRoleToggle}
-            className="flex-row items-center px-4 pb-6 pt-2 bg-ostia-bg border-t border-ostia-border opacity-80"
-          >
-            <View className="flex-1 flex-row items-center bg-[#111218] border border-ostia-border rounded-full px-4 h-10 justify-center">
-              <Lock size={12} color="#ef4444" className="mr-2" />
-              <Text className="text-ostia-muted text-xs font-semibold">
-                {canInput ? 'Watching. Tap to type here.' : 'Watching only. Tap to see how to type here.'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Elevation Dialog */}
-        <AnimatePresence>
-          {elevationVisible ? (
-            <View className="absolute inset-0 z-50">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Dismiss permission request"
-                className="absolute inset-0" style={{ backgroundColor: 'rgba(0, 0, 0, 0.65)' }}
-                onPress={() => setElevationVisible(false)}
-              />
-
-              <MotiView
-                from={{ translateY: 320, opacity: 0 }}
-                animate={{ translateY: 0, opacity: 1 }}
-                exit={{ translateY: 320, opacity: 0 }}
-                transition={{ type: 'spring', damping: 20 }}
-                className="absolute bottom-0 left-0 right-0 px-5 pt-4 pb-6 rounded-t-2xl bg-ostia-card border-t border-ostia-border"
-              >
-                <View className="w-12 h-1.5 rounded-full bg-ostia-border self-center mb-5" />
-
-                <View className="flex-row items-start">
-                  <View style={{ backgroundColor: 'rgba(251, 191, 36, 0.08)', borderColor: 'rgba(251, 191, 36, 0.25)' }} className="h-12 w-12 rounded-xl border items-center justify-center mr-3">
-                    <Shield size={24} color="#fbbf24" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-ostia-text text-lg font-bold">Typing needs the Input permission</Text>
-                    <Text className="text-ostia-muted text-sm leading-5 mt-1">
-                      On your desktop, open Ostia Settings → Remote and turn on Input for this phone. This screen switches to typing as soon as it is on.
-                    </Text>
-                  </View>
-                </View>
-
-                <Button
-                  label="Close"
-                  icon={Check}
-                  variant="secondary"
-                  onPress={() => setElevationVisible(false)}
-                  className="mt-5"
-                />
-              </MotiView>
-            </View>
-          ) : null}
-        </AnimatePresence>
-      </Screen>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1, backgroundColor: colors.bgSunken },
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: colors.bgSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    paddingRight: 4,
+    paddingTop: 4,
+    backgroundColor: colors.surface,
+  },
+});

@@ -1,40 +1,87 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { LucideIcon } from 'lucide-react-native';
+import { colors, type } from '../theme';
 
-export const colors = {
-  bg: '#08090c',
-  surface: '#111218',
-  surfaceRaised: '#171922',
-  border: '#252836',
-  borderStrong: '#34384a',
-  accent: '#a78bfa',
-  accentSoft: '#262038',
-  text: '#eef0f5',
-  muted: '#9ba1b0',
-  subtle: '#62687a',
-  success: '#34d399',
-  warning: '#fbbf24',
-  danger: '#fb7185',
-  info: '#67e8f9',
-};
-
-export function cn(...parts: Array<string | false | null | undefined>) {
-  return parts.filter(Boolean).join(' ');
+export function tap() {
+  void Haptics.selectionAsync();
 }
 
-export function Screen({
-  children,
-  className,
+export function ListRow({
+  title,
+  subtitle,
+  overline,
+  leading,
+  trailing,
+  onPress,
+  mono,
 }: {
-  children: React.ReactNode;
-  className?: string;
+  title: string;
+  subtitle?: string;
+  overline?: string;
+  leading?: React.ReactNode;
+  trailing?: React.ReactNode;
+  onPress?: () => void;
+  mono?: boolean;
 }) {
   return (
-    <SafeAreaView className={cn('flex-1 bg-ostia-bg', className)}>
-      {children}
-    </SafeAreaView>
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      onPress={onPress ? () => (tap(), onPress()) : undefined}
+      android_ripple={onPress ? { color: colors.ripple } : undefined}
+      style={({ pressed }) => [styles.row, pressed && Platform.OS === 'ios' && styles.rowPressed]}
+    >
+      {leading ? <View style={styles.leading}>{leading}</View> : null}
+      <View style={styles.rowText}>
+        {overline ? (
+          <Text style={type.caption} numberOfLines={1}>
+            {overline}
+          </Text>
+        ) : null}
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={mono ? type.mono : type.bodyMuted} numberOfLines={2}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
+    </Pressable>
+  );
+}
+
+export function SectionHeader({ title, tone = 'muted' }: { title: string; tone?: 'muted' | 'attn' }) {
+  return (
+    <Text style={[styles.section, { color: tone === 'attn' ? colors.attnFg : colors.muted }]}>{title}</Text>
+  );
+}
+
+export function Divider({ inset = 72 }: { inset?: number }) {
+  return <View style={[styles.divider, { marginLeft: inset }]} />;
+}
+
+export function Avatar({
+  icon: Icon,
+  letter,
+  tone = 'neutral',
+}: {
+  icon?: LucideIcon;
+  letter?: string;
+  tone?: 'neutral' | 'brand' | 'attn';
+}) {
+  const background = tone === 'brand' ? colors.brandSoft : tone === 'attn' ? colors.attnSoft : colors.surfaceHigh;
+  const foreground = tone === 'brand' ? colors.brand : tone === 'attn' ? colors.attnFg : colors.fg;
+  return (
+    <View style={[styles.avatar, { backgroundColor: background }]}>
+      {Icon ? (
+        <Icon size={20} color={foreground} />
+      ) : (
+        <Text style={[styles.avatarLetter, { color: foreground }]}>{letter?.slice(0, 1).toUpperCase()}</Text>
+      )}
+    </View>
   );
 }
 
@@ -42,162 +89,142 @@ export function Button({
   label,
   onPress,
   icon: Icon,
-  variant = 'primary',
-  disabled,
+  variant = 'filled',
   loading,
-  className,
+  disabled,
+  style,
 }: {
   label: string;
   onPress: () => void;
   icon?: LucideIcon;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
-  disabled?: boolean;
+  variant?: 'filled' | 'tonal' | 'text' | 'danger';
   loading?: boolean;
-  className?: string;
+  disabled?: boolean;
+  style?: ViewStyle;
 }) {
-  const stylesByVariant = {
-    primary: 'bg-ostia-accent border-ostia-accent',
-    secondary: 'bg-ostia-card border-ostia-border',
-    danger: 'bg-red-950 border-red-800',
-    ghost: 'bg-transparent border-transparent',
-  };
-
-  const textByVariant = {
-    primary: 'text-white',
-    secondary: 'text-ostia-text',
-    danger: 'text-red-200',
-    ghost: 'text-ostia-muted',
-  };
-
-  const iconColor =
-    variant === 'primary'
-      ? '#ffffff'
-      : variant === 'danger'
-        ? colors.danger
-        : colors.accent;
-
+  const palette = {
+    filled: { bg: colors.brand, fg: colors.onBrand },
+    tonal: { bg: colors.surfaceHigh, fg: colors.fg },
+    text: { bg: 'transparent', fg: colors.brand },
+    danger: { bg: colors.attnSoft, fg: colors.attnFg },
+  }[variant];
   return (
     <Pressable
       accessibilityRole="button"
       disabled={disabled || loading}
-      onPress={onPress}
-      className={cn(
-        'min-h-11 rounded-lg border px-4 flex-row items-center justify-center',
-        stylesByVariant[variant],
-        (disabled || loading) && 'opacity-60',
-        className
-      )}
+      onPress={() => (tap(), onPress())}
+      android_ripple={{ color: colors.ripple, foreground: true }}
+      style={[styles.button, { backgroundColor: palette.bg, opacity: disabled ? 0.4 : 1 }, style]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={variant === 'primary' ? '#ffffff' : colors.accent} />
+        <ActivityIndicator color={palette.fg} />
       ) : (
         <>
-          {Icon ? <Icon size={16} color={iconColor} /> : null}
-          <Text
-            className={cn(
-              'text-sm font-semibold',
-              Icon && 'ml-2',
-              textByVariant[variant]
-            )}
-          >
-            {label}
-          </Text>
+          {Icon ? <Icon size={18} color={palette.fg} style={{ marginRight: 8 }} /> : null}
+          <Text style={[styles.buttonLabel, { color: palette.fg }]}>{label}</Text>
         </>
       )}
     </Pressable>
   );
 }
 
-export function IconButton({
-  label,
-  onPress,
-  icon: Icon,
-  danger,
-  disabled,
-  className,
-}: {
+export function HeaderIcon({ icon: Icon, label, onPress, color = colors.fg }: {
+  icon: LucideIcon;
   label: string;
   onPress: () => void;
-  icon: LucideIcon;
-  danger?: boolean;
-  disabled?: boolean;
-  className?: string;
+  color?: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      disabled={disabled}
-      onPress={onPress}
-      className={cn(
-        'h-11 w-11 rounded-lg border items-center justify-center',
-        danger ? 'bg-red-950 border-red-800' : 'bg-ostia-card border-ostia-border',
-        disabled && 'opacity-50',
-        className
-      )}
+      onPress={() => (tap(), onPress())}
+      android_ripple={{ color: colors.ripple, borderless: true, radius: 22 }}
+      hitSlop={8}
+      style={styles.headerIcon}
     >
-      <Icon size={18} color={danger ? colors.danger : colors.muted} />
+      <Icon size={22} color={color} />
     </Pressable>
   );
 }
 
-export function Pill({
-  label,
-  tone = 'neutral',
-  className,
+export function Notice({
+  text,
+  tone = 'warn',
+  actions,
 }: {
-  label: string;
-  tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
-  className?: string;
+  text: string;
+  tone?: 'warn' | 'attn';
+  actions?: React.ReactNode;
 }) {
-  const containerStyle = {
-    neutral: { backgroundColor: '#111218', borderColor: '#252836' },
-    accent: { backgroundColor: 'rgba(167, 139, 250, 0.12)', borderColor: 'rgba(167, 139, 250, 0.3)' },
-    success: { backgroundColor: 'rgba(52, 211, 153, 0.12)', borderColor: 'rgba(52, 211, 153, 0.3)' },
-    warning: { backgroundColor: 'rgba(251, 191, 36, 0.12)', borderColor: 'rgba(251, 191, 36, 0.3)' },
-    danger: { backgroundColor: 'rgba(251, 113, 133, 0.12)', borderColor: 'rgba(251, 113, 133, 0.3)' },
-    info: { backgroundColor: 'rgba(103, 232, 249, 0.12)', borderColor: 'rgba(103, 232, 249, 0.3)' },
-  };
-
-  const textStyle = {
-    neutral: { color: '#9ba1b0' },
-    accent: { color: '#a78bfa' },
-    success: { color: '#34d399' },
-    warning: { color: '#fbbf24' },
-    danger: { color: '#fb7185' },
-    info: { color: '#67e8f9' },
-  };
-
   return (
-    <View style={containerStyle[tone]} className={cn('rounded-full border px-2.5 py-1', className)}>
-      <Text style={textStyle[tone]} className="text-[11px] font-bold capitalize">
-        {label}
-      </Text>
+    <View style={styles.notice}>
+      <Text style={[type.bodyMuted, { color: tone === 'attn' ? colors.attnFg : colors.warn }]}>{text}</Text>
+      {actions ? <View style={styles.noticeActions}>{actions}</View> : null}
     </View>
   );
 }
 
-export function EmptyState({
-  icon: Icon,
-  title,
-  body,
-  action,
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  action?: React.ReactNode;
-}) {
+export function Empty({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
   return (
-    <View className="flex-1 justify-center items-center px-8 py-10">
-      <View className="h-14 w-14 rounded-2xl bg-ostia-card border border-ostia-border items-center justify-center mb-4">
-        <Icon size={26} color={colors.muted} />
-      </View>
-      <Text className="text-ostia-text text-base font-bold text-center">{title}</Text>
-      <Text className="text-ostia-muted text-sm leading-5 text-center mt-2 max-w-[300]">
-        {body}
-      </Text>
-      {action ? <View className="mt-5">{action}</View> : null}
+    <View style={styles.empty}>
+      <Text style={[type.title, { textAlign: 'center' }]}>{title}</Text>
+      <Text style={[type.bodyMuted, { textAlign: 'center', marginTop: 8 }]}>{body}</Text>
+      {action ? <View style={{ marginTop: 24 }}>{action}</View> : null}
     </View>
   );
 }
+
+export function Loading() {
+  return (
+    <View style={styles.empty}>
+      <ActivityIndicator size="large" color={colors.brand} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    minHeight: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rowPressed: { backgroundColor: colors.ripple },
+  leading: { marginRight: 16 },
+  rowText: { flex: 1, justifyContent: 'center' },
+  rowTitle: { fontSize: 16, lineHeight: 22, fontWeight: '500', color: colors.fg },
+  trailing: { marginLeft: 12, alignItems: 'flex-end' },
+  section: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 6,
+  },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.lineStrong },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarLetter: { fontSize: 17, fontWeight: '600' },
+  button: {
+    minHeight: 48,
+    borderRadius: 24,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  buttonLabel: { fontSize: 15, fontWeight: '600' },
+  headerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  notice: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+  },
+  noticeActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+});

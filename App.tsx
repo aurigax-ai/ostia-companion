@@ -1,111 +1,94 @@
-import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, Alert, Text } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { isPaired, getPairingData, clearPairingData } from './src/services/storage';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { clearPairingData, getPairingData } from './src/services/storage';
 import { OstiaRpc } from './src/services/rpc';
-import { PairingScreen } from './src/screens/PairingScreen';
-import { DashboardScreen } from './src/screens/DashboardScreen';
+import { resetWorkspaces } from './src/services/workspaceStore';
+import { HomeScreen } from './src/screens/HomeScreen';
+import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
-import { Screen, colors } from './src/components/ui';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { PairingScreen } from './src/screens/PairingScreen';
+import { PairLinkScreen } from './src/screens/PairLinkScreen';
+import { RootStack } from './src/navigation';
+import { colors, navigationTheme } from './src/theme';
+
+const Stack = createNativeStackNavigator<RootStack>();
 
 export default function App() {
-  const [loading, setLoading] = useState(true);
-  const [screen, setScreen] = useState<'pairing' | 'dashboard' | 'terminal'>('pairing');
-  const [activePane, setActivePane] = useState<{ id: string; title: string } | null>(null);
+  const [paired, setPaired] = useState<boolean | null>(null);
 
-  // Check pairing status on startup
-  useEffect(() => {
-    async function checkPairing() {
-      try {
-        const paired = await isPaired();
-        if (paired) {
-          const pairingData = await getPairingData();
-          if (pairingData) {
-            // Initialize RPC connection
-            OstiaRpc.initialize(pairingData);
-            setScreen('dashboard');
-          } else {
-            setScreen('pairing');
-          }
-        } else {
-          setScreen('pairing');
-        }
-      } catch (e) {
-        console.error('Failed checking pairing state:', e);
-        setScreen('pairing');
-      } finally {
-        setLoading(false);
-      }
-    }
-    checkPairing();
-
-    return OstiaRpc.addStatusListener((status, reason) => {
-      if (status !== 'revoked') return;
-      clearPairingData().finally(() => {
-        setActivePane(null);
-        setScreen('pairing');
-        Alert.alert('Pair this phone again', reason ?? 'The desktop no longer accepts this device.');
-      });
-    });
+  const connect = useCallback(async () => {
+    const data = await getPairingData();
+    if (!data) return setPaired(false);
+    OstiaRpc.initialize(data);
+    setPaired(true);
   }, []);
 
-  const handlePairSuccess = async () => {
-    const pairingData = await getPairingData();
-    if (pairingData) {
-      OstiaRpc.initialize(pairingData);
-      setScreen('dashboard');
-    }
-  };
+  const unpair = useCallback(async () => {
+    OstiaRpc.disconnect();
+    await clearPairingData();
+    resetWorkspaces();
+    setPaired(false);
+  }, []);
 
-  const handleUnpair = () => {
-    setScreen('pairing');
-    setActivePane(null);
-  };
+  useEffect(() => {
+    connect().catch(() => setPaired(false));
+    return OstiaRpc.addStatusListener((status, reason) => {
+      if (status !== 'revoked') return;
+      void unpair().then(() =>
+        Alert.alert('Pair this phone again', reason ?? 'The desktop no longer accepts this phone.'),
+      );
+    });
+  }, [connect, unpair]);
 
-  const handleSelectPane = (paneId: string, title: string) => {
-    setActivePane({ id: paneId, title });
-    setScreen('terminal');
-  };
-
-  const handleBackToDashboard = () => {
-    setScreen('dashboard');
-    setActivePane(null);
-  };
-
-  if (loading) {
-    return (
-      <Screen className="justify-center items-center">
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text className="text-ostia-muted text-sm font-semibold mt-4">
-          Initializing Ostia
-        </Text>
-        <StatusBar style="light" />
-      </Screen>
-    );
-  }
+  if (paired === null) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
   return (
-    <View className="flex-1 bg-ostia-bg">
-      {screen === 'pairing' && (
-        <PairingScreen onPairSuccess={handlePairSuccess} />
-      )}
-      
-      {screen === 'dashboard' && (
-        <DashboardScreen
-          onSelectPane={handleSelectPane}
-          onUnpair={handleUnpair}
-        />
-      )}
-      
-      {screen === 'terminal' && activePane && (
-        <TerminalScreen
-          paneId={activePane.id}
-          paneTitle={activePane.title}
-          onBack={handleBackToDashboard}
-        />
-      )}
-      
+    <SafeAreaProvider>
+      <NavigationContainer theme={navigationTheme}>
+        <Stack.Navigator
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.fg,
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.bg },
+            animation: 'default',
+          }}
+        >
+          {paired ? (
+            <>
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen
+                name="Workspace"
+                component={WorkspaceScreen}
+                options={({ route }) => ({ title: route.params.name })}
+              />
+              <Stack.Screen
+                name="Terminal"
+                component={TerminalScreen}
+                options={({ route }) => ({ title: route.params.title })}
+              />
+              <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
+                {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
+              </Stack.Screen>
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="Pair" options={{ headerShown: false }}>
+                {(props) => <PairingScreen {...props} onPaired={connect} />}
+              </Stack.Screen>
+              <Stack.Screen name="PairLink" options={{ title: 'Paste pairing link', presentation: 'modal' }}>
+                {(props) => <PairLinkScreen {...props} onPaired={connect} />}
+              </Stack.Screen>
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
       <StatusBar style="light" />
-    </View>
+    </SafeAreaProvider>
   );
 }
