@@ -37,7 +37,7 @@ To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate p
     │   └── KeyBar.tsx         # Touch control keys helper (ESC, TAB, Ctrl, Arrows)
     ├── screens/
     │   ├── PairingScreen.tsx  # QR scanner and manual backup pairing link
-    │   ├── DashboardScreen.tsx# Active sessions/panes list & Kanban board
+    │   ├── DashboardScreen.tsx# Workspaces and panes with live state
     │   └── TerminalScreen.tsx # Live terminal, keyboard interaction, & elevation flow
     └── services/
         ├── crypto.ts          # Key generation and SPKI formatting

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, ActivityIndicator, Alert, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { isPaired, getPairingData } from './src/services/storage';
+import { isPaired, getPairingData, clearPairingData } from './src/services/storage';
 import { OstiaRpc } from './src/services/rpc';
 import { PairingScreen } from './src/screens/PairingScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -38,6 +38,15 @@ export default function App() {
       }
     }
     checkPairing();
+
+    return OstiaRpc.addStatusListener((status, reason) => {
+      if (status !== 'revoked') return;
+      clearPairingData().finally(() => {
+        setActivePane(null);
+        setScreen('pairing');
+        Alert.alert('Pair this phone again', reason ?? 'The desktop no longer accepts this device.');
+      });
+    });
   }, []);
 
   const handlePairSuccess = async () => {
