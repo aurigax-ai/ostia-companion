@@ -51,6 +51,11 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
       if (!config.host || !config.port || !config.fingerprint || !config.pairCode) {
         throw new Error('Pairing payload is missing required parameters');
       }
+      if (isLoopbackHost(config.host)) {
+        throw new Error(
+          `The desktop is only listening on itself (${config.host}). In Ostia on your desktop, open Settings → Remote, choose your Wi-Fi or Tailscale address, then show the QR again.`
+        );
+      }
 
       const pairingResult = await pairDevice(
         config.host,
@@ -151,13 +156,13 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
         onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
       />
 
-      <View className="absolute inset-0 bg-black/55" />
+      <View className="absolute inset-0" style={{ backgroundColor: 'rgba(0, 0, 0, 0.55)' }} />
 
       <View className="flex-1 px-5 justify-between">
         <View className="pt-4">
-          <Text className="text-white/70 text-xs font-bold uppercase">Ostia</Text>
+          <Text className="text-white text-xs font-bold uppercase">Ostia</Text>
           <Text className="text-white text-2xl font-bold mt-1">Scan pairing code</Text>
-          <Text className="text-white/70 text-sm leading-5 mt-2 max-w-[320]">
+          <Text className="text-white text-sm leading-5 mt-2 max-w-[320]">
             Open Ostia desktop settings and choose Connect phone.
           </Text>
         </View>
@@ -173,7 +178,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
               duration: 2400,
               type: 'timing',
             }}
-            className="w-64 h-64 justify-center items-center border border-white/15 relative overflow-hidden bg-black/10"
+            className="w-64 h-64 justify-center items-center border border-ostia-border relative overflow-hidden" style={{ backgroundColor: 'rgba(0, 0, 0, 0.10)' }}
           >
             <View className="absolute top-[-2] left-[-2] w-9 h-9 border-t-4 border-l-4 border-ostia-accent rounded-tl" />
             <View className="absolute top-[-2] right-[-2] w-9 h-9 border-t-4 border-r-4 border-ostia-accent rounded-tr" />
@@ -197,13 +202,13 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
               setError(null);
               setManualModalVisible(true);
             }}
-            className="bg-black/55 border-white/15"
+            className="border-ostia-border"
           />
         </View>
       </View>
 
       <Modal transparent visible={loading} animationType="fade">
-        <View className="flex-1 bg-black/85 justify-center items-center px-5">
+        <View className="flex-1 justify-center items-center px-5" style={{ backgroundColor: 'rgba(0, 0, 0, 0.85)' }}>
           <MotiView
             from={{ scale: 0.94, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -225,13 +230,13 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
           from={{ opacity: 0, translateY: 40 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'spring', damping: 16 }}
-          className="absolute bottom-8 left-5 right-5 p-4 rounded-lg bg-red-950/95 border border-red-800"
+          className="absolute bottom-8 left-5 right-5 p-4 rounded-lg bg-red-950 border border-red-800"
         >
           <View className="flex-row items-center mb-2">
             <AlertCircle size={17} color={colors.danger} />
             <Text className="text-red-200 text-sm font-bold ml-2">Pairing failed</Text>
           </View>
-          <Text className="text-red-200/90 text-xs leading-4 mb-4">{error}</Text>
+          <Text className="text-red-200 text-xs leading-4 mb-4">{error}</Text>
           <Button
             label="Try Again"
             variant="danger"
@@ -252,7 +257,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
       <Modal visible={manualModalVisible} transparent animationType="slide" onRequestClose={closeManualModal}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 bg-black/70 justify-end"
+          className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0, 0, 0, 0.70)' }}
         >
           <View className="bg-ostia-card rounded-t-2xl p-5 border-t border-ostia-border">
             <View className="w-12 h-1.5 rounded-full bg-ostia-border self-center mb-5" />
@@ -270,7 +275,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
               <MotiView
                 from={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="mb-4 p-3 rounded-lg bg-red-950/40 border border-red-900/60 flex-row items-start"
+                className="mb-4 p-3 rounded-lg bg-red-950 border border-red-900 flex-row items-start"
               >
                 <AlertTriangle size={15} color={colors.danger} />
                 <View className="flex-1 ml-2">
@@ -312,4 +317,8 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
       </Modal>
     );
   }
+}
+
+function isLoopbackHost(host: string): boolean {
+  return host === 'localhost' || host === '::1' || host.startsWith('127.');
 }

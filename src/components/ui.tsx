@@ -58,7 +58,7 @@ export function Button({
   const stylesByVariant = {
     primary: 'bg-ostia-accent border-ostia-accent',
     secondary: 'bg-ostia-card border-ostia-border',
-    danger: 'bg-red-950/30 border-red-800/60',
+    danger: 'bg-red-950 border-red-800',
     ghost: 'bg-transparent border-transparent',
   };
 
@@ -131,7 +131,7 @@ export function IconButton({
       onPress={onPress}
       className={cn(
         'h-11 w-11 rounded-lg border items-center justify-center',
-        danger ? 'bg-red-950/30 border-red-800/60' : 'bg-ostia-card border-ostia-border',
+        danger ? 'bg-red-950 border-red-800' : 'bg-ostia-card border-ostia-border',
         disabled && 'opacity-50',
         className
       )}

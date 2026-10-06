@@ -287,7 +287,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss permission request"
-                className="absolute inset-0 bg-black/65"
+                className="absolute inset-0" style={{ backgroundColor: 'rgba(0, 0, 0, 0.65)' }}
                 onPress={() => setElevationVisible(false)}
               />
 
