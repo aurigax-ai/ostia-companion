@@ -14,6 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { MotiView } from 'moti';
 import { AlertCircle, AlertTriangle, Camera, Link2, ScanLine, ShieldCheck, X } from 'lucide-react-native';
 import { pairDevice } from '../services/network';
+import { openTailscaleApp } from '../services/openTailscaleApp';
 import { savePairingData } from '../services/storage';
 import { Button, IconButton, Screen, colors } from '../components/ui';
 
@@ -26,6 +27,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorAction, setErrorAction] = useState<'open-tailscale' | undefined>(undefined);
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [manualUri, setManualUri] = useState('');
 
@@ -76,6 +78,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
     } catch (e: any) {
       setLoading(false);
       setError(e.message || 'Failed to complete pairing');
+      setErrorAction(e.action);
     }
   };
 
@@ -237,6 +240,14 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
             <Text className="text-red-200 text-sm font-bold ml-2">Pairing failed</Text>
           </View>
           <Text className="text-red-200 text-xs leading-4 mb-4">{error}</Text>
+          {errorAction === 'open-tailscale' ? (
+            <Button
+              label="Open Tailscale"
+              variant="secondary"
+              onPress={() => void openTailscaleApp()}
+              className="mb-2"
+            />
+          ) : null}
           <Button
             label="Try Again"
             variant="danger"
