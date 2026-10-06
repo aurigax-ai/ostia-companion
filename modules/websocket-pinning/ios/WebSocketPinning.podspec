@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version        = '1.0.0'
   s.summary        = 'WebSocket with custom self-signed SSL/TLS certificate pinning'
   s.description    = 'Local Expo native module for WebSocket connection and cert fingerprint pinning.'
-  s.homepage       = 'https://github.com/pine-terminal/pine-companion'
+  s.homepage       = 'https://github.com/aurigax-ai/ostia-companion'
   s.license        = 'MIT'
   s.author         = 'Antigravity'
   s.platform       = :ios, '13.4'

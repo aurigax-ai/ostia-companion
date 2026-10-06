@@ -25,7 +25,7 @@ import {
   Terminal,
 } from 'lucide-react-native';
 import { TerminalView, TerminalViewHandle } from '../components/TerminalView';
-import { PineRpc } from '../services/rpc';
+import { OstiaRpc } from '../services/rpc';
 import { Button, EmptyState, Pill, Screen, cn, colors } from '../components/ui';
 
 interface TerminalScreenProps {
@@ -46,11 +46,11 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
   const [cmdInput, setCmdInput] = useState('');
 
   useEffect(() => {
-    const unsubscribePty = PineRpc.addPtyListener((base64Data) => {
+    const unsubscribePty = OstiaRpc.addPtyListener((base64Data) => {
       terminalRef.current?.write(base64Data);
     });
 
-    const unsubscribeEvents = PineRpc.addEventListener((type) => {
+    const unsubscribeEvents = OstiaRpc.addEventListener((type) => {
       if (type === 'caps.changed') {
         checkCapabilities();
       }
@@ -61,7 +61,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
     return () => {
       unsubscribePty();
       unsubscribeEvents();
-      PineRpc.detachPty(paneId).catch((err) => console.warn('Detaching PTY error:', err));
+      OstiaRpc.detachPty(paneId).catch((err) => console.warn('Detaching PTY error:', err));
     };
   }, [paneId]);
 
@@ -69,7 +69,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
     setConnecting(true);
     setError(null);
     try {
-      await PineRpc.attachPty(paneId, targetRole, 0);
+      await OstiaRpc.attachPty(paneId, targetRole, 0);
       setRole(targetRole);
       setConnecting(false);
     } catch (err: any) {
@@ -88,7 +88,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
 
   const checkCapabilities = async () => {
     try {
-      const result = await PineRpc.call('device.caps');
+      const result = await OstiaRpc.call('device.caps');
       const caps: string[] = result.caps || [];
 
       if (caps.includes('input') && role === 'observer') {
@@ -110,7 +110,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
 
   const handleTerminalInput = (data: string) => {
     if (role === 'owner') {
-      PineRpc.sendKeystroke(data);
+      OstiaRpc.sendKeystroke(data);
     } else {
       setRequestedCap('input');
       setElevationVisible(true);
@@ -125,17 +125,17 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
   };
 
   const handleTerminalResize = (cols: number, rows: number) => {
-    PineRpc.sendResize(paneId, cols, rows);
+    OstiaRpc.sendResize(paneId, cols, rows);
   };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-pine-bg"
+      className="flex-1 bg-ostia-bg"
     >
       <Screen>
         {/* CMUX Premium Navigation Header */}
-        <View className="flex-row items-center justify-between px-3 py-2 bg-pine-bg border-b border-pine-border">
+        <View className="flex-row items-center justify-between px-3 py-2 bg-ostia-bg border-b border-ostia-border">
           <Pressable
             accessibilityRole="button"
             onPress={onBack}
@@ -148,8 +148,8 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
           </Pressable>
 
           {/* Rounded title pill */}
-          <View className="bg-[#111218] border border-pine-border px-4 py-1.5 rounded-full flex-row items-center max-w-[180]">
-            <Text className="text-pine-text text-xs font-bold font-mono" numberOfLines={1}>
+          <View className="bg-[#111218] border border-ostia-border px-4 py-1.5 rounded-full flex-row items-center max-w-[180]">
+            <Text className="text-ostia-text text-xs font-bold font-mono" numberOfLines={1}>
               {paneTitle}
             </Text>
           </View>
@@ -180,16 +180,16 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
         </View>
 
         {/* Terminal Area */}
-        <View className="flex-1 bg-pine-bg relative">
+        <View className="flex-1 bg-ostia-bg relative">
           {connecting ? (
-            <View className="absolute inset-0 justify-center items-center bg-pine-bg z-10">
+            <View className="absolute inset-0 justify-center items-center bg-ostia-bg z-10">
               <ActivityIndicator size="large" color={colors.accent} />
-              <Text className="text-pine-muted text-sm mt-3">Attaching terminal stream</Text>
+              <Text className="text-ostia-muted text-sm mt-3">Attaching terminal stream</Text>
             </View>
           ) : null}
 
           {error ? (
-            <View className="absolute inset-0 bg-pine-bg z-10">
+            <View className="absolute inset-0 bg-ostia-bg z-10">
               <EmptyState
                 icon={ShieldAlert}
                 title="Terminal unavailable"
@@ -208,18 +208,18 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
         </View>
 
         {/* Micro Stats Bar */}
-        <View className="flex-row items-center justify-between px-4 py-2 border-t border-pine-border bg-pine-bg">
+        <View className="flex-row items-center justify-between px-4 py-2 border-t border-ostia-border bg-ostia-bg">
           <View className="flex-row items-center">
             <Text className="text-[#a78bfa] text-[10px] font-mono font-bold mr-1.5">$0.00</Text>
-            <Text className="text-pine-muted text-[10px] font-mono">|</Text>
-            <Text className="text-pine-muted text-[10px] font-mono ml-1.5">38% ctx</Text>
+            <Text className="text-ostia-muted text-[10px] font-mono">|</Text>
+            <Text className="text-ostia-muted text-[10px] font-mono ml-1.5">38% ctx</Text>
           </View>
           <View className="flex-row items-center">
             <Text className="text-emerald-500 text-[9px] font-mono font-bold uppercase tracking-wider">
               »» {role === 'owner' ? 'interactive mode' : 'observer mode'}
             </Text>
-            <Text className="text-pine-muted text-[10px] font-mono mx-1.5">·</Text>
-            <Text className="text-pine-muted text-[9px] font-mono font-bold uppercase tracking-wider">
+            <Text className="text-ostia-muted text-[10px] font-mono mx-1.5">·</Text>
+            <Text className="text-ostia-muted text-[9px] font-mono font-bold uppercase tracking-wider">
               -- zsh
             </Text>
           </View>
@@ -227,34 +227,34 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
 
         {/* Horizontal Capsule KeyBar */}
         {role === 'owner' && (
-          <View className="flex-row items-center px-3 py-1 bg-pine-bg">
-            <View className="flex-row flex-1 bg-[#111218] border border-pine-border rounded-full py-1 px-3 items-center justify-between">
+          <View className="flex-row items-center px-3 py-1 bg-ostia-bg">
+            <View className="flex-row flex-1 bg-[#111218] border border-ostia-border rounded-full py-1 px-3 items-center justify-between">
               <TouchableOpacity className="p-1">
                 <Keyboard size={14} color="#7f8497" />
               </TouchableOpacity>
               <View className="w-1.5 h-1.5 rounded-full bg-emerald-500 mx-2" />
               
-              <TouchableOpacity onPress={() => handleTerminalInput('\x03')} className="bg-pine-bg border border-pine-border px-3 py-0.5 rounded-full">
-                <Text className="text-pine-text text-[10px] font-mono font-bold">Ctrl+C</Text>
+              <TouchableOpacity onPress={() => handleTerminalInput('\x03')} className="bg-ostia-bg border border-ostia-border px-3 py-0.5 rounded-full">
+                <Text className="text-ostia-text text-[10px] font-mono font-bold">Ctrl+C</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('\t')} className="bg-pine-bg border border-pine-border px-3 py-0.5 rounded-full">
-                <Text className="text-pine-text text-[10px] font-mono font-bold">Tab</Text>
+              <TouchableOpacity onPress={() => handleTerminalInput('\t')} className="bg-ostia-bg border border-ostia-border px-3 py-0.5 rounded-full">
+                <Text className="text-ostia-text text-[10px] font-mono font-bold">Tab</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('\x1b')} className="bg-pine-bg border border-pine-border px-3 py-0.5 rounded-full">
-                <Text className="text-pine-text text-[10px] font-mono font-bold">Esc</Text>
+              <TouchableOpacity onPress={() => handleTerminalInput('\x1b')} className="bg-ostia-bg border border-ostia-border px-3 py-0.5 rounded-full">
+                <Text className="text-ostia-text text-[10px] font-mono font-bold">Esc</Text>
               </TouchableOpacity>
               
               <TouchableOpacity onPress={() => handleTerminalInput('^')} className="p-1">
-                <Text className="text-pine-muted text-[10px] font-mono font-bold">^</Text>
+                <Text className="text-ostia-muted text-[10px] font-mono font-bold">^</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => handleTerminalInput('⌥')} className="p-1">
-                <Text className="text-pine-muted text-[10px] font-mono font-bold">⌥</Text>
+                <Text className="text-ostia-muted text-[10px] font-mono font-bold">⌥</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => handleTerminalInput('⌘')} className="p-1">
-                <Text className="text-pine-muted text-[10px] font-mono font-bold">⌘</Text>
+                <Text className="text-ostia-muted text-[10px] font-mono font-bold">⌘</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => handleTerminalInput('⇧')} className="p-1">
-                <Text className="text-pine-muted text-[10px] font-mono font-bold">⇧</Text>
+                <Text className="text-ostia-muted text-[10px] font-mono font-bold">⇧</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -262,7 +262,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
 
         {/* Message-Style Command Input Bar */}
         {role === 'owner' ? (
-          <View className="flex-row items-center px-3 pb-6 pt-2 bg-pine-bg border-t border-pine-border">
+          <View className="flex-row items-center px-3 pb-6 pt-2 bg-ostia-bg border-t border-ostia-border">
             <TouchableOpacity className="p-2 mr-1">
               <Paperclip size={18} color="#7f8497" />
             </TouchableOpacity>
@@ -271,9 +271,9 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
               <Mic size={18} color="#7f8497" />
             </TouchableOpacity>
             
-            <View className="flex-1 flex-row items-center bg-[#111218] border border-pine-border rounded-full px-4 h-10">
+            <View className="flex-1 flex-row items-center bg-[#111218] border border-ostia-border rounded-full px-4 h-10">
               <TextInput
-                className="flex-1 text-pine-text text-sm h-full"
+                className="flex-1 text-ostia-text text-sm h-full"
                 placeholder="Message"
                 placeholderTextColor="#4e5165"
                 value={cmdInput}
@@ -284,7 +284,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
               />
               <TouchableOpacity
                 onPress={handleSendCommand}
-                className="w-7 h-7 rounded-full bg-pine-accent justify-center items-center ml-2"
+                className="w-7 h-7 rounded-full bg-ostia-accent justify-center items-center ml-2"
               >
                 <ArrowUp size={14} color="#08090c" />
               </TouchableOpacity>
@@ -293,11 +293,11 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
         ) : (
           <TouchableOpacity
             onPress={handleRoleToggle}
-            className="flex-row items-center px-4 pb-6 pt-2 bg-pine-bg border-t border-pine-border opacity-80"
+            className="flex-row items-center px-4 pb-6 pt-2 bg-ostia-bg border-t border-ostia-border opacity-80"
           >
-            <View className="flex-1 flex-row items-center bg-[#111218] border border-pine-border rounded-full px-4 h-10 justify-center">
+            <View className="flex-1 flex-row items-center bg-[#111218] border border-ostia-border rounded-full px-4 h-10 justify-center">
               <Lock size={12} color="#ef4444" className="mr-2" />
-              <Text className="text-pine-muted text-xs font-semibold">
+              <Text className="text-ostia-muted text-xs font-semibold">
                 Observer Mode. Tap to request input access.
               </Text>
             </View>
@@ -320,25 +320,25 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
                 animate={{ translateY: 0, opacity: 1 }}
                 exit={{ translateY: 320, opacity: 0 }}
                 transition={{ type: 'spring', damping: 20 }}
-                className="absolute bottom-0 left-0 right-0 px-5 pt-4 pb-6 rounded-t-2xl bg-pine-card border-t border-pine-border"
+                className="absolute bottom-0 left-0 right-0 px-5 pt-4 pb-6 rounded-t-2xl bg-ostia-card border-t border-ostia-border"
               >
-                <View className="w-12 h-1.5 rounded-full bg-pine-border self-center mb-5" />
+                <View className="w-12 h-1.5 rounded-full bg-ostia-border self-center mb-5" />
 
                 <View className="flex-row items-start">
                   <View style={{ backgroundColor: 'rgba(251, 191, 36, 0.08)', borderColor: 'rgba(251, 191, 36, 0.25)' }} className="h-12 w-12 rounded-xl border items-center justify-center mr-3">
                     <Shield size={24} color="#fbbf24" />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-pine-text text-lg font-bold">Input permission needed</Text>
-                    <Text className="text-pine-muted text-sm leading-5 mt-1">
-                      This pane is in observer mode. Approve the {requestedCap || 'input'} capability on Pine desktop to type here.
+                    <Text className="text-ostia-text text-lg font-bold">Input permission needed</Text>
+                    <Text className="text-ostia-muted text-sm leading-5 mt-1">
+                      This pane is in observer mode. Approve the {requestedCap || 'input'} capability on Ostia desktop to type here.
                     </Text>
                   </View>
                 </View>
 
-                <View className="bg-pine-bg border border-pine-border rounded-lg p-3 mt-5 flex-row items-center">
+                <View className="bg-ostia-bg border border-ostia-border rounded-lg p-3 mt-5 flex-row items-center">
                   <ActivityIndicator size="small" color={colors.accent} />
-                  <Text className="text-pine-text text-xs leading-4 flex-1 ml-3">
+                  <Text className="text-ostia-text text-xs leading-4 flex-1 ml-3">
                     Waiting for the remote elevation prompt to be approved.
                   </Text>
                   <Pill label="Pending" tone="warning" />

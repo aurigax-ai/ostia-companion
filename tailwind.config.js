@@ -5,8 +5,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Pine Custom Design System Color Tokens (Obsidian Dark Theme)
-        pine: {
+        // Ostia Custom Design System Color Tokens (Obsidian Dark Theme)
+        ostia: {
           bg: '#08090c',
           card: '#111218',
           border: '#1f212a',

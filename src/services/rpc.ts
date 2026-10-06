@@ -32,7 +32,7 @@ type EventListener = (type: string, payload: any) => void;
 type PtyDataListener = (base64Data: string) => void;
 type StatusListener = (status: 'connecting' | 'connected' | 'disconnected' | 'error', errorMsg?: string) => void;
 
-class PineRpcClient {
+class OstiaRpcClient {
   private socket: PinnedWebSocket | null = null;
   private nextId = 1;
   private pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
@@ -138,12 +138,12 @@ class PineRpcClient {
     try {
       const response = await this.call('hello', {
         deviceToken: this.pairingData.deviceToken,
-        client: 'pine-companion/1.0',
+        client: 'ostia-companion/1.0',
       });
       
       this.isAuthenticated = true;
       this.setStatus('connected');
-      console.log('PINERPC: Handshake successful', response);
+      console.log('OSTIA_RPC: Handshake successful', response);
 
       // Re-attach PTY if we were previously attached to a pane
       if (this.activePaneId) {
@@ -321,4 +321,4 @@ function decodeUtf8(str: string): string {
   }
 }
 
-export const PineRpc = new PineRpcClient();
+export const OstiaRpc = new OstiaRpcClient();

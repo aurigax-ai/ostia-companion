@@ -12,14 +12,14 @@ export interface PairingData {
 }
 
 const KEYS = {
-  DEVICE_TOKEN: 'pine_device_token',
-  DEVICE_ID: 'pine_device_id',
-  PINNED_FINGERPRINT: 'pine_pinned_fingerprint',
-  DESKTOP_NAME: 'pine_desktop_name',
-  GATEWAY_HOST: 'pine_gateway_host',
-  GATEWAY_PORT: 'pine_gateway_port',
-  PRIVATE_KEY: 'pine_private_key',
-  PUBLIC_KEY: 'pine_public_key',
+  DEVICE_TOKEN: 'ostia_device_token',
+  DEVICE_ID: 'ostia_device_id',
+  PINNED_FINGERPRINT: 'ostia_pinned_fingerprint',
+  DESKTOP_NAME: 'ostia_desktop_name',
+  GATEWAY_HOST: 'ostia_gateway_host',
+  GATEWAY_PORT: 'ostia_gateway_port',
+  PRIVATE_KEY: 'ostia_private_key',
+  PUBLIC_KEY: 'ostia_public_key',
 };
 
 /**

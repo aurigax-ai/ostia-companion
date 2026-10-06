@@ -32,7 +32,7 @@ export function Screen({
   className?: string;
 }) {
   return (
-    <SafeAreaView className={cn('flex-1 bg-pine-bg', className)}>
+    <SafeAreaView className={cn('flex-1 bg-ostia-bg', className)}>
       {children}
     </SafeAreaView>
   );
@@ -56,17 +56,17 @@ export function Button({
   className?: string;
 }) {
   const stylesByVariant = {
-    primary: 'bg-pine-accent border-pine-accent',
-    secondary: 'bg-pine-card border-pine-border',
+    primary: 'bg-ostia-accent border-ostia-accent',
+    secondary: 'bg-ostia-card border-ostia-border',
     danger: 'bg-red-950/30 border-red-800/60',
     ghost: 'bg-transparent border-transparent',
   };
 
   const textByVariant = {
     primary: 'text-white',
-    secondary: 'text-pine-text',
+    secondary: 'text-ostia-text',
     danger: 'text-red-200',
-    ghost: 'text-pine-muted',
+    ghost: 'text-ostia-muted',
   };
 
   const iconColor =
@@ -131,7 +131,7 @@ export function IconButton({
       onPress={onPress}
       className={cn(
         'h-11 w-11 rounded-lg border items-center justify-center',
-        danger ? 'bg-red-950/30 border-red-800/60' : 'bg-pine-card border-pine-border',
+        danger ? 'bg-red-950/30 border-red-800/60' : 'bg-ostia-card border-ostia-border',
         disabled && 'opacity-50',
         className
       )}
@@ -190,11 +190,11 @@ export function EmptyState({
 }) {
   return (
     <View className="flex-1 justify-center items-center px-8 py-10">
-      <View className="h-14 w-14 rounded-2xl bg-pine-card border border-pine-border items-center justify-center mb-4">
+      <View className="h-14 w-14 rounded-2xl bg-ostia-card border border-ostia-border items-center justify-center mb-4">
         <Icon size={26} color={colors.muted} />
       </View>
-      <Text className="text-pine-text text-base font-bold text-center">{title}</Text>
-      <Text className="text-pine-muted text-sm leading-5 text-center mt-2 max-w-[300]">
+      <Text className="text-ostia-text text-base font-bold text-center">{title}</Text>
+      <Text className="text-ostia-muted text-sm leading-5 text-center mt-2 max-w-[300]">
         {body}
       </Text>
       {action ? <View className="mt-5">{action}</View> : null}

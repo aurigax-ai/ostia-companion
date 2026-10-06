@@ -1,12 +1,12 @@
-# Pine Companion — Mobile App (Expo / React Native)
+# Ostia Companion — Mobile App (Expo / React Native)
 
-The mobile companion app for **Pine** (a desktop terminal & agent workspace). It allows you to monitor and control your Pine terminal sessions, answer agent prompts, execute commands, and view a live terminal mirror from your phone (iOS and Android) over your local network or Tailscale.
+The mobile companion app for **Ostia** (a desktop terminal & agent workspace). It allows you to monitor and control your Ostia terminal sessions, answer agent prompts, execute commands, and view a live terminal mirror from your phone (iOS and Android) over your local network or Tailscale.
 
 ---
 
 ## 🏗 System Architecture & Security (TOFU TLS Pinning)
 
-Because the Pine desktop gateway runs a local server with a **self-signed TLS certificate**, standard WebSockets and HTTP requests would be blocked by OS WebView engines and JavaScript engines.
+Because the Ostia desktop gateway runs a local server with a **self-signed TLS certificate**, standard WebSockets and HTTP requests would be blocked by OS WebView engines and JavaScript engines.
 
 To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate pinning**, we designed and implemented:
 1. **Local Native Module (`modules/websocket-pinning`)**:
