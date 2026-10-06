@@ -59,6 +59,10 @@ class OstiaRpcClient {
     this.connect();
   }
 
+  public getPairing() {
+    return this.pairingData;
+  }
+
   public getStatus() {
     return this.status;
   }
