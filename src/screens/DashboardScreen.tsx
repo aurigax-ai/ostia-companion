@@ -16,7 +16,7 @@ interface DashboardScreenProps {
 type SessionState = 'idle' | 'working' | 'waiting' | 'done' | 'error';
 
 interface Session {
-  id: string;
+  sessionId: string;
   name: string;
   kind: string;
   workDir: string;
@@ -112,7 +112,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
   };
 
   const setSessionState = (sessionId: string, state: SessionState) => {
-    setSessions((prev) => prev.map((session) => (session.id === sessionId ? { ...session, state } : session)));
+    setSessions((prev) => prev.map((session) => (session.sessionId === sessionId ? { ...session, state } : session)));
   };
 
   const handleRefresh = () => {
@@ -253,10 +253,10 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       >
         {sessions.map((session, index) => {
-          const sessionPanes = panes.filter((pane) => pane.sessionId === session.id);
+          const sessionPanes = panes.filter((pane) => pane.sessionId === session.sessionId);
           return (
             <MotiView
-              key={session.id}
+              key={session.sessionId}
               from={{ opacity: 0, translateY: 12 }}
               animate={{ opacity: 1, translateY: 0 }}
               transition={{ type: 'spring', delay: index * 60 }}
