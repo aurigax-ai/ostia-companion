@@ -68,7 +68,7 @@ export default function App() {
       <Screen className="justify-center items-center">
         <ActivityIndicator size="large" color={colors.accent} />
         <Text className="text-ostia-muted text-sm font-semibold mt-4">
-          Initializing Ostia Companion
+          Initializing Ostia
         </Text>
         <StatusBar style="light" />
       </Screen>

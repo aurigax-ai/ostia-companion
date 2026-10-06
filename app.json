@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Ostia Companion",
-    "slug": "ostia-companion",
+    "name": "Ostia",
+    "slug": "ostia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,7 +17,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.ostiacompanion"
+      "package": "com.anonymous.ostia"
     },
     "web": {
       "favicon": "./assets/favicon.png"

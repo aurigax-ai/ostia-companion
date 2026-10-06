@@ -224,7 +224,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
       <View className="border-b border-ostia-border bg-ostia-bg px-4 pb-3">
         <View className="flex-row items-start justify-between">
           <View className="flex-1 pr-3">
-            <Text className="text-ostia-muted text-xs font-bold uppercase">Ostia Companion</Text>
+            <Text className="text-ostia-muted text-xs font-bold uppercase">Ostia</Text>
             <Text className="text-ostia-text text-2xl font-bold mt-1" numberOfLines={1}>
               {desktopName}
             </Text>
