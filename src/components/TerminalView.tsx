@@ -1,6 +1,7 @@
 import React, { useRef, useImperativeHandle, forwardRef } from 'react';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import { FIT_ADDON_JS, XTERM_CSS, XTERM_JS } from './terminalAssets.generated';
 
 export interface TerminalViewHandle {
   write: (data: string) => void;
@@ -20,7 +21,7 @@ const htmlContent = `
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <style>${XTERM_CSS}</style>
   <style>
     body, html {
       margin: 0;
@@ -46,8 +47,8 @@ const htmlContent = `
       border-radius: 3px;
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script>${XTERM_JS}</script>
+  <script>${FIT_ADDON_JS}</script>
 </head>
 <body>
   <div id="terminal"></div>

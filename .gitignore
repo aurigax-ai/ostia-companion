@@ -46,3 +46,6 @@ yarn-error.*
 # gradle / build directories
 build/
 .gradle/
+
+# generated from @xterm packages by scripts/terminal-assets.mjs
+src/components/terminalAssets.generated.ts
