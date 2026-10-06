@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { isPaired, getPairingData } from './src/services/storage';
-import { PineRpc } from './src/services/rpc';
+import { OstiaRpc } from './src/services/rpc';
 import { PairingScreen } from './src/screens/PairingScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
@@ -22,7 +22,7 @@ export default function App() {
           const pairingData = await getPairingData();
           if (pairingData) {
             // Initialize RPC connection
-            PineRpc.initialize(pairingData);
+            OstiaRpc.initialize(pairingData);
             setScreen('dashboard');
           } else {
             setScreen('pairing');
@@ -43,7 +43,7 @@ export default function App() {
   const handlePairSuccess = async () => {
     const pairingData = await getPairingData();
     if (pairingData) {
-      PineRpc.initialize(pairingData);
+      OstiaRpc.initialize(pairingData);
       setScreen('dashboard');
     }
   };
@@ -67,8 +67,8 @@ export default function App() {
     return (
       <Screen className="justify-center items-center">
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text className="text-pine-muted text-sm font-semibold mt-4">
-          Initializing Pine Companion
+        <Text className="text-ostia-muted text-sm font-semibold mt-4">
+          Initializing Ostia Companion
         </Text>
         <StatusBar style="light" />
       </Screen>
@@ -76,7 +76,7 @@ export default function App() {
   }
 
   return (
-    <View className="flex-1 bg-pine-bg">
+    <View className="flex-1 bg-ostia-bg">
       {screen === 'pairing' && (
         <PairingScreen onPairSuccess={handlePairSuccess} />
       )}

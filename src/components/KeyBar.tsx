@@ -31,7 +31,7 @@ const keys: ShortcutKey[] = [
 
 export function KeyBar({ onKeyPress }: KeyBarProps) {
   return (
-    <View className="h-14 bg-pine-card border-t border-pine-border">
+    <View className="h-14 bg-ostia-card border-t border-ostia-border">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -45,15 +45,15 @@ export function KeyBar({ onKeyPress }: KeyBarProps) {
             className={cn(
               'h-9 min-w-12 rounded-lg justify-center items-center mx-1 px-3 border',
               key.isPrimary
-                ? 'bg-pine-accentDark/30 border-pine-accent/45'
-                : 'bg-pine-bg border-pine-border'
+                ? 'bg-ostia-accentDark/30 border-ostia-accent/45'
+                : 'bg-ostia-bg border-ostia-border'
             )}
             onPress={() => onKeyPress(key.sequence)}
           >
             <Text
               className={cn(
                 'text-xs font-semibold font-mono',
-                key.isPrimary ? 'text-pine-accent' : 'text-pine-muted'
+                key.isPrimary ? 'text-ostia-accent' : 'text-ostia-muted'
               )}
               numberOfLines={1}
             >

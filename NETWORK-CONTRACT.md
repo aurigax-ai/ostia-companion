@@ -1,10 +1,10 @@
-# Pine Companion — Network Contract (v1.2, contract-first)
+# Ostia Companion — Network Contract (v1.2, contract-first)
 
 > **v1.2 (2026-09-28)** removes the board: `board.get`, `board.update`, the `board.read`/`board.write` caps and the reserved `board.changed` event are gone (the desktop dropped its kanban; boards now live in Trellis). See §11.
 
 > **v1.1 (2026-09-28)** is wire-compatible with v1: the pairing payload is still `"v": 1`. It adds desktop-side capability grants, live cap changes (`caps.changed` event, close code `4004`), `device.caps`, the effective `role` in `pty.attach`, stricter `0x02`/`0x03` gating, and the event→cap mapping. See §11 for the full changelog.
 
-> The desktop↔phone interface. Both the Pine desktop **control gateway** and this **mobile companion** implement to this document. Grounded in Pine's existing local control plane (a per-pane-token-authenticated `pine.sock`); the gateway re-exposes that same command layer over a network transport, plus a live PTY stream.
+> The desktop↔phone interface. Both the Ostia desktop **control gateway** and this **mobile companion** implement to this document. Grounded in Ostia's existing local control plane (a per-pane-token-authenticated `ostia.sock`); the gateway re-exposes that same command layer over a network transport, plus a live PTY stream.
 
 ## 0. Decided constraints (do not violate)
 
@@ -16,13 +16,13 @@
 
 ## 0.1 The gateway is an ADAPTER (not a passthrough)
 
-This phone-facing protocol is intentionally **different** from Pine's internal *local* control socket (a Unix socket with `{token}→{externalId}` auth and different method shapes). The desktop **gateway translates** between this contract and the internal control plane, and **adds the PTY stream** (which internally exists as renderer IPC + a `PtySession` observer-role + cursor-replay ring buffer, not yet as a socket method). The **capability names here are phone-facing** and map to internal desktop capabilities. So: **this document is the stable target the desktop gateway (Phase C) implements to** — do not expect the internal socket to already match it verbatim.
+This phone-facing protocol is intentionally **different** from Ostia's internal *local* control socket (a Unix socket with `{token}→{externalId}` auth and different method shapes). The desktop **gateway translates** between this contract and the internal control plane, and **adds the PTY stream** (which internally exists as renderer IPC + a `PtySession` observer-role + cursor-replay ring buffer, not yet as a socket method). The **capability names here are phone-facing** and map to internal desktop capabilities. So: **this document is the stable target the desktop gateway (Phase C) implements to** — do not expect the internal socket to already match it verbatim.
 
 ## 1. Architecture
 
 ```
   ┌─────────────────────────── User's machine ───────────────────────────┐
-  │  Pine desktop (Electron)                                              │
+  │  Ostia desktop (Electron)                                              │
   │   • control plane: per-pane tokens, capability broker, command layer  │
   │   • CONTROL GATEWAY (this contract): HTTPS + WebSocket server         │
   │        bound to a chosen interface (LAN IP, or the Tailscale addr)    │
@@ -30,7 +30,7 @@ This phone-facing protocol is intentionally **different** from Pine's internal *
                   │  WSS (TLS) — same LAN, or over the user's Tailscale
                   │  (no third party in the path)
         ┌─────────┴─────────┐
-        │  Pine Companion    │  (this repo — phone: PWA or Expo/RN)
+        │  Ostia Companion    │  (this repo — phone: PWA or Expo/RN)
         │  xterm.js + control│
         └────────────────────┘
 ```
@@ -50,10 +50,10 @@ There is exactly one network hop, desktop↔phone. No broker.
 
 Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 
-1. **User action (desktop):** opens **"Connect a device / Pair phone"** in a Pine menu. The desktop:
+1. **User action (desktop):** opens **"Connect a device / Pair phone"** in a Ostia menu. The desktop:
    - ensures the gateway is running on the chosen interface,
    - generates a **short-lived pairing code** (`pairCode`, ~120 s TTL, single-use),
-   - renders a **QR** encoding the JSON payload below (also shown as a copyable `pine-pair://` URI).
+   - renders a **QR** encoding the JSON payload below (also shown as a copyable `ostia-pair://` URI).
 2. **QR / pairing payload:**
    ```json
    {
@@ -88,7 +88,7 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 - **First control frame MUST be `hello`:**
   ```json
   { "jsonrpc": "2.0", "id": 1, "method": "hello",
-    "params": { "deviceToken": "OPAQUE-BEARER", "client": "pine-companion/1.0" } }
+    "params": { "deviceToken": "OPAQUE-BEARER", "client": "ostia-companion/1.0" } }
   ```
   - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","notify"], "desktop": { "name": "...", "version": "..." } } }`.
   - Any method before a successful `hello` → error `-32001 unauthenticated`, connection closed.
@@ -200,7 +200,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 |---|---|---|---|
 | `agent.needs-input` | `notify` | `{ sessionId }` | a session enters `waiting` (an agent needs the user) |
 | `agent.done` | `notify` | `{ sessionId }` | a session enters `done` |
-| `notify` | `notify` | `{ title, body?, from }` — `from` is the sending pane's `externalId`, or `null` | an agent runs `pine notify` |
+| `notify` | `notify` | `{ title, body?, from }` — `from` is the sending pane's `externalId`, or `null` | an agent runs `ostia notify` |
 | `session.state` | `read` | `{ sessionId, state: "idle"\|"working"\|"waiting"\|"done"\|"error" }` | any session state change (also sent alongside `agent.*`) |
 | `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
 | `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
@@ -249,13 +249,13 @@ interface CommandDescriptor {
 
 ---
 
-*This is v1.2. The desktop gateway (Pine Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
+*This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
 
 ### v1.2 — 2026-09-28 (board removed)
 
-The desktop removed its built-in kanban (and wiki); boards and cards live in Trellis now, outside Pine.
+The desktop removed its built-in kanban (and wiki); boards and cards live in Trellis now, outside Ostia.
 
 - **Removed methods:** `board.get` and `board.update` now return `-32601 method not found`.
 - **Removed caps:** `board.read` (was a base cap) and `board.write` (was grantable). Base caps are `read`, `notify`; grantable caps are `command`, `input`, `destructive`. Existing device records keep working: the desktop drops unknown caps when it loads them, so `hello`/`device.caps` just return the smaller set.

@@ -22,7 +22,7 @@ import {
   User,
   Wifi,
 } from 'lucide-react-native';
-import { PineRpc } from '../services/rpc';
+import { OstiaRpc } from '../services/rpc';
 import { clearPairingData, getPairingData } from '../services/storage';
 import { Button, EmptyState, IconButton, Pill, Screen, cn, colors } from '../components/ui';
 
@@ -70,8 +70,8 @@ type Tab = 'workspace' | 'board';
 export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps) {
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<Tab>('workspace');
-  const [desktopName, setDesktopName] = useState('Pine Workspace');
-  const [connStatus, setConnStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>(PineRpc.getStatus());
+  const [desktopName, setDesktopName] = useState('Ostia Workspace');
+  const [connStatus, setConnStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>(OstiaRpc.getStatus());
   const [sessions, setSessions] = useState<Session[]>([]);
   const [panes, setPanes] = useState<Pane[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,17 +92,17 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
 
   useEffect(() => {
     getPairingData().then((data) => {
-      if (data) setDesktopName(data.desktopName || 'Pine Desktop');
+      if (data) setDesktopName(data.desktopName || 'Ostia Desktop');
     });
 
-    const unsubscribeStatus = PineRpc.addStatusListener((status) => {
+    const unsubscribeStatus = OstiaRpc.addStatusListener((status) => {
       setConnStatus(status);
       if (status === 'connected') {
         fetchWorkspaceData();
       }
     });
 
-    const unsubscribeEvents = PineRpc.addEventListener((type, payload) => {
+    const unsubscribeEvents = OstiaRpc.addEventListener((type, payload) => {
       if (type === 'pane.state') {
         updatePaneState(payload);
       } else if (type === 'session.state') {
@@ -116,7 +116,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
       }
     });
 
-    if (PineRpc.getStatus() === 'connected') {
+    if (OstiaRpc.getStatus() === 'connected') {
       fetchWorkspaceData();
     } else {
       setLoading(false);
@@ -138,8 +138,8 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
     setLoading(true);
     setError(null);
     try {
-      const sessionResult = await PineRpc.call('session.list');
-      const paneResult = await PineRpc.call('pane.list');
+      const sessionResult = await OstiaRpc.call('session.list');
+      const paneResult = await OstiaRpc.call('pane.list');
       setSessions(sessionResult.sessions || []);
       setPanes(paneResult.panes || []);
     } catch (err: any) {
@@ -153,7 +153,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
   const fetchKanbanBoard = async () => {
     setLoadingBoard(true);
     try {
-      const board = await PineRpc.call('board.get');
+      const board = await OstiaRpc.call('board.get');
       if (board?.columns) {
         const columnsData: KanbanColumn[] = board.columns.map((col: any) => {
           const colId = typeof col === 'string' ? col : col.id;
@@ -214,18 +214,18 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
   };
 
   const handleUnpair = async () => {
-    PineRpc.disconnect();
+    OstiaRpc.disconnect();
     await clearPairingData();
     onUnpair();
   };
 
   return (
     <Screen>
-      <View className="border-b border-pine-border bg-pine-bg px-4 pb-3">
+      <View className="border-b border-ostia-border bg-ostia-bg px-4 pb-3">
         <View className="flex-row items-start justify-between">
           <View className="flex-1 pr-3">
-            <Text className="text-pine-muted text-xs font-bold uppercase">Pine Companion</Text>
-            <Text className="text-pine-text text-2xl font-bold mt-1" numberOfLines={1}>
+            <Text className="text-ostia-muted text-xs font-bold uppercase">Ostia Companion</Text>
+            <Text className="text-ostia-text text-2xl font-bold mt-1" numberOfLines={1}>
               {desktopName}
             </Text>
             <View className="flex-row items-center mt-2">
@@ -265,7 +265,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
           <Metric label="Waiting" value={waitingCount.toString()} urgent={waitingCount > 0} />
         </View>
 
-        <View className="flex-row bg-pine-card border border-pine-border rounded-lg p-1 mt-4">
+        <View className="flex-row bg-ostia-card border border-ostia-border rounded-lg p-1 mt-4">
           <TabButton
             active={activeTab === 'workspace'}
             icon={LayoutGrid}
@@ -293,7 +293,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
         >
           <AlertTriangle size={16} color="#fbbf24" />
           <Text style={{ color: '#fde68a' }} className="text-xs font-semibold ml-2 flex-1 leading-4">
-            Connecting to the desktop gateway. Keep Pine open on the same LAN or tailnet.
+            Connecting to the desktop gateway. Keep Ostia open on the same LAN or tailnet.
           </Text>
         </MotiView>
       ) : null}
@@ -301,7 +301,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
       {loading ? (
         <View className="flex-1 justify-center items-center p-8">
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text className="text-pine-muted text-sm mt-3">Loading workspace</Text>
+          <Text className="text-ostia-muted text-sm mt-3">Loading workspace</Text>
         </View>
       ) : activeTab === 'workspace' ? (
         renderWorkspace()
@@ -328,7 +328,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
         <EmptyState
           icon={Folder}
           title="No active sessions"
-          body="Create or attach a workspace in Pine desktop, then pull to refresh here."
+          body="Create or attach a workspace in Ostia desktop, then pull to refresh here."
         />
       );
     }
@@ -353,15 +353,15 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
               from={{ opacity: 0, translateY: 12 }}
               animate={{ opacity: 1, translateY: 0 }}
               transition={{ type: 'spring', delay: index * 60 }}
-              className="bg-pine-card rounded-lg border border-pine-border mb-4 overflow-hidden"
+              className="bg-ostia-card rounded-lg border border-ostia-border mb-4 overflow-hidden"
             >
-              <View className="px-4 py-4 border-b border-pine-border/70">
+              <View className="px-4 py-4 border-b border-ostia-border/70">
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-3">
-                    <Text className="text-pine-text text-base font-bold" numberOfLines={1}>
+                    <Text className="text-ostia-text text-base font-bold" numberOfLines={1}>
                       {session.name || 'Untitled session'}
                     </Text>
-                    <Text className="text-pine-muted text-xs font-mono mt-1" numberOfLines={1}>
+                    <Text className="text-ostia-muted text-xs font-mono mt-1" numberOfLines={1}>
                       {session.workDir || 'No working directory'}
                     </Text>
                   </View>
@@ -370,7 +370,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
               </View>
 
               {sessionPanes.length === 0 ? (
-                <Text className="text-pine-muted text-sm italic px-4 py-4">No open panes.</Text>
+                <Text className="text-ostia-muted text-sm italic px-4 py-4">No open panes.</Text>
               ) : (
                 sessionPanes.map((pane) => (
                   <PaneRow key={pane.paneId} pane={pane} onPress={() => onSelectPane(pane.paneId, pane.title)} />
@@ -388,7 +388,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
       return (
         <View className="flex-1 justify-center items-center p-8">
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text className="text-pine-muted text-sm mt-3">Loading board</Text>
+          <Text className="text-ostia-muted text-sm mt-3">Loading board</Text>
         </View>
       );
     }
@@ -398,7 +398,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
         <EmptyState
           icon={Columns}
           title="Board is empty"
-          body="Cards will appear once Pine desktop exposes the board for this workspace."
+          body="Cards will appear once Ostia desktop exposes the board for this workspace."
         />
       );
     }
@@ -421,10 +421,10 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
           <View
             key={column.id}
             style={{ width: boardColumnWidth }}
-            className="mr-3 bg-pine-card border border-pine-border rounded-lg overflow-hidden"
+            className="mr-3 bg-ostia-card border border-ostia-border rounded-lg overflow-hidden"
           >
-            <View className="flex-row items-center justify-between px-4 py-3 border-b border-pine-border/70">
-              <Text className="text-pine-text text-sm font-bold uppercase" numberOfLines={1}>
+            <View className="flex-row items-center justify-between px-4 py-3 border-b border-ostia-border/70">
+              <Text className="text-ostia-text text-sm font-bold uppercase" numberOfLines={1}>
                 {column.title}
               </Text>
               <Pill label={column.cards.length.toString()} tone="neutral" />
@@ -439,20 +439,20 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
                   from={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ type: 'spring', delay: index * 45 }}
-                  className="bg-pine-bg border border-pine-border rounded-lg p-3 mb-3"
+                  className="bg-ostia-bg border border-ostia-border rounded-lg p-3 mb-3"
                 >
-                  <Text className="text-pine-text text-sm font-semibold leading-5">
+                  <Text className="text-ostia-text text-sm font-semibold leading-5">
                     {item.title}
                   </Text>
                   {item.description ? (
-                    <Text className="text-pine-muted text-xs leading-4 mt-1.5" numberOfLines={3}>
+                    <Text className="text-ostia-muted text-xs leading-4 mt-1.5" numberOfLines={3}>
                       {item.description}
                     </Text>
                   ) : null}
                   {item.assignee ? (
-                    <View className="mt-3 pt-2 border-t border-pine-border/60 flex-row items-center">
+                    <View className="mt-3 pt-2 border-t border-ostia-border/60 flex-row items-center">
                       <User size={12} color={colors.muted} />
-                      <Text className="text-pine-muted text-xs ml-1.5" numberOfLines={1}>
+                      <Text className="text-ostia-muted text-xs ml-1.5" numberOfLines={1}>
                         {item.assignee}
                       </Text>
                     </View>
@@ -460,7 +460,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
                 </MotiView>
               )}
               ListEmptyComponent={
-                <Text className="text-pine-muted text-sm italic text-center mt-8">
+                <Text className="text-ostia-muted text-sm italic text-center mt-8">
                   No cards in this column
                 </Text>
               }
@@ -474,11 +474,11 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
 
 function Metric({ label, value, urgent }: { label: string; value: string; urgent?: boolean }) {
   return (
-    <View className="flex-1 bg-pine-card border border-pine-border rounded-lg px-3 py-2 mr-2 last:mr-0">
-      <Text className={cn('text-lg font-bold', urgent ? 'text-red-300' : 'text-pine-text')}>
+    <View className="flex-1 bg-ostia-card border border-ostia-border rounded-lg px-3 py-2 mr-2 last:mr-0">
+      <Text className={cn('text-lg font-bold', urgent ? 'text-red-300' : 'text-ostia-text')}>
         {value}
       </Text>
-      <Text className="text-pine-muted text-[11px] font-semibold mt-0.5" numberOfLines={1}>
+      <Text className="text-ostia-muted text-[11px] font-semibold mt-0.5" numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -503,11 +503,11 @@ function TabButton({
       onPress={onPress}
       className={cn(
         'flex-1 min-h-10 rounded-md flex-row items-center justify-center',
-        active && 'bg-pine-accentDark/35'
+        active && 'bg-ostia-accentDark/35'
       )}
     >
       <Icon size={15} color={active ? colors.accent : colors.muted} />
-      <Text className={cn('text-sm font-semibold ml-2', active ? 'text-pine-accent' : 'text-pine-muted')}>
+      <Text className={cn('text-sm font-semibold ml-2', active ? 'text-ostia-accent' : 'text-ostia-muted')}>
         {label}
       </Text>
     </Pressable>
@@ -519,7 +519,7 @@ function PaneRow({ pane, onPress }: { pane: Pane; onPress: () => void }) {
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="min-h-16 px-4 py-3 border-b border-pine-border/55 flex-row items-center"
+      className="min-h-16 px-4 py-3 border-b border-ostia-border/55 flex-row items-center"
     >
       <MotiView
         animate={{
@@ -534,12 +534,12 @@ function PaneRow({ pane, onPress }: { pane: Pane; onPress: () => void }) {
 
       <View className="flex-1 pr-3">
         <View className="flex-row items-center">
-          <Text className="text-pine-text text-sm font-bold flex-1" numberOfLines={1}>
+          <Text className="text-ostia-text text-sm font-bold flex-1" numberOfLines={1}>
             {pane.title || 'Terminal'}
           </Text>
           {pane.agentWaiting ? <Pill label="Needs input" tone="danger" className="ml-2" /> : null}
         </View>
-        <Text className="text-pine-muted text-xs font-mono mt-1" numberOfLines={1}>
+        <Text className="text-ostia-muted text-xs font-mono mt-1" numberOfLines={1}>
           {pane.cwd || 'No path'}
         </Text>
       </View>

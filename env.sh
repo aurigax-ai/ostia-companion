@@ -18,7 +18,7 @@ else
 fi
 
 # 3. Print verification info
-echo -e "\x1b[32m🌲 Pine Companion environment populated for this session!\x1b[0m"
+echo -e "\x1b[32m🌲 Ostia Companion environment populated for this session!\x1b[0m"
 if command -v java >/dev/null 2>&1; then
   echo "  - Java version: $(java -version 2>&1 | head -n 1)"
 else

@@ -41,8 +41,8 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
     try {
       let dataStr = payloadStr.trim();
 
-      if (dataStr.startsWith('pine-pair://')) {
-        const base64Data = dataStr.replace('pine-pair://', '');
+      if (dataStr.startsWith('ostia-pair://')) {
+        const base64Data = dataStr.replace('ostia-pair://', '');
         dataStr = atob(base64Data);
       }
 
@@ -62,7 +62,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
 
       await savePairingData({
         ...pairingResult,
-        desktopName: config.name || 'Pine Desktop',
+        desktopName: config.name || 'Ostia Desktop',
       });
 
       setLoading(false);
@@ -108,17 +108,17 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
           transition={{ type: 'spring', damping: 15 }}
           className="items-center"
         >
-          <View className="h-16 w-16 rounded-2xl bg-pine-card border border-pine-border items-center justify-center mb-6">
+          <View className="h-16 w-16 rounded-2xl bg-ostia-card border border-ostia-border items-center justify-center mb-6">
             <Camera size={30} color={colors.accent} />
           </View>
 
-          <Text className="text-pine-muted text-xs font-bold uppercase text-center">
-            Pine Companion
+          <Text className="text-ostia-muted text-xs font-bold uppercase text-center">
+            Ostia Companion
           </Text>
-          <Text className="text-pine-text text-2xl font-bold text-center mt-2">
-            Connect to Pine desktop
+          <Text className="text-ostia-text text-2xl font-bold text-center mt-2">
+            Connect to Ostia desktop
           </Text>
-          <Text className="text-pine-muted text-sm leading-5 text-center mt-3 mb-8 max-w-[310]">
+          <Text className="text-ostia-muted text-sm leading-5 text-center mt-3 mb-8 max-w-[310]">
             Camera access is used only to scan the local pairing QR code from your desktop.
           </Text>
 
@@ -155,10 +155,10 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
 
       <View className="flex-1 px-5 justify-between">
         <View className="pt-4">
-          <Text className="text-white/70 text-xs font-bold uppercase">Pine Companion</Text>
+          <Text className="text-white/70 text-xs font-bold uppercase">Ostia Companion</Text>
           <Text className="text-white text-2xl font-bold mt-1">Scan pairing code</Text>
           <Text className="text-white/70 text-sm leading-5 mt-2 max-w-[320]">
-            Open Pine desktop settings and choose Connect phone.
+            Open Ostia desktop settings and choose Connect phone.
           </Text>
         </View>
 
@@ -175,15 +175,15 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
             }}
             className="w-64 h-64 justify-center items-center border border-white/15 relative overflow-hidden bg-black/10"
           >
-            <View className="absolute top-[-2] left-[-2] w-9 h-9 border-t-4 border-l-4 border-pine-accent rounded-tl" />
-            <View className="absolute top-[-2] right-[-2] w-9 h-9 border-t-4 border-r-4 border-pine-accent rounded-tr" />
-            <View className="absolute bottom-[-2] left-[-2] w-9 h-9 border-b-4 border-l-4 border-pine-accent rounded-bl" />
-            <View className="absolute bottom-[-2] right-[-2] w-9 h-9 border-b-4 border-r-4 border-pine-accent rounded-br" />
+            <View className="absolute top-[-2] left-[-2] w-9 h-9 border-t-4 border-l-4 border-ostia-accent rounded-tl" />
+            <View className="absolute top-[-2] right-[-2] w-9 h-9 border-t-4 border-r-4 border-ostia-accent rounded-tr" />
+            <View className="absolute bottom-[-2] left-[-2] w-9 h-9 border-b-4 border-l-4 border-ostia-accent rounded-bl" />
+            <View className="absolute bottom-[-2] right-[-2] w-9 h-9 border-b-4 border-r-4 border-ostia-accent rounded-br" />
             <ScanLine size={34} color={colors.accent} />
             <MotiView
               animate={{ translateY: [-112, 112, -112] }}
               transition={{ loop: true, duration: 2100, type: 'timing' }}
-              className="absolute w-56 h-0.5 bg-pine-accent"
+              className="absolute w-56 h-0.5 bg-ostia-accent"
             />
           </MotiView>
         </View>
@@ -207,14 +207,14 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
           <MotiView
             from={{ scale: 0.94, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="p-6 rounded-lg bg-pine-card border border-pine-border items-center w-full max-w-[310]"
+            className="p-6 rounded-lg bg-ostia-card border border-ostia-border items-center w-full max-w-[310]"
           >
             <ActivityIndicator size="large" color={colors.accent} />
-            <Text className="text-pine-text text-base font-bold mt-4 text-center">
+            <Text className="text-ostia-text text-base font-bold mt-4 text-center">
               Securing connection
             </Text>
-            <Text className="text-pine-muted text-xs mt-2 text-center leading-4">
-              Verifying the TLS fingerprint and registering this device with Pine.
+            <Text className="text-ostia-muted text-xs mt-2 text-center leading-4">
+              Verifying the TLS fingerprint and registering this device with Ostia.
             </Text>
           </MotiView>
         </View>
@@ -254,12 +254,12 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           className="flex-1 bg-black/70 justify-end"
         >
-          <View className="bg-pine-card rounded-t-2xl p-5 border-t border-pine-border">
-            <View className="w-12 h-1.5 rounded-full bg-pine-border self-center mb-5" />
+          <View className="bg-ostia-card rounded-t-2xl p-5 border-t border-ostia-border">
+            <View className="w-12 h-1.5 rounded-full bg-ostia-border self-center mb-5" />
             <View className="flex-row justify-between items-start mb-3">
               <View className="flex-1 pr-4">
-                <Text className="text-pine-text text-xl font-bold">Manual pairing</Text>
-                <Text className="text-pine-muted text-sm leading-5 mt-2">
+                <Text className="text-ostia-text text-xl font-bold">Manual pairing</Text>
+                <Text className="text-ostia-muted text-sm leading-5 mt-2">
                   Paste the copyable pairing link shown below the QR code on your desktop.
                 </Text>
               </View>
@@ -281,8 +281,8 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
             ) : null}
 
             <TextInput
-              className="bg-pine-bg border border-pine-border rounded-lg p-3 text-pine-text min-h-24 text-xs font-mono mb-4"
-              placeholder="pine-pair://..."
+              className="bg-ostia-bg border border-ostia-border rounded-lg p-3 text-ostia-text min-h-24 text-xs font-mono mb-4"
+              placeholder="ostia-pair://..."
               placeholderTextColor={colors.subtle}
               value={manualUri}
               onChangeText={setManualUri}
@@ -297,7 +297,7 @@ export function PairingScreen({ onPairSuccess }: PairingScreenProps) {
                 onPress={closeManualModal}
                 className="flex-1 min-h-11 rounded-lg items-center justify-center mr-3"
               >
-                <Text className="text-pine-muted text-sm font-semibold">Cancel</Text>
+                <Text className="text-ostia-muted text-sm font-semibold">Cancel</Text>
               </Pressable>
               <Button
                 label="Pair"
