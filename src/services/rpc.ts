@@ -1,36 +1,34 @@
 import { PinnedWebSocket } from 'websocket-pinning';
 import { PairingData } from './storage';
 
-export interface RpcRequest {
-  jsonrpc: '2.0';
-  id: number;
-  method: string;
-  params: any;
+export type Cap = 'read' | 'notify' | 'command' | 'input' | 'destructive';
+export type Role = 'observer' | 'owner';
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'revoked';
+
+export interface RpcError {
+  code: number;
+  message: string;
+  data?: any;
 }
 
-export interface RpcResponse {
-  jsonrpc: '2.0';
-  id?: number;
-  result?: any;
-  error?: {
-    code: number;
-    message: string;
-    data?: any;
-  };
-}
-
-export interface ServerNotification {
-  jsonrpc: '2.0';
-  method: 'event';
-  params: {
-    type: string;
-    payload: any;
-  };
+export interface AttachResult {
+  cursor: number;
+  dropped: boolean;
+  cols: number;
+  rows: number;
+  role: Role;
 }
 
 type EventListener = (type: string, payload: any) => void;
 type PtyDataListener = (base64Data: string) => void;
-type StatusListener = (status: 'connecting' | 'connected' | 'disconnected' | 'error', errorMsg?: string) => void;
+type StatusListener = (status: ConnectionStatus, reason?: string) => void;
+type CapsListener = (caps: Cap[]) => void;
+
+const CLOSE_REVOKED = 4003;
+const CLOSE_CAPS_CHANGED = 4004;
+const RPC_UNAUTHENTICATED = -32001;
+const MIN_RECONNECT_DELAY = 500;
+const MAX_RECONNECT_DELAY = 8000;
 
 class OstiaRpcClient {
   private socket: PinnedWebSocket | null = null;
@@ -39,286 +37,304 @@ class OstiaRpcClient {
   private eventListeners = new Set<EventListener>();
   private ptyListeners = new Set<PtyDataListener>();
   private statusListeners = new Set<StatusListener>();
-  
-  private pairingData: PairingData | null = null;
-  private connectionStatus: 'connecting' | 'connected' | 'disconnected' = 'disconnected';
-  private isAuthenticated = false;
-  
-  // Reconnection state
-  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-  private reconnectDelay = 500; // ms
-  private activePaneId: string | null = null;
-  private activeRole: 'observer' | 'owner' = 'observer';
-  private lastCursor = 0;
+  private capsListeners = new Set<CapsListener>();
 
-  constructor() {}
+  private pairingData: PairingData | null = null;
+  private status: ConnectionStatus = 'disconnected';
+  private caps: Cap[] = [];
+
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private reconnectDelay = MIN_RECONNECT_DELAY;
+
+  private activePaneId: string | null = null;
+  private requestedRole: Role = 'observer';
+  private lastCursor = 0;
+  private awaitingAttach = false;
+  private replayFrames: string[] = [];
 
   public initialize(pairingData: PairingData) {
     this.pairingData = pairingData;
-    this.lastCursor = 0;
     this.activePaneId = null;
+    this.lastCursor = 0;
     this.connect();
   }
 
-  private setStatus(status: 'connecting' | 'connected' | 'disconnected', errorMsg?: string) {
-    this.connectionStatus = status;
-    const mappedStatus = errorMsg && status === 'disconnected' ? 'error' : status;
-    this.statusListeners.forEach(listener => listener(mappedStatus as any, errorMsg));
-  }
-
   public getStatus() {
-    return this.connectionStatus;
+    return this.status;
   }
 
-  public getIsAuthenticated() {
-    return this.isAuthenticated;
+  public getCaps() {
+    return this.caps;
+  }
+
+  public hasCap(cap: Cap) {
+    return this.caps.includes(cap);
+  }
+
+  private setStatus(status: ConnectionStatus, reason?: string) {
+    this.status = status;
+    this.statusListeners.forEach((listener) => listener(status, reason));
+  }
+
+  private setCaps(caps: Cap[]) {
+    this.caps = caps;
+    this.capsListeners.forEach((listener) => listener(caps));
   }
 
   public connect() {
     if (!this.pairingData) return;
-    this.disconnect();
-    
-    const host = this.pairingData.gatewayHost;
-    const port = this.pairingData.gatewayPort;
-    const fingerprint = this.pairingData.pinnedFingerprint;
-    const wsUrl = `wss://${host}:${port}/ws`;
-    
-    this.setStatus('connecting');
-    this.isAuthenticated = false;
+    this.closeSocket();
 
-    this.socket = new PinnedWebSocket(wsUrl, fingerprint, {
-      onOpen: () => {
-        this.reconnectDelay = 500; // Reset backoff
-        this.sendHello();
-      },
-      onMessage: (event) => {
-        if (event.type === 'text') {
-          this.handleTextFrame(event.data);
-        } else if (event.type === 'binary') {
-          this.handleBinaryFrame(event.data);
-        }
-      },
-      onClose: (event) => {
-        this.setStatus('disconnected', event.reason || 'WebSocket connection closed');
-        this.handleDisconnect();
-      },
-      onError: (event) => {
-        console.warn('PinnedWebSocket Error:', event.message);
-        this.statusListeners.forEach(l => l('error', event.message));
+    const { gatewayHost, gatewayPort, pinnedFingerprint } = this.pairingData;
+    this.setStatus('connecting');
+
+    const socket: PinnedWebSocket = new PinnedWebSocket(
+      `wss://${gatewayHost}:${gatewayPort}/ws`,
+      pinnedFingerprint,
+      {
+        onOpen: () => {
+          if (this.socket !== socket) return;
+          this.sendHello();
+        },
+        onMessage: (event) => {
+          if (this.socket !== socket) return;
+          if (event.type === 'text') this.handleTextFrame(event.data);
+          else this.handleBinaryFrame(event.data);
+        },
+        onClose: (event) => {
+          if (this.socket !== socket) return;
+          this.handleClose(event.code, event.reason);
+        },
+        onError: (event) => {
+          if (this.socket !== socket) return;
+          console.warn('PinnedWebSocket error:', event.message);
+        },
       }
-    });
+    );
+    this.socket = socket;
   }
 
   public disconnect() {
+    this.closeSocket();
+    this.activePaneId = null;
+    this.setStatus('disconnected');
+  }
+
+  private closeSocket() {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-    }
-    this.isAuthenticated = false;
-    this.setStatus('disconnected');
+    const socket = this.socket;
+    this.socket = null;
+    socket?.close();
+    this.rejectPending('WebSocket closed');
+    this.awaitingAttach = false;
+    this.replayFrames = [];
   }
 
-  private handleDisconnect() {
-    this.isAuthenticated = false;
-    // Exponential backoff reconnect
-    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.reconnectTimeout = setTimeout(() => {
-      // Increase delay up to 8s max
-      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
-      this.connect();
-    }, this.reconnectDelay);
+  private rejectPending(message: string) {
+    const pending = [...this.pendingRequests.values()];
+    this.pendingRequests.clear();
+    pending.forEach(({ reject }) => reject({ code: -1, message }));
+  }
+
+  private handleClose(code: number, reason: string) {
+    this.socket = null;
+    this.rejectPending(reason || 'WebSocket closed');
+    this.awaitingAttach = false;
+    this.replayFrames = [];
+
+    if (code === CLOSE_REVOKED) {
+      this.revoke('This device was removed on the desktop.');
+      return;
+    }
+
+    this.setStatus('disconnected', reason || undefined);
+    const delay = code === CLOSE_CAPS_CHANGED ? 0 : this.reconnectDelay;
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
+    this.reconnectTimeout = setTimeout(() => this.connect(), delay);
+  }
+
+  private revoke(reason: string) {
+    this.closeSocket();
+    this.pairingData = null;
+    this.activePaneId = null;
+    this.setCaps([]);
+    this.setStatus('revoked', reason);
   }
 
   private async sendHello() {
     if (!this.pairingData) return;
     try {
-      const response = await this.call('hello', {
+      const result = await this.call('hello', {
         deviceToken: this.pairingData.deviceToken,
         client: 'ostia-companion/1.0',
       });
-      
-      this.isAuthenticated = true;
+      this.reconnectDelay = MIN_RECONNECT_DELAY;
+      this.setCaps(result.caps ?? []);
       this.setStatus('connected');
-      console.log('OSTIA_RPC: Handshake successful', response);
-
-      // Re-attach PTY if we were previously attached to a pane
       if (this.activePaneId) {
-        this.attachPty(this.activePaneId, this.activeRole, this.lastCursor);
+        this.attachPty(this.activePaneId, this.requestedRole).catch((err) =>
+          console.warn('Re-attach after reconnect failed:', err)
+        );
       }
-    } catch (e: any) {
-      console.error('Handshake hello failed:', e);
-      this.setStatus('disconnected', e.message || 'Authentication failed');
-      // If unauthenticated error code is returned, maybe forget pairing
-      if (e.code === -32001) {
-        this.disconnect(); // Do not auto-reconnect if token is revoked
+    } catch (err: any) {
+      if (err?.code === RPC_UNAUTHENTICATED) {
+        this.revoke('The desktop no longer accepts this device.');
       }
     }
   }
 
   private handleTextFrame(data: string) {
+    let message: any;
     try {
-      const payload = JSON.parse(data);
-      
-      // 1. JSON-RPC Response
-      if (payload.id !== undefined) {
-        const pending = this.pendingRequests.get(payload.id);
-        if (pending) {
-          this.pendingRequests.delete(payload.id);
-          if (payload.error) {
-            pending.reject(payload.error);
-          } else {
-            pending.resolve(payload.result);
-          }
-        }
-      } 
-      // 2. Server Notification Event
-      else if (payload.method === 'event' && payload.params) {
-        const { type, payload: eventPayload } = payload.params;
-        
-        // Handle lastCursor updates from cursor event notifications to resume cleanly
-        if (type === 'pane.state' && eventPayload?.paneId === this.activePaneId) {
-          if (eventPayload.blockCount !== undefined) {
-            // Placeholder/rough sync if cursor is not directly exposed in metadata
-          }
-        }
-        
-        this.eventListeners.forEach(listener => listener(type, eventPayload));
-      }
+      message = JSON.parse(data);
     } catch (e) {
       console.error('Failed to parse text frame JSON:', e);
+      return;
     }
+
+    if (message.method === 'event' && message.params) {
+      const { type, payload } = message.params;
+      if (type === 'caps.changed') this.setCaps(payload?.caps ?? []);
+      this.emit(type, payload);
+      return;
+    }
+
+    if (message.id === null && message.error) {
+      this.emit('rpc.error', message.error);
+      return;
+    }
+
+    const pending = this.pendingRequests.get(message.id);
+    if (!pending) return;
+    this.pendingRequests.delete(message.id);
+    if (message.error) pending.reject(message.error);
+    else pending.resolve(message.result);
   }
 
   private handleBinaryFrame(base64Data: string) {
-    try {
-      const binaryString = atob(base64Data);
-      if (binaryString.length === 0) return;
-      const typeByte = binaryString.charCodeAt(0);
+    const binary = atob(base64Data);
+    if (binary.length === 0 || binary.charCodeAt(0) !== 0x01) return;
+    const payload = binary.substring(1);
 
-      // 0x01: Server -> Client Raw PTY output bytes
-      if (typeByte === 0x01) {
-        // Strip the type byte and forward the remainder as Base64 to xterm.js WebView
-        const payloadBase64 = btoa(binaryString.substring(1));
-        this.ptyListeners.forEach(listener => listener(payloadBase64));
-      } 
-      // 0x00: Server -> Client Control JSON (e.g. cursor or resize metadata)
-      else if (typeByte === 0x00) {
-        const jsonStr = decodeUtf8(binaryString.substring(1));
-        const control = JSON.parse(jsonStr);
-        if (control.kind === 'cursor' && control.cursor !== undefined) {
-          this.lastCursor = control.cursor;
-        }
-        this.eventListeners.forEach(l => l(`pty.${control.kind}`, control));
-      }
-    } catch (e) {
-      console.error('Failed to decode binary frame:', e);
+    if (this.awaitingAttach) {
+      this.replayFrames.push(payload);
+      return;
     }
+    this.lastCursor += utf16Length(payload);
+    this.writePty(payload);
   }
 
-  /**
-   * Sends a JSON-RPC 2.0 request over the text channel.
-   */
+  private writePty(binaryPayload: string) {
+    const base64 = btoa(binaryPayload);
+    this.ptyListeners.forEach((listener) => listener(base64));
+  }
+
+  private emit(type: string, payload: any) {
+    this.eventListeners.forEach((listener) => listener(type, payload));
+  }
+
   public call(method: string, params: any = {}): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (this.connectionStatus !== 'connected' && method !== 'hello') {
-        reject(new Error('WebSocket is not connected'));
+      if (!this.socket || (this.status !== 'connected' && method !== 'hello')) {
+        reject({ code: -1, message: 'Not connected to the desktop' });
         return;
       }
-
       const id = this.nextId++;
-      const request: RpcRequest = {
-        jsonrpc: '2.0',
-        id,
-        method,
-        params,
-      };
-
       this.pendingRequests.set(id, { resolve, reject });
-      
       try {
-        this.socket?.send(JSON.stringify(request));
-      } catch (e) {
+        this.socket.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
+      } catch (e: any) {
         this.pendingRequests.delete(id);
-        reject(e);
+        reject({ code: -1, message: e?.message ?? 'Send failed' });
       }
     });
   }
 
-  // === PTY Methods ===
-
-  public async attachPty(paneId: string, role: 'observer' | 'owner' = 'observer', sinceCursor = 0) {
+  public async attachPty(paneId: string, role: Role): Promise<AttachResult> {
+    const sinceCursor = paneId === this.activePaneId ? this.lastCursor : 0;
     this.activePaneId = paneId;
-    this.activeRole = role;
-    this.lastCursor = sinceCursor;
-    
-    return this.call('pty.attach', {
-      paneId,
-      role,
-      sinceCursor,
-    });
+    this.requestedRole = role;
+    this.awaitingAttach = true;
+    this.replayFrames = [];
+
+    try {
+      const result: AttachResult = await this.call('pty.attach', { paneId, role, sinceCursor });
+      const replay = this.replayFrames;
+      this.awaitingAttach = false;
+      this.replayFrames = [];
+      this.lastCursor = result.cursor;
+      this.emit('pty.attached', result);
+      replay.forEach((frame) => this.writePty(frame));
+      return result;
+    } catch (err) {
+      this.awaitingAttach = false;
+      this.replayFrames = [];
+      throw err;
+    }
   }
 
   public async detachPty(paneId: string) {
-    if (this.activePaneId === paneId) {
-      this.activePaneId = null;
-    }
-    return this.call('pty.detach', { paneId });
+    if (this.activePaneId !== paneId) return;
+    this.activePaneId = null;
+    this.lastCursor = 0;
+    if (this.status === 'connected') await this.call('pty.detach', { paneId });
   }
 
-  /**
-   * Sends keystrokes to the active PTY session.
-   */
   public sendKeystroke(data: string) {
-    if (!this.socket || this.connectionStatus !== 'connected') return;
-    
-    // Binary Frame 0x02: Client -> Server Raw input bytes
-    const frameContent = String.fromCharCode(0x02) + data;
-    this.socket.sendBinary(btoa(frameContent));
+    if (!this.socket || this.status !== 'connected') return;
+    this.socket.sendBinary(btoa(String.fromCharCode(0x02) + encodeUtf8(data)));
   }
 
-  /**
-   * Sends terminal resize command to the server.
-   */
   public sendResize(paneId: string, cols: number, rows: number) {
-    if (!this.socket || this.connectionStatus !== 'connected') return;
-    
-    // Binary Frame 0x03: Client -> Server Resize
-    const jsonStr = JSON.stringify({ paneId, cols, rows });
-    const frameContent = String.fromCharCode(0x03) + jsonStr;
-    this.socket.sendBinary(btoa(frameContent));
+    if (!this.socket || this.status !== 'connected') return;
+    const frame = String.fromCharCode(0x03) + JSON.stringify({ paneId, cols, rows });
+    this.socket.sendBinary(btoa(frame));
   }
-
-  // === Event Subscriptions ===
 
   public addEventListener(listener: EventListener) {
     this.eventListeners.add(listener);
-    return () => this.eventListeners.delete(listener);
+    return () => {
+      this.eventListeners.delete(listener);
+    };
   }
 
   public addPtyListener(listener: PtyDataListener) {
     this.ptyListeners.add(listener);
-    return () => this.ptyListeners.delete(listener);
+    return () => {
+      this.ptyListeners.delete(listener);
+    };
   }
 
   public addStatusListener(listener: StatusListener) {
     this.statusListeners.add(listener);
-    return () => this.statusListeners.delete(listener);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
+  public addCapsListener(listener: CapsListener) {
+    this.capsListeners.add(listener);
+    return () => {
+      this.capsListeners.delete(listener);
+    };
   }
 }
 
-/**
- * Basic pure JS UTF-8 decoder.
- */
-function decodeUtf8(str: string): string {
-  try {
-    return decodeURIComponent(escape(str));
-  } catch (e) {
-    return str; // Fallback
+export function utf16Length(utf8Binary: string): number {
+  let length = 0;
+  for (let i = 0; i < utf8Binary.length; i++) {
+    const byte = utf8Binary.charCodeAt(i);
+    if ((byte & 0xc0) === 0x80) continue;
+    length += byte >= 0xf0 ? 2 : 1;
   }
+  return length;
+}
+
+function encodeUtf8(text: string): string {
+  return unescape(encodeURIComponent(text));
 }
 
 export const OstiaRpc = new OstiaRpcClient();

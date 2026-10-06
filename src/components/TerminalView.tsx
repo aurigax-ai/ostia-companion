@@ -4,8 +4,9 @@ import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
 export interface TerminalViewHandle {
   write: (data: string) => void;
-  clear: () => void;
-  fit: () => void;
+  reset: () => void;
+  followFit: () => void;
+  setSize: (cols: number, rows: number) => void;
 }
 
 interface TerminalViewProps {
@@ -53,6 +54,7 @@ const htmlContent = `
   <script>
     let term;
     let fitAddon;
+    let fixedSize = false;
 
     try {
       term = new Terminal({
@@ -82,11 +84,6 @@ const htmlContent = `
       term.open(document.getElementById('terminal'));
       
       // Initial fit after load
-      setTimeout(() => {
-        fitAddon.fit();
-        sendResizeEvent();
-      }, 300);
-
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
 
       term.onData((data) => {
@@ -97,6 +94,7 @@ const htmlContent = `
       });
 
       window.addEventListener('resize', () => {
+        if (fixedSize) return;
         fitAddon.fit();
         sendResizeEvent();
       });
@@ -125,11 +123,15 @@ const htmlContent = `
             bytes[i] = raw.charCodeAt(i);
           }
           term.write(bytes);
-        } else if (msg.type === 'clear') {
-          term.clear();
-        } else if (msg.type === 'fit') {
+        } else if (msg.type === 'reset') {
+          term.reset();
+        } else if (msg.type === 'follow-fit') {
+          fixedSize = false;
           fitAddon.fit();
           sendResizeEvent();
+        } else if (msg.type === 'set-size') {
+          fixedSize = true;
+          term.resize(msg.cols, msg.rows);
         }
       } catch (err) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', data: 'PostMessage failed: ' + err.message }));
@@ -150,15 +152,14 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(
           JSON.stringify({ type: 'write', data })
         );
       },
-      clear: () => {
-        webViewRef.current?.postMessage(
-          JSON.stringify({ type: 'clear' })
-        );
+      reset: () => {
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'reset' }));
       },
-      fit: () => {
-        webViewRef.current?.postMessage(
-          JSON.stringify({ type: 'fit' })
-        );
+      followFit: () => {
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'follow-fit' }));
+      },
+      setSize: (cols: number, rows: number) => {
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'set-size', cols, rows }));
       },
     }));
 

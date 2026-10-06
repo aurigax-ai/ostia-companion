@@ -25,7 +25,7 @@ import {
   Terminal,
 } from 'lucide-react-native';
 import { TerminalView, TerminalViewHandle } from '../components/TerminalView';
-import { OstiaRpc } from '../services/rpc';
+import { AttachResult, OstiaRpc, Role } from '../services/rpc';
 import { Button, EmptyState, Pill, Screen, cn, colors } from '../components/ui';
 
 interface TerminalScreenProps {
@@ -34,98 +34,100 @@ interface TerminalScreenProps {
   onBack: () => void;
 }
 
+const RESIZE_DEBOUNCE_MS = 150;
+const RPC_NEEDS_ELEVATION = -32003;
+
 export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProps) {
   const terminalRef = useRef<TerminalViewHandle>(null);
-  const [role, setRole] = useState<'observer' | 'owner'>('observer');
+  const [ready, setReady] = useState(false);
+  const [role, setRole] = useState<Role>('observer');
+  const [canInput, setCanInput] = useState(OstiaRpc.hasCap('input'));
   const [connecting, setConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [elevationVisible, setElevationVisible] = useState(false);
-  const [requestedCap, setRequestedCap] = useState<string | null>(null);
-  
-  // Chat-terminal input state
   const [cmdInput, setCmdInput] = useState('');
+  const roleRef = useRef<Role>('observer');
+  const wantsOwner = useRef(true);
+  const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!ready) return;
+
     const unsubscribePty = OstiaRpc.addPtyListener((base64Data) => {
       terminalRef.current?.write(base64Data);
     });
 
-    const unsubscribeEvents = OstiaRpc.addEventListener((type) => {
-      if (type === 'caps.changed') {
-        checkCapabilities();
+    const unsubscribeEvents = OstiaRpc.addEventListener((type, payload) => {
+      if (type === 'pty.attached') applyAttach(payload);
+      else if (type === 'rpc.error' && payload?.code === RPC_NEEDS_ELEVATION) setElevationVisible(true);
+    });
+
+    const unsubscribeCaps = OstiaRpc.addCapsListener((caps) => {
+      const hasInput = caps.includes('input');
+      setCanInput(hasInput);
+      if (hasInput && wantsOwner.current && roleRef.current === 'observer') {
+        setElevationVisible(false);
+        attach('owner');
       }
     });
 
-    attemptAttach('owner');
+    attach(wantsOwner.current && OstiaRpc.hasCap('input') ? 'owner' : 'observer');
 
     return () => {
       unsubscribePty();
       unsubscribeEvents();
+      unsubscribeCaps();
+      if (resizeTimer.current) clearTimeout(resizeTimer.current);
       OstiaRpc.detachPty(paneId).catch((err) => console.warn('Detaching PTY error:', err));
     };
-  }, [paneId]);
+  }, [ready, paneId]);
 
-  const attemptAttach = async (targetRole: 'observer' | 'owner') => {
+  const applyAttach = (result: AttachResult) => {
+    if (result.dropped) terminalRef.current?.reset();
+    roleRef.current = result.role;
+    setRole(result.role);
+    if (result.role === 'owner') terminalRef.current?.followFit();
+    else terminalRef.current?.setSize(result.cols, result.rows);
+  };
+
+  const attach = async (targetRole: Role) => {
     setConnecting(true);
     setError(null);
     try {
-      await OstiaRpc.attachPty(paneId, targetRole, 0);
-      setRole(targetRole);
-      setConnecting(false);
+      await OstiaRpc.attachPty(paneId, targetRole);
     } catch (err: any) {
-      if (err.code === -32003) {
-        setRequestedCap(err.data?.cap || 'input');
-        if (targetRole === 'owner') {
-          await attemptAttach('observer');
-          setElevationVisible(true);
-        }
-      } else {
-        setError(err.message || 'Failed to attach to terminal');
-        setConnecting(false);
-      }
-    }
-  };
-
-  const checkCapabilities = async () => {
-    try {
-      const result = await OstiaRpc.call('device.caps');
-      const caps: string[] = result.caps || [];
-
-      if (caps.includes('input') && role === 'observer') {
-        setElevationVisible(false);
-        attemptAttach('owner');
-      }
-    } catch (err) {
-      console.warn('Failed to query device caps:', err);
+      setError(err.message || 'Failed to attach to terminal');
+    } finally {
+      setConnecting(false);
     }
   };
 
   const handleRoleToggle = () => {
     if (role === 'owner') {
-      attemptAttach('observer');
-    } else {
-      attemptAttach('owner');
+      wantsOwner.current = false;
+      attach('observer');
+      return;
     }
+    wantsOwner.current = true;
+    if (canInput) attach('owner');
+    else setElevationVisible(true);
   };
 
   const handleTerminalInput = (data: string) => {
-    if (role === 'owner') {
-      OstiaRpc.sendKeystroke(data);
-    } else {
-      setRequestedCap('input');
-      setElevationVisible(true);
-    }
+    if (role === 'owner') OstiaRpc.sendKeystroke(data);
+    else setElevationVisible(true);
   };
 
   const handleSendCommand = () => {
     if (!cmdInput) return;
-    // Transmit command + return sequence to PTY stream
     handleTerminalInput(cmdInput + '\r');
     setCmdInput('');
   };
 
   const handleTerminalResize = (cols: number, rows: number) => {
-    OstiaRpc.sendResize(paneId, cols, rows);
+    if (roleRef.current !== 'owner') return;
+    if (resizeTimer.current) clearTimeout(resizeTimer.current);
+    resizeTimer.current = setTimeout(() => OstiaRpc.sendResize(paneId, cols, rows), RESIZE_DEBOUNCE_MS);
   };
 
   return (
@@ -194,14 +196,14 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
                 icon={ShieldAlert}
                 title="Terminal unavailable"
                 body={error}
-                action={<Button label="Retry Connect" onPress={() => attemptAttach('owner')} />}
+                action={<Button label="Retry Connect" onPress={() => attach(role)} />}
               />
             </View>
           ) : null}
 
           <TerminalView
             ref={terminalRef}
-            onReady={() => console.log('Terminal layout rendered')}
+            onReady={() => setReady(true)}
             onInput={handleTerminalInput}
             onResize={handleTerminalResize}
           />
@@ -298,7 +300,7 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
             <View className="flex-1 flex-row items-center bg-[#111218] border border-ostia-border rounded-full px-4 h-10 justify-center">
               <Lock size={12} color="#ef4444" className="mr-2" />
               <Text className="text-ostia-muted text-xs font-semibold">
-                Observer Mode. Tap to request input access.
+                {canInput ? 'Watching. Tap to type here.' : 'Watching only. Tap to see how to type here.'}
               </Text>
             </View>
           </TouchableOpacity>
@@ -329,19 +331,11 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
                     <Shield size={24} color="#fbbf24" />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-ostia-text text-lg font-bold">Input permission needed</Text>
+                    <Text className="text-ostia-text text-lg font-bold">Typing needs the Input permission</Text>
                     <Text className="text-ostia-muted text-sm leading-5 mt-1">
-                      This pane is in observer mode. Approve the {requestedCap || 'input'} capability on Ostia desktop to type here.
+                      On your desktop, open Ostia Settings → Remote and turn on Input for this phone. This screen switches to typing as soon as it is on.
                     </Text>
                   </View>
-                </View>
-
-                <View className="bg-ostia-bg border border-ostia-border rounded-lg p-3 mt-5 flex-row items-center">
-                  <ActivityIndicator size="small" color={colors.accent} />
-                  <Text className="text-ostia-text text-xs leading-4 flex-1 ml-3">
-                    Waiting for the remote elevation prompt to be approved.
-                  </Text>
-                  <Pill label="Pending" tone="warning" />
                 </View>
 
                 <Button
