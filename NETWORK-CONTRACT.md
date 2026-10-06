@@ -176,7 +176,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | method | cap | params → result |
 |---|---|---|
 | `hello` | — | see §4 |
-| `session.list` | `read` | `{}` → `{ sessions: [{ id, name, kind, workDir, state }] }` |
+| `session.list` | `read` | `{}` → `{ sessions: [{ sessionId, name, kind, workDir, state }] }` |
 | `pane.list` | `read` | `{ sessionId? }` → `{ panes: [{ paneId, sessionId, kind, title, cwd?, running, blockCount, lastExitCode? }] }` |
 | `pane.info` | `read` | `{ paneId }` → `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` |
 | `cwd.get` | `read` | `{ paneId }` → `{ cwd: string \| null }` |
@@ -259,6 +259,7 @@ interface CommandDescriptor {
 
 - **Transport:** the desktop gateway no longer binds a LAN or Tailscale interface; it listens on loopback and Ostia's embedded tsnet node forwards tailnet connections to it, end to end TLS unchanged (same certificate, same fingerprint pin).
 - **Pairing payload:** unchanged shape (`"v": 1`); `host` is always the desktop's tailnet IPv4. A phone paired to a LAN address must pair again.
+- **`session.list`:** each workspace's id is `sessionId`, the same key `pane.list` and every event use (the desktop has always sent it; v1.2 wrote `id`).
 - **Client:** when a `100.64.0.0/10` host is unreachable, tell the user to open Tailscale and sign in to the same tailnet.
 
 ### v1.2 — 2026-09-28 (board removed)
