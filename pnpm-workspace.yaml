@@ -21,3 +21,6 @@ minimumReleaseAgeExclude:
 
 overrides:
   react-dom: 19.2.3
+
+allowBuilds:
+  expo-libghostty: true
