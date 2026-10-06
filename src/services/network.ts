@@ -1,4 +1,4 @@
-import { PinnedWebSocket, pinnedPost } from 'websocket-pinning';
+import { pinnedPost } from 'websocket-pinning';
 import { generateDeviceKeyPair } from './crypto';
 import { PairingData } from './storage';
 
@@ -50,7 +50,19 @@ export async function pairDevice(
       publicKey: keypair.publicKeySpki,
     };
   } catch (error: any) {
-    console.error('Pairing request failed:', error);
-    throw new Error(error.message || 'Pairing failed due to network or certificate error');
+    throw new Error(describePairFailure(error?.message ?? '', host, port));
   }
+}
+
+function describePairFailure(message: string, host: string, port: number): string {
+  if (/401/.test(message)) {
+    return 'The pairing code was already used or expired. Show a new QR on the desktop and scan again.';
+  }
+  if (/429/.test(message)) {
+    return 'Too many pairing attempts. Wait a minute, then show a new QR on the desktop.';
+  }
+  if (/fingerprint|certificate|SSL|TLS/i.test(message)) {
+    return 'The desktop certificate does not match the QR. Show a new QR on the desktop and scan again.';
+  }
+  return `Cannot reach the desktop at ${host}:${port}. Check that the phone is on the same network (or tailnet) and that the desktop firewall allows TCP port ${port}.`;
 }

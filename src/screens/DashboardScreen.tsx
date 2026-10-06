@@ -238,7 +238,7 @@ export function DashboardScreen({ onSelectPane, onUnpair }: DashboardScreenProps
               transition={{ type: 'spring', delay: index * 60 }}
               className="bg-ostia-card rounded-lg border border-ostia-border mb-4 overflow-hidden"
             >
-              <View className="px-4 py-4 border-b border-ostia-border/70">
+              <View className="px-4 py-4 border-b border-ostia-border">
                 <View className="flex-row items-start justify-between">
                   <View className="flex-1 pr-3">
                     <Text className="text-ostia-text text-base font-bold" numberOfLines={1}>
@@ -289,7 +289,7 @@ function PaneRow({ pane, onPress }: { pane: Pane; onPress: () => void }) {
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="min-h-16 px-4 py-3 border-b border-ostia-border/55 flex-row items-center"
+      className="min-h-16 px-4 py-3 border-b border-ostia-border flex-row items-center"
     >
       <View
         style={{ backgroundColor: failed ? '#3a151c' : '#1b1728', borderColor: failed ? '#fb7185' : '#3a3155' }}
