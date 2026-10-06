@@ -14,9 +14,10 @@ To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate p
    - **Android (Kotlin)**: Uses OkHttp and configures a custom `X509TrustManager` with `hostnameVerifier` to validate certificate fingerprints for both Rest API (`POST /pair`) and WebSocket connections.
 2. **Standard Cryptography**:
    - Uses `tweetnacl` polyfilled with `expo-crypto`'s secure native random generator to generate Ed25519 device keypairs and format them into the standard **Subject Public Key Info (SPKI)** format for the pairing payload.
-3. **High-Performance Terminal Rendering**:
-   - Embeds `xterm.js` and `@xterm/addon-fit` inside a `react-native-webview`. 
-   - Binary PTY frames (`0x01`) are captured by the native socket, their header bytes stripped, and forwarded as Base64 to the WebView. The WebView decodes the Base64 directly into a binary `Uint8Array`, feeding `xterm.js` without any string-encoding overhead.
+3. **Native Terminal Rendering (`expo-libghostty`)**:
+   - Ghostty's terminal core renders natively: Metal on iOS, libghostty-vt with a Canvas renderer on Android. Its keyboard accessory bar provides Esc, Tab, arrows and sticky Ctrl/Alt.
+   - Binary PTY frames (`0x01`) are captured by the native socket, their type byte stripped, and the Base64 payload written straight into the view. Keystrokes come back as Base64 and go out as `0x02` frames.
+   - Its `postinstall` downloads checksum-pinned native libraries, so `pnpm-workspace.yaml` allows its build script (`allowBuilds`).
 
 ---
 
@@ -33,8 +34,7 @@ To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate p
 │       └── index.ts           # JS/TS interface wrapper (PinnedWebSocket & pinnedPost)
 └── src/
     ├── components/
-    │   ├── TerminalView.tsx   # WebView wrapper for xterm.js terminal
-    │   └── KeyBar.tsx         # Touch control keys helper (ESC, TAB, Ctrl, Arrows)
+    │   └── ui.tsx             # Shared UI primitives
     ├── screens/
     │   ├── PairingScreen.tsx  # QR scanner and manual backup pairing link
     │   ├── DashboardScreen.tsx# Workspaces and panes with live state

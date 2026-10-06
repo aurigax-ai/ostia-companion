@@ -283,9 +283,13 @@ class OstiaRpcClient {
     if (this.status === 'connected') await this.call('pty.detach', { paneId });
   }
 
-  public sendKeystroke(data: string) {
+  public sendKeystroke(text: string) {
+    this.sendInput(btoa(encodeUtf8(text)));
+  }
+
+  public sendInput(base64: string) {
     if (!this.socket || this.status !== 'connected') return;
-    this.socket.sendBinary(btoa(String.fromCharCode(0x02) + encodeUtf8(data)));
+    this.socket.sendBinary(btoa(String.fromCharCode(0x02) + atob(base64)));
   }
 
   public sendResize(paneId: string, cols: number, rows: number) {

@@ -18,13 +18,12 @@ import {
   ShieldAlert,
   Unlock,
   MessageSquare,
-  Keyboard,
   Paperclip,
   Mic,
   ArrowUp,
   Terminal,
 } from 'lucide-react-native';
-import { TerminalView, TerminalViewHandle } from '../components/TerminalView';
+import { TerminalTheme, TerminalView, TerminalViewRef } from 'expo-libghostty';
 import { AttachResult, OstiaRpc, Role } from '../services/rpc';
 import { Button, EmptyState, Pill, Screen, cn, colors } from '../components/ui';
 
@@ -35,11 +34,17 @@ interface TerminalScreenProps {
 }
 
 const RESIZE_DEBOUNCE_MS = 150;
+const FULL_RESET = '\x1bc';
+const TERMINAL_THEME: TerminalTheme = {
+  background: '#08090c',
+  foreground: '#e2e4e9',
+  cursorColor: '#a78bfa',
+  palette: ['#16161a', '#ff6c6b', '#98be65', '#ecbe7b', '#51afef', '#c678dd', '#46d9ff', '#bbc2cf'],
+};
 const RPC_NEEDS_ELEVATION = -32003;
 
 export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProps) {
-  const terminalRef = useRef<TerminalViewHandle>(null);
-  const [ready, setReady] = useState(false);
+  const terminalRef = useRef<TerminalViewRef>(null);
   const [role, setRole] = useState<Role>('observer');
   const [canInput, setCanInput] = useState(OstiaRpc.hasCap('input'));
   const [connecting, setConnecting] = useState(true);
@@ -49,10 +54,9 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
   const roleRef = useRef<Role>('observer');
   const wantsOwner = useRef(true);
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridSize = useRef<{ cols: number; rows: number } | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
-
     const unsubscribePty = OstiaRpc.addPtyListener((base64Data) => {
       terminalRef.current?.write(base64Data);
     });
@@ -80,14 +84,15 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
       if (resizeTimer.current) clearTimeout(resizeTimer.current);
       OstiaRpc.detachPty(paneId).catch((err) => console.warn('Detaching PTY error:', err));
     };
-  }, [ready, paneId]);
+  }, [paneId]);
 
   const applyAttach = (result: AttachResult) => {
-    if (result.dropped) terminalRef.current?.reset();
+    if (result.dropped) terminalRef.current?.writeText(FULL_RESET);
     roleRef.current = result.role;
     setRole(result.role);
-    if (result.role === 'owner') terminalRef.current?.followFit();
-    else terminalRef.current?.setSize(result.cols, result.rows);
+    if (result.role === 'owner' && gridSize.current) {
+      OstiaRpc.sendResize(paneId, gridSize.current.cols, gridSize.current.rows);
+    }
   };
 
   const attach = async (targetRole: Role) => {
@@ -113,18 +118,20 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
     else setElevationVisible(true);
   };
 
-  const handleTerminalInput = (data: string) => {
-    if (role === 'owner') OstiaRpc.sendKeystroke(data);
+  const handleTerminalInput = (base64: string) => {
+    if (roleRef.current === 'owner') OstiaRpc.sendInput(base64);
     else setElevationVisible(true);
   };
 
   const handleSendCommand = () => {
     if (!cmdInput) return;
-    handleTerminalInput(cmdInput + '\r');
+    if (roleRef.current === 'owner') OstiaRpc.sendKeystroke(cmdInput + '\r');
+    else setElevationVisible(true);
     setCmdInput('');
   };
 
   const handleTerminalResize = (cols: number, rows: number) => {
+    gridSize.current = { cols, rows };
     if (roleRef.current !== 'owner') return;
     if (resizeTimer.current) clearTimeout(resizeTimer.current);
     resizeTimer.current = setTimeout(() => OstiaRpc.sendResize(paneId, cols, rows), RESIZE_DEBOUNCE_MS);
@@ -203,9 +210,11 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
 
           <TerminalView
             ref={terminalRef}
-            onReady={() => setReady(true)}
-            onInput={handleTerminalInput}
-            onResize={handleTerminalResize}
+            style={{ flex: 1 }}
+            theme={TERMINAL_THEME}
+            fontSize={13}
+            onInput={({ nativeEvent }) => handleTerminalInput(nativeEvent.data)}
+            onResize={({ nativeEvent }) => handleTerminalResize(nativeEvent.cols, nativeEvent.rows)}
           />
         </View>
 
@@ -226,41 +235,6 @@ export function TerminalScreen({ paneId, paneTitle, onBack }: TerminalScreenProp
             </Text>
           </View>
         </View>
-
-        {/* Horizontal Capsule KeyBar */}
-        {role === 'owner' && (
-          <View className="flex-row items-center px-3 py-1 bg-ostia-bg">
-            <View className="flex-row flex-1 bg-[#111218] border border-ostia-border rounded-full py-1 px-3 items-center justify-between">
-              <TouchableOpacity className="p-1">
-                <Keyboard size={14} color="#7f8497" />
-              </TouchableOpacity>
-              <View className="w-1.5 h-1.5 rounded-full bg-emerald-500 mx-2" />
-              
-              <TouchableOpacity onPress={() => handleTerminalInput('\x03')} className="bg-ostia-bg border border-ostia-border px-3 py-0.5 rounded-full">
-                <Text className="text-ostia-text text-[10px] font-mono font-bold">Ctrl+C</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('\t')} className="bg-ostia-bg border border-ostia-border px-3 py-0.5 rounded-full">
-                <Text className="text-ostia-text text-[10px] font-mono font-bold">Tab</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('\x1b')} className="bg-ostia-bg border border-ostia-border px-3 py-0.5 rounded-full">
-                <Text className="text-ostia-text text-[10px] font-mono font-bold">Esc</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity onPress={() => handleTerminalInput('^')} className="p-1">
-                <Text className="text-ostia-muted text-[10px] font-mono font-bold">^</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('⌥')} className="p-1">
-                <Text className="text-ostia-muted text-[10px] font-mono font-bold">⌥</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('⌘')} className="p-1">
-                <Text className="text-ostia-muted text-[10px] font-mono font-bold">⌘</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTerminalInput('⇧')} className="p-1">
-                <Text className="text-ostia-muted text-[10px] font-mono font-bold">⇧</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Message-Style Command Input Bar */}
         {role === 'owner' ? (
