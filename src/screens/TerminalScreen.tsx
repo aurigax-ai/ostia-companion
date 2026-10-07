@@ -8,7 +8,8 @@ import { ScreenProps } from '../navigation';
 import { AttachResult, OstiaRpc, Role } from '../services/rpc';
 import { useCaps, useWorkspaces } from '../services/workspaceStore';
 import { KeyRowEvent, KeyRowState, RowKey, pressKeyRow } from '../model/terminalKeys';
-import { TERMINAL_FONT_SIZE, watchFontSize } from '../model/terminalFit';
+import { terminalFontSize } from '../model/prefs';
+import { getPrefs, usePrefs } from '../services/prefsStore';
 import { colors, mono, type } from '../theme';
 
 const RESIZE_DEBOUNCE_MS = 150;
@@ -48,8 +49,9 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const canInput = caps.includes('input');
   const [role, setRole] = useState<Role>('observer');
   const [attaching, setAttaching] = useState(true);
-  const [fontSize, setFontSize] = useState(TERMINAL_FONT_SIZE);
-  const fontSizeRef = useRef(TERMINAL_FONT_SIZE);
+  const prefs = usePrefs();
+  const [fontSize, setFontSize] = useState(getPrefs().fontSize);
+  const fontSizeRef = useRef(getPrefs().fontSize);
   const desktopCols = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const roleRef = useRef<Role>('observer');
@@ -91,6 +93,10 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   useEffect(() => {
     if (canInput && wantsOwner.current && roleRef.current === 'observer') attach('owner');
   }, [canInput]);
+
+  useEffect(() => {
+    if (gridSize.current) settle();
+  }, [prefs.fontSize, prefs.fitWhenWatching]);
 
   const applyAttach = (result: AttachResult) => {
     if (result.dropped) terminalRef.current?.writeText(FULL_RESET);
@@ -163,10 +169,12 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const settle = () => {
     const measured = gridSize.current;
     if (!measured) return;
-    const next =
-      roleRef.current === 'owner'
-        ? TERMINAL_FONT_SIZE
-        : watchFontSize({ cols: measured.cols, fontSize: fontSizeRef.current }, desktopCols.current);
+    const next = terminalFontSize(
+      roleRef.current,
+      getPrefs(),
+      { cols: measured.cols, fontSize: fontSizeRef.current },
+      desktopCols.current,
+    );
     if (next === fontSizeRef.current) return flush();
     fontSizeRef.current = next;
     fontChanging.current = true;
@@ -214,7 +222,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           </View>
         ) : null}
       </View>
-      {role === 'owner' && !attaching && !error ? (
+      {role === 'owner' && prefs.keyRow && !attaching && !error ? (
         <View style={[styles.keyRow, { paddingBottom: 8 + insets.bottom }]}>
           <RowButton label="esc" onPress={() => pressKey({ type: 'key', key: 'esc' })} />
           <RowButton label="tab" onPress={() => pressKey({ type: 'key', key: 'tab' })} />

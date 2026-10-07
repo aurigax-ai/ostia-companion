@@ -5,6 +5,8 @@ import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getPairingData, loadDesktops } from './src/services/storage';
+import { loadPrefs } from './src/services/prefsStore';
+import { startConnectionLog } from './src/services/connectionLog';
 import { removeDesktopAndReconnect } from './src/services/desktopSession';
 import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
@@ -52,6 +54,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    startConnectionLog();
+    void loadPrefs();
     connect().catch(() => setPaired(false));
   }, [connect]);
 
