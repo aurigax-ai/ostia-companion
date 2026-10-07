@@ -1,4 +1,6 @@
-# Ostia Companion — Network Contract (v1.3, contract-first)
+# Ostia Companion — Network Contract (v1.4, contract-first)
+
+> **v1.4 (2026-10-06)** adds pairing without the QR: while the human turned on Discoverable and a pairing code is shown, the desktop announces `_ostia._tcp` on the local network, and the phone pairs by typing the code. Every pairing (QR, link or typed code) now takes two requests (`POST /pair`, then `POST /pair/confirm`) and waits for the human's Approve on the desktop after both screens show the same 6-digit check code. The one-step `/pair` is removed. See §3 and §11.
 
 > **v1.3 (2026-10-06)** makes the tailnet the only transport: the desktop gateway listens only on loopback and is reached through Ostia's embedded Tailscale node (tsnet). The pairing payload is unchanged (`"v": 1`), but its `host` is now always the desktop's tailnet IPv4 (`100.64.0.0/10`), so the phone must run Tailscale signed in to the same tailnet. See §11.
 
@@ -12,7 +14,7 @@
 
 - **The human's own tailnet, nothing else.** The desktop gateway listens only on loopback; Ostia's embedded Tailscale node (tsnet, signed in by the human with their own Tailscale account) forwards tailnet connections to it. Nothing listens on the LAN. The phone reaches the desktop by running Tailscale signed in to the same tailnet; Tailscale connects directly when both are on the same Wi-Fi. **No hosted relay. No cloud rendezvous. No Ostia account.**
 - **Off by default.** The gateway ships disabled; the user explicitly enables it and it shows an always-visible "remote active" indicator.
-- **Pairing is a menu action + QR.** No typing credentials.
+- **Pairing is a menu action on the desktop**: the phone scans the QR, or finds the desktop on the local network and types the one-time code. The human approves every phone on the desktop after comparing a check code.
 - **The desktop is the source of truth.** The phone is a remote view/controller; it holds no durable workspace state beyond its device credential + UI prefs.
 - **Least privilege.** A paired phone gets a **capability subset**; terminal input and destructive actions are **off by default** and require explicit elevation/confirmation.
 
@@ -48,39 +50,55 @@ There is exactly one network hop, desktop↔phone. No broker.
   - **PTY stream**: **binary** frames (see §6). Control and binary frames share the socket; they are distinguished by WebSocket frame opcode (text vs binary).
 - **Origin/host checks:** the server validates the `Origin`/`Host`; the client sends its device token in the connect handshake (§4). A reachable URL alone grants nothing.
 
-## 3. Discovery & pairing (menu → QR → device credential)
+## 3. Discovery & pairing (menu → QR or code → approve → device credential)
 
 Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 
-1. **User action (desktop):** opens **"Connect a device / Pair phone"** in a Ostia menu. The desktop:
-   - requires remote access on and its tailnet node signed in and running (no pairing code otherwise),
-   - generates a **short-lived pairing code** (`pairCode`, ~120 s TTL, single-use),
+1. **User action (desktop):** opens **Settings → Remote → Show pairing code**. The desktop:
+   - requires remote access on and its route ready (tailnet node running, or the picked address bound),
+   - generates a **short-lived pairing code** (`pairCode`: 8 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, 120 s TTL, single-use), shown as `ABCD-EFGH` and replaced by a new one when it expires while the card is open,
    - renders a **QR** encoding the JSON payload below (also shown as a copyable `ostia-pair://` URI).
 2. **QR / pairing payload:**
    ```json
    {
      "v": 1,
-     "host": "100.87.x.y",        // the desktop's tailnet IPv4
+     "host": "100.87.x.y",        // the route's host: tailnet IPv4 or the picked address
      "port": 8722,
      "fingerprint": "sha256/BASE64==",  // TLS cert fingerprint to pin
-     "pairCode": "8-CHAR-ONE-TIME",
+     "pairCode": "ABCDEFGH",
      "name": "Marco's MacBook"    // desktop display name
    }
    ```
-3. **Client (phone):** scans → pins `fingerprint` → generates a **device keypair** (Ed25519 or WebCrypto ECDSA P-256) → calls the pairing endpoint:
-   - `POST https://<host>:<port>/pair`
-     ```json
-     { "v": 1, "pairCode": "8-CHAR-ONE-TIME",
-       "device": { "name": "iPhone 15", "pubkey": "BASE64-SPKI" } }
-     ```
-4. **Desktop:** verifies `pairCode` (unexpired, unused) → registers the device (stores `pubkey`, `name`, a new `deviceId`) → returns a **device token**:
+3. **Discovery (instead of the QR):** while the human turned **Discoverable** on and at least one pairing code is live, the desktop announces itself by mDNS/DNS-SD as `_ostia._tcp` on its LAN interfaces. The TXT record holds exactly:
+
+   | key | value |
+   |---|---|
+   | `v` | `1` |
+   | `name` | the desktop's display name |
+   | `host` | the route's host (tailnet IPv4 or the picked address) |
+   | `port` | the gateway port, decimal |
+   | `fp` | the TLS certificate fingerprint (`sha256/BASE64`) |
+
+   It never carries a code, token or device. The phone ignores an announcement with a missing field, another `v`, or a `host` that is not an IPv4, and treats it only as a hint: the check code (step 5) is what proves which desktop the phone reached. The phone takes `host`, `port` and `fp` from it exactly as from the QR, and the human types the code (case and dashes ignored).
+4. **Request (`POST https://<host>:<port>/pair`, pinning `fingerprint`):** the phone generates a **device keypair** (Ed25519) and 32 random bytes `Np`, and sends:
    ```json
-   { "deviceId": "dev_01J...", "deviceToken": "OPAQUE-BEARER",
-     "caps": ["read", "notify"], "expiresAt": null }
+   { "pairCode": "ABCDEFGH",
+     "device": { "name": "Pixel 9", "pubkey": "BASE64-SPKI" },
+     "commit": "hex(SHA-256(Np))" }
    ```
-   - `deviceToken` is an opaque, revocable bearer credential the phone stores in secure storage. `caps` = the phone's initial capability subset (§5).
-   - The desktop shows the new device in a **"Paired devices"** list with a **revoke** button (revocation is immediate; the token stops working).
-5. **Later connections** use `deviceToken` (§4). Re-pairing is only needed if revoked/expired.
+   - `400 bad-request` for a missing or malformed field (including a body without `commit`), `401 invalid-pair-code` for an unknown, used or expired code, `429 rate-limited`.
+   - On success the code is used up and the desktop answers `200 { "requestId": "…", "nonce": "base64(Nd)" }` (`Nd`: 32 random bytes).
+5. **Confirm (`POST https://<host>:<port>/pair/confirm`):** the phone sends `{ "requestId": "…", "nonce": "base64(Np)" }` and shows the **check code**; the desktop checks `SHA-256(Np)` against the commit (else `400 commit-mismatch`, and the request ends), shows the phone's name and its own check code, and holds the response until the human decides:
+   - **Approve** → `200 { "deviceId": "dev_01J...", "deviceToken": "OPAQUE-BEARER", "caps": ["read", "notify"], "expiresAt": null }`
+   - **Deny** → `403 { "error": "declined" }`
+   - no decision within 120 s of step 4 → `408 { "error": "expired" }`
+   - unknown or finished `requestId` → `404 { "error": "unknown-request" }`
+   - The phone must keep this request open up to 130 s. Closing it withdraws the request on the desktop.
+6. **Check code:** both sides compute `SHA-256(utf8(fingerprint) ‖ 0x00 ‖ utf8(pubkey) ‖ 0x00 ‖ Np ‖ Nd)`, read its first 4 bytes as a big-endian unsigned integer, take it modulo 1 000 000 and zero-pad to 6 digits (shown as `396 848`). The phone uses the fingerprint it pinned, the desktop its own; a relay holding another certificate shows different digits, and because the phone committed to `Np` before seeing `Nd`, it cannot steer them to match.
+
+   Test vector: fingerprint `sha256/q83vEjRWeJCrze8SNFZ4kKvN7xI0VniQq83vEjRWeJA=`, pubkey `MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=`, `Np` = 32 bytes `0x01`, `Nd` = 32 bytes `0x02` → **`396848`**.
+7. **Result:** `deviceToken` is an opaque, revocable bearer credential the phone stores in secure storage; `caps` = the phone's initial capability subset (§5). The desktop lists the device under **Paired devices** with a **revoke** button (revocation is immediate).
+8. **Later connections** use `deviceToken` (§4). Re-pairing is only needed if revoked/expired.
 
 > **Optional hardening (recommended, can be phase-2):** step-up biometric (Face ID/passkey) on the phone before enabling *input* (owner) mode or destructive actions.
 
@@ -254,6 +272,12 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.4 — 2026-10-06 (code pairing, discovery, approval)
+- **Discovery:** `_ostia._tcp` with TXT `v`, `name`, `host`, `port`, `fp`, announced only while Discoverable is on and a pairing code is live (§3.3).
+- **Two-step pairing:** `POST /pair` now takes `commit` and answers `{ requestId, nonce }`; `POST /pair/confirm` reveals the phone's nonce and returns the device token only after the human's Approve (`403 declined`, `408 expired`, `400 commit-mismatch`, `404 unknown-request`). The one-step `/pair` is removed; the QR and link go through the same two steps.
+- **Check code:** 6 digits from the fingerprint, device key and both nonces, with a test vector (§3.6).
+- **Pairing code** is shown as `ABCD-EFGH`; the phone accepts it in any case, with or without the dash.
 
 ### v1.3 — 2026-10-06 (tailnet only)
 
