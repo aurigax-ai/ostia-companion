@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CheckCodeView } from '../components/CheckCodeView';
 import { HeaderTitle } from '../components/ui';
 import { ScreenProps } from '../navigation';
@@ -45,7 +45,7 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
   const boxes = Array.from({ length: CODE_LENGTH }, (_, index) => chars[index] ?? '');
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior="padding">
       <Text style={type.title}>Enter the pairing code</Text>
       <Text style={[type.bodyMuted, { marginTop: 8 }]}>
         It's under the QR code in Settings › Remote on the desktop and changes every 2 minutes.

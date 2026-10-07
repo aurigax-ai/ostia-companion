@@ -128,5 +128,6 @@ export function paneTitle(pane: Pane): string {
 export function paneSubtitle(pane: Pane, workDir: string | undefined): string {
   if (pane.agentState === 'waiting' && pane.agentMessage) return pane.agentMessage;
   if (pane.cwd && pane.cwd !== workDir) return shortPath(pane.cwd);
-  return pane.agent && pane.agent !== 'other' ? pane.agent : shortPath(pane.cwd);
+  const agent = pane.agent && pane.agent !== 'other' && pane.agent !== paneTitle(pane) ? pane.agent : null;
+  return agent ?? shortPath(pane.cwd);
 }

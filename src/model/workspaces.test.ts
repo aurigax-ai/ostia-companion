@@ -152,4 +152,8 @@ describe('paneSubtitle', () => {
     expect(paneSubtitle(pane('a', 's', { cwd: dir }), dir)).toBe('~/api');
     expect(paneSubtitle(pane('a', 's', { agentState: 'waiting', agentMessage: 'Allow?' }), dir)).toBe('Allow?');
   });
+
+  it('shows the folder instead of repeating an agent name that is already the title', () => {
+    expect(paneSubtitle(pane('a', 's', { title: 'claude', cwd: '/home/me/api', agent: 'claude' }), '/home/me/api')).toBe('~/api');
+  });
 });

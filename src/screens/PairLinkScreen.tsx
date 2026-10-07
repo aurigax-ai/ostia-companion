@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CheckCodeView } from '../components/CheckCodeView';
 import { Button } from '../components/ui';
 import { ScreenProps } from '../navigation';
@@ -11,6 +12,7 @@ import { colors, mono, type } from '../theme';
 export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaired: () => Promise<void> }) {
   const [link, setLink] = useState('');
   const pairing = usePairing(onPaired);
+  const insets = useSafeAreaInsets();
 
   if (pairing.check) {
     return (
@@ -26,7 +28,8 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
   const submit = () => void pairing.run((onCheck) => pairWith(link, onCheck));
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.fill} behavior="padding">
+      <View style={[styles.screen, { paddingBottom: 16 + insets.bottom }]}>
       <Text style={type.bodyMuted}>
         Copy the link under the QR code in Settings › Remote on the desktop and paste it here.
       </Text>
@@ -46,12 +49,14 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
       <View style={{ marginTop: 'auto' }}>
         <Button label="Pair" onPress={submit} loading={pairing.busy} disabled={!link.trim()} />
       </View>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 16, paddingBottom: 24 },
+  fill: { flex: 1 },
+  screen: { flex: 1, padding: 16 },
   input: {
     marginTop: 16,
     minHeight: 120,
