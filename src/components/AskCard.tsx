@@ -11,6 +11,9 @@ export function AskCard({
   pending,
   error,
   onAnswer,
+  compact,
+  flat,
+  onReply,
 }: {
   ask: Ask;
   workspace: string;
@@ -18,6 +21,9 @@ export function AskCard({
   pending?: string;
   error?: string;
   onAnswer: (answer: { choiceId?: string; text?: string }) => void;
+  compact?: boolean;
+  flat?: boolean;
+  onReply?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [reply, setReply] = useState('');
@@ -26,7 +32,7 @@ export function AskCard({
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
-  const preview = ask.detail ? detailPreview(ask.detail) : null;
+  const preview = ask.detail && !compact ? detailPreview(ask.detail) : null;
   const disabled = !canRespond || pending !== undefined;
 
   const secondary = ask.choices.filter((choice) => choice.tone !== 'approve');
@@ -43,8 +49,10 @@ export function AskCard({
     />
   );
 
+  const Frame = flat ? View : Card;
+
   return (
-    <Card>
+    <Frame>
       <View style={styles.metaRow}>
         <View style={styles.attnDot} />
         <Text style={[type.mono, styles.meta]} numberOfLines={1}>
@@ -63,7 +71,7 @@ export function AskCard({
           ) : null}
         </View>
       ) : null}
-      {ask.allowText ? (
+      {ask.allowText && !compact ? (
         <View style={styles.replyRow}>
           <TextInput
             style={styles.reply}
@@ -85,8 +93,13 @@ export function AskCard({
         </View>
       ) : null}
       <View style={styles.actions}>
-        {secondary.length > 0 ? (
-          <View style={styles.choiceRow}>{secondary.map((choice) => choiceButton(choice, 'tonal'))}</View>
+        {secondary.length > 0 || (compact && ask.allowText && onReply) ? (
+          <View style={styles.choiceRow}>
+            {secondary.map((choice) => choiceButton(choice, 'tonal'))}
+            {compact && ask.allowText && onReply ? (
+              <Button label="Reply" variant="text" disabled={disabled} onPress={onReply} style={styles.choice} />
+            ) : null}
+          </View>
         ) : null}
         {primary.map((choice) => choiceButton(choice, 'filled'))}
       </View>
@@ -94,7 +107,7 @@ export function AskCard({
         <Text style={[type.caption, styles.note]}>Turn on Respond for this phone in Settings › Remote.</Text>
       ) : null}
       {error ? <Text style={[type.caption, styles.error]}>{error}</Text> : null}
-    </Card>
+    </Frame>
   );
 }
 

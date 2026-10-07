@@ -183,8 +183,8 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
 
 const styles = StyleSheet.create({
   value: { maxWidth: 200, textAlign: 'right' },
-  note: { paddingHorizontal: space.lg + space.xs, paddingTop: space.sm },
+  note: { paddingHorizontal: space.gutter, paddingTop: space.sm },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   size: { ...type.monoLabel, minWidth: 24, textAlign: 'center' },
-  remove: { marginHorizontal: space.lg, marginTop: space.xxl },
+  remove: { marginHorizontal: space.gutter, marginTop: space.xxl },
 });

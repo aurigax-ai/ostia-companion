@@ -60,7 +60,7 @@ export function PromptComposer({
 
 const styles = StyleSheet.create({
   bar: {
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.gutter,
     paddingTop: space.sm,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,

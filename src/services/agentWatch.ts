@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { startAgentWatch, stopAgentWatch } from 'agent-watch';
 import { actionFor, AgentAlert, alertForAsk, alertsFromChange, tapTarget, watchState } from '../model/agentAlerts';
@@ -55,7 +55,7 @@ export function startAgentAlerts(openTerminal: OpenTerminal): void {
   if (started) return;
   started = true;
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }),
+    handleNotification: async () => ({ shouldShowBanner: AppState.currentState !== 'active', shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }),
   });
   if (Platform.OS === 'android') {
     void Notifications.setNotificationChannelAsync(CHANNEL, { name: 'Agents', importance: Notifications.AndroidImportance.HIGH });

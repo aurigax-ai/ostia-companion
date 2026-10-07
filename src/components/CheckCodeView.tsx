@@ -52,7 +52,7 @@ export function CheckCodeView({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.xl },
+  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.gutter },
   body: { flex: 1, justifyContent: 'center' },
   mark: { alignItems: 'center', marginBottom: space.xl },
   center: { textAlign: 'center' },
