@@ -5,6 +5,8 @@ import Foundation
 public class WebSocketPinningModule: Module {
   private var webSocketTask: URLSessionWebSocketTask?
   private var urlSession: URLSession?
+  private var postTasks = Set<URLSessionDataTask>()
+  private let postLock = NSLock()
   private var expectedFingerprint: String?
 
   public func definition() -> ModuleDefinition {
@@ -45,7 +47,9 @@ public class WebSocketPinningModule: Module {
       let delegate = WebSocketSessionDelegate(module: self, expectedFingerprint: fingerprint)
       let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: OperationQueue.main)
       
-      let task = session.dataTask(with: request) { data, response, error in
+      var task: URLSessionDataTask?
+      task = session.dataTask(with: request) { data, response, error in
+        if let task = task { self.postLock.withLock { _ = self.postTasks.remove(task) } }
         if let error = error {
           promise.reject(error)
           return
@@ -62,7 +66,19 @@ public class WebSocketPinningModule: Module {
         
         promise.resolve(responseString)
       }
-      task.resume()
+      if let task = task {
+        self.postLock.withLock { _ = self.postTasks.insert(task) }
+        task.resume()
+      }
+    }
+
+    Function("cancelPosts") {
+      let tasks = self.postLock.withLock { () -> Set<URLSessionDataTask> in
+        let pending = self.postTasks
+        self.postTasks.removeAll()
+        return pending
+      }
+      tasks.forEach { $0.cancel() }
     }
 
     Function("send") { (message: String) in

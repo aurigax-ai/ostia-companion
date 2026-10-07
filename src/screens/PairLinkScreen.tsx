@@ -3,22 +3,32 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } fro
 import { CheckCodeView } from '../components/CheckCodeView';
 import { Button } from '../components/ui';
 import { ScreenProps } from '../navigation';
+import { parsePairingPayload } from '../services/pairing';
 import { pairWith } from '../services/pairWith';
 import { usePairing } from '../services/usePairing';
-import { colors, type } from '../theme';
+import { colors, mono, type } from '../theme';
 
 export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaired: () => Promise<void> }) {
   const [link, setLink] = useState('');
   const pairing = usePairing(onPaired);
 
-  if (pairing.checkCode) return <CheckCodeView code={pairing.checkCode} desktop="your desktop" />;
+  if (pairing.check) {
+    return (
+      <CheckCodeView
+        code={pairing.check.code}
+        startedAt={pairing.check.startedAt}
+        desktop={desktopName(link)}
+        onCancel={pairing.cancel}
+      />
+    );
+  }
 
   const submit = () => void pairing.run((onCheck) => pairWith(link, onCheck));
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Text style={type.bodyMuted}>
-        Copy the link under the QR code in Ostia Settings → Remote and paste it here.
+        Copy the link under the QR code in Settings › Remote on the desktop and paste it here.
       </Text>
       <TextInput
         style={styles.input}
@@ -49,8 +59,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.surface,
     color: colors.fg,
-    fontFamily: 'monospace',
-    fontSize: 13,
+    fontFamily: mono,
+    fontSize: 14,
     textAlignVertical: 'top',
   },
 });
+
+function desktopName(link: string): string {
+  try {
+    return parsePairingPayload(link).name || 'your desktop';
+  } catch {
+    return 'your desktop';
+  }
+}

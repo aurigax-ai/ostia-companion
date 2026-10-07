@@ -1,25 +1,21 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { Pane, Session, applyPaneUpdate, applySessionState } from '../model/workspaces';
+import { EMPTY_SNAPSHOT, Snapshot, applyLoad } from '../model/snapshot';
+import { applyPaneUpdate, applySessionState } from '../model/workspaces';
 import { OstiaRpc } from './rpc';
 
-interface Snapshot {
-  sessions: Session[];
-  panes: Pane[];
-  loading: boolean;
-  refreshing: boolean;
-  error: string | null;
-}
-
-const EMPTY: Snapshot = { sessions: [], panes: [], loading: true, refreshing: false, error: null };
 const AGENT_REFETCH_MS = 300;
 
-let snapshot = EMPTY;
+let snapshot = EMPTY_SNAPSHOT;
 let started = false;
 let agentRefetch: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 
 function update(patch: Partial<Snapshot>) {
-  snapshot = { ...snapshot, ...patch };
+  set({ ...snapshot, ...patch });
+}
+
+function set(next: Snapshot) {
+  snapshot = next;
   listeners.forEach((listener) => listener());
 }
 
@@ -30,9 +26,9 @@ export async function refreshWorkspaces(pulled = false) {
       OstiaRpc.call('session.list'),
       OstiaRpc.call('pane.list'),
     ]);
-    update({ sessions: sessionResult.sessions ?? [], panes: paneResult.panes ?? [], error: null });
+    set(applyLoad(snapshot, { sessions: sessionResult.sessions ?? [], panes: paneResult.panes ?? [] }, Date.now()));
   } catch (err: any) {
-    update({ error: err?.message || 'Could not load workspaces' });
+    set(applyLoad(snapshot, { error: err?.message || 'Could not load workspaces' }, Date.now()));
   } finally {
     update({ loading: false, refreshing: false });
   }
@@ -64,7 +60,7 @@ function start() {
 }
 
 export function resetWorkspaces() {
-  snapshot = EMPTY;
+  snapshot = EMPTY_SNAPSHOT;
   listeners.forEach((listener) => listener());
 }
 

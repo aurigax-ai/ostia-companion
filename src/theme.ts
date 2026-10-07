@@ -16,20 +16,29 @@ export const colors = {
   onBrand: '#161616',
   attn: '#ee5396',
   attnSoft: 'rgba(238, 83, 150, 0.18)',
-  attnFg: '#ee5698',
   warn: '#f2c55c',
   ok: '#42be65',
+  okSoft: 'rgba(66, 190, 101, 0.14)',
   scrim: 'rgba(0, 0, 0, 0.6)',
 };
 
+export const mono = 'monospace';
+
 export const type = {
   title: { fontSize: 22, lineHeight: 28, fontWeight: '600' as const, color: colors.fg },
-  headline: { fontSize: 28, lineHeight: 34, fontWeight: '600' as const, color: colors.fg },
   body: { fontSize: 16, lineHeight: 22, color: colors.fg },
   bodyMuted: { fontSize: 14, lineHeight: 20, color: colors.muted },
-  label: { fontSize: 14, lineHeight: 20, fontWeight: '500' as const, color: colors.fg },
+  label: { fontSize: 14, lineHeight: 20, fontWeight: '600' as const, color: colors.fg },
   caption: { fontSize: 12, lineHeight: 16, color: colors.muted },
-  mono: { fontFamily: 'monospace', fontSize: 13, lineHeight: 18, color: colors.muted },
+  overline: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600' as const,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+    color: colors.muted,
+  },
+  mono: { fontFamily: mono, fontSize: 12, lineHeight: 16, color: colors.muted },
 };
 
 export const navigationTheme: Theme = {

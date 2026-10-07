@@ -1,71 +1,104 @@
-import React, { useLayoutEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CheckCodeView } from '../components/CheckCodeView';
-import { Button } from '../components/ui';
+import { HeaderTitle } from '../components/ui';
 import { ScreenProps } from '../navigation';
-import { codeProblem, normalizeCode } from '../services/pairCode';
+import { CODE_LENGTH, codeInput, codeToSubmit } from '../services/pairCode';
 import { pairWithTarget } from '../services/pairWith';
 import { usePairing } from '../services/usePairing';
-import { colors, type } from '../theme';
+import { colors, mono, type } from '../theme';
+
+const HALF = CODE_LENGTH / 2;
 
 export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'PairCode'> & { onPaired: () => Promise<void> }) {
   const desktop = route.params;
-  const [input, setInput] = useState('');
+  const [chars, setChars] = useState('');
+  const [failed, setFailed] = useState<string | null>(null);
+  const input = useRef<TextInput>(null);
   const pairing = usePairing(onPaired);
-  const code = normalizeCode(input);
-  const problem = codeProblem(input);
+  const { code } = codeInput(chars);
 
   useLayoutEffect(() => {
-    navigation.setOptions({ title: desktop.name });
-  }, [navigation, desktop.name]);
+    navigation.setOptions({ headerTitle: () => <HeaderTitle title={desktop.name} subtitle={desktop.host} mono /> });
+  }, [navigation, desktop.name, desktop.host]);
 
-  if (pairing.checkCode) return <CheckCodeView code={pairing.checkCode} desktop={desktop.name} />;
+  useEffect(() => {
+    const next = codeToSubmit(code, failed);
+    if (!next || pairing.busy) return;
+    void pairing.run(
+      (onCheck) => pairWithTarget({ ...desktop, pairCode: next }, onCheck),
+      () => setFailed(next),
+    );
+  }, [code, failed]);
 
-  const submit = () => {
-    if (!code) return;
-    void pairing.run((onCheck) => pairWithTarget({ ...desktop, pairCode: code }, onCheck));
-  };
+  if (pairing.check) {
+    return (
+      <CheckCodeView
+        code={pairing.check.code}
+        startedAt={pairing.check.startedAt}
+        desktop={desktop.name}
+        onCancel={pairing.cancel}
+      />
+    );
+  }
+
+  const boxes = Array.from({ length: CODE_LENGTH }, (_, index) => chars[index] ?? '');
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Text style={type.bodyMuted}>Type the pairing code Ostia shows in Settings → Remote.</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="ABCD-EFGH"
-        placeholderTextColor={colors.dim}
-        value={input}
-        onChangeText={setInput}
-        onSubmitEditing={submit}
-        autoCapitalize="characters"
-        autoCorrect={false}
-        autoComplete="off"
-        autoFocus
-        maxLength={9}
-        returnKeyType="go"
-        cursorColor={colors.brand}
-        selectionColor={colors.brandSoft}
-        accessibilityLabel="Pairing code"
-      />
-      {problem ? <Text style={[type.caption, { color: colors.attnFg, marginTop: 8 }]}>{problem}</Text> : null}
-      <View style={{ marginTop: 'auto' }}>
-        <Button label="Pair" onPress={submit} loading={pairing.busy} disabled={!code} />
-      </View>
+      <Text style={type.title}>Enter the pairing code</Text>
+      <Text style={[type.bodyMuted, { marginTop: 8 }]}>
+        It's under the QR code in Settings › Remote on the desktop and changes every 2 minutes.
+      </Text>
+      <Pressable style={styles.boxes} onPress={() => input.current?.focus()} accessible={false}>
+        {boxes.map((char, index) => (
+          <React.Fragment key={index}>
+            {index === HALF ? <Text style={styles.dash}>–</Text> : null}
+            <View style={[styles.box, index === chars.length && styles.boxCurrent]}>
+              <Text style={styles.char}>{char}</Text>
+            </View>
+          </React.Fragment>
+        ))}
+        <TextInput
+          ref={input}
+          style={styles.hiddenInput}
+          value={chars}
+          onChangeText={(text) => setChars(codeInput(text).chars)}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          autoComplete="off"
+          autoFocus
+          caretHidden
+          editable={!pairing.busy}
+          contextMenuHidden={false}
+          accessibilityLabel="Pairing code, 8 characters"
+        />
+      </Pressable>
+      {failed && code === failed ? (
+        <Text style={[type.bodyMuted, styles.hint]}>Change the code to try again.</Text>
+      ) : pairing.busy ? (
+        <Text style={[type.bodyMuted, styles.hint]}>Sending the code…</Text>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 16, paddingBottom: 24 },
-  input: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
+  screen: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
+  boxes: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 32 },
+  box: {
+    width: 34,
+    height: 48,
+    borderRadius: 10,
     backgroundColor: colors.surface,
-    color: colors.fg,
-    fontFamily: 'monospace',
-    fontSize: 28,
-    letterSpacing: 4,
-    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  boxCurrent: { borderColor: colors.brand },
+  char: { fontFamily: mono, fontSize: 22, lineHeight: 28, fontWeight: '600', color: colors.fg },
+  dash: { fontSize: 22, color: colors.dim },
+  hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, color: 'transparent', opacity: 0.02 },
+  hint: { textAlign: 'center', marginTop: 16 },
 });

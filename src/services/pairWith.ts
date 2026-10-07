@@ -1,18 +1,20 @@
 import { Alert } from 'react-native';
-import { pairDevice, PairTarget } from './network';
+import { PairingRun, pairDevice, PairTarget } from './network';
 import { openTailscaleApp } from './openTailscaleApp';
 import { parsePairingPayload } from './pairing';
 import { savePairingData } from './storage';
 
 const DEVICE_NAME = 'Phone';
 
-export async function pairWithTarget(target: PairTarget, onCheckCode: (code: string) => void): Promise<void> {
-  await savePairingData(await pairDevice(target, DEVICE_NAME, onCheckCode));
+export type CheckCodeListener = (code: string, startedAt: number) => void;
+
+export function pairWithTarget(target: PairTarget, onCheckCode: CheckCodeListener): PairingRun {
+  return pairDevice(target, DEVICE_NAME, onCheckCode, savePairingData);
 }
 
-export async function pairWith(text: string, onCheckCode: (code: string) => void): Promise<void> {
+export function pairWith(text: string, onCheckCode: CheckCodeListener): PairingRun {
   const config = parsePairingPayload(text);
-  await pairWithTarget({ ...config, name: config.name || 'Ostia desktop' }, onCheckCode);
+  return pairWithTarget({ ...config, name: config.name || 'Ostia desktop' }, onCheckCode);
 }
 
 export function showPairingError(err: any, onDismiss: () => void) {

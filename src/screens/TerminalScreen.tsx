@@ -1,14 +1,15 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Eye, Keyboard } from 'lucide-react-native';
 import { TerminalTheme, TerminalView, TerminalViewRef } from 'expo-libghostty';
-import { Button, Empty, HeaderIcon } from '../components/ui';
+import { Button, Empty, HeaderTitle, Loading, tap } from '../components/ui';
 import { ScreenProps } from '../navigation';
 import { AttachResult, OstiaRpc, Role } from '../services/rpc';
-import { useCaps } from '../services/workspaceStore';
+import { useCaps, useWorkspaces } from '../services/workspaceStore';
+import { KeyRowEvent, KeyRowState, RowKey, pressKeyRow } from '../model/terminalKeys';
 import { TERMINAL_FONT_SIZE, watchFontSize } from '../model/terminalFit';
-import { colors, type } from '../theme';
+import { colors, mono, type } from '../theme';
 
 const RESIZE_DEBOUNCE_MS = 150;
 const SETTLE_FALLBACK_MS = 400;
@@ -24,8 +25,23 @@ const TERMINAL_THEME: TerminalTheme = {
   ],
 };
 
+const ROW_KEYS: { key: RowKey; label: string }[] = [
+  { key: 'esc', label: 'esc' },
+  { key: 'tab', label: 'tab' },
+  { key: 'up', label: '↑' },
+  { key: 'down', label: '↓' },
+  { key: 'left', label: '←' },
+  { key: 'right', label: '→' },
+  { key: 'enter', label: '⏎' },
+];
+
 export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
-  const { paneId } = route.params;
+  const { paneId, title } = route.params;
+  const { sessions, panes } = useWorkspaces();
+  const sessionId = panes.find((pane) => pane.paneId === paneId)?.sessionId;
+  const workspace = sessions.find((session) => session.sessionId === sessionId)?.name;
+  const [keyRow, setKeyRow] = useState<KeyRowState>({ ctrl: false });
+  const keyRowRef = useRef<KeyRowState>({ ctrl: false });
   const insets = useSafeAreaInsets();
   const terminalRef = useRef<TerminalViewRef>(null);
   const caps = useCaps();
@@ -47,14 +63,11 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerTitle: () => <HeaderTitle title={title} subtitle={workspace} />,
       headerRight: () =>
-        role === 'owner' ? (
-          <HeaderIcon icon={Eye} label="Stop typing, only watch" onPress={watch} />
-        ) : (
-          <HeaderIcon icon={Keyboard} label="Type in this terminal" onPress={takeControl} color={colors.brand} />
-        ),
+        role === 'owner' ? <Button label="Done" variant="text" compact onPress={watch} /> : null,
     });
-  }, [navigation, role, canInput]);
+  }, [navigation, role, title, workspace]);
 
   useEffect(() => {
     const unsubscribePty = OstiaRpc.addPtyListener((base64) => {
@@ -121,8 +134,18 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     attach('observer');
   }
 
+  const pressKey = (event: KeyRowEvent) => {
+    const result = pressKeyRow(keyRowRef.current, event);
+    keyRowRef.current = result.state;
+    setKeyRow(result.state);
+    if (result.send) OstiaRpc.sendInput(btoa(result.send));
+  };
+
   const handleInput = (base64: string) => {
-    if (roleRef.current === 'owner') return OstiaRpc.sendInput(base64);
+    if (roleRef.current === 'owner') {
+      if (!keyRowRef.current.ctrl) return OstiaRpc.sendInput(base64);
+      return pressKey({ type: 'text', text: atob(base64) });
+    }
     if (explained.current) return;
     explained.current = true;
     if (OstiaRpc.hasCap('input')) takeControl();
@@ -167,7 +190,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
-      <View style={[styles.fill, role === 'owner' && { paddingBottom: insets.bottom }]}>
+      <View style={styles.fill}>
         <TerminalView
           ref={terminalRef}
           style={styles.fill}
@@ -178,7 +201,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         />
         {attaching ? (
           <View style={styles.overlay}>
-            <ActivityIndicator size="large" color={colors.brand} />
+            <Loading label={`Attaching to ${title}…`} />
           </View>
         ) : null}
         {error ? (
@@ -191,13 +214,39 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           </View>
         ) : null}
       </View>
+      {role === 'owner' && !attaching && !error ? (
+        <View style={[styles.keyRow, { paddingBottom: 8 + insets.bottom }]}>
+          <RowButton label="esc" onPress={() => pressKey({ type: 'key', key: 'esc' })} />
+          <RowButton label="tab" onPress={() => pressKey({ type: 'key', key: 'tab' })} />
+          <RowButton label="ctrl" active={keyRow.ctrl} onPress={() => pressKey({ type: 'ctrl' })} />
+          {ROW_KEYS.slice(2).map(({ key, label }) => (
+            <RowButton key={key} label={label} onPress={() => pressKey({ type: 'key', key })} />
+          ))}
+        </View>
+      ) : null}
       {role === 'observer' && !attaching && !error ? (
         <View style={[styles.watchBar, { paddingBottom: 12 + insets.bottom }]}>
-          <Text style={[type.bodyMuted, { flex: 1 }]}>You are watching this terminal.</Text>
-          <Button label="Type" variant="text" onPress={takeControl} />
+          <Eye size={18} color={colors.muted} />
+          <Text style={[type.bodyMuted, { flex: 1, marginLeft: 8 }]}>Watching</Text>
+          <Button label="Type" icon={Keyboard} compact onPress={takeControl} />
         </View>
       ) : null}
     </KeyboardAvoidingView>
+  );
+}
+
+function RowButton({ label, active, onPress }: { label: string; active?: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={active === undefined ? undefined : { selected: active }}
+      onPress={() => (tap(), onPress())}
+      android_ripple={{ color: colors.ripple }}
+      style={[styles.rowKey, active && styles.rowKeyActive]}
+    >
+      <Text style={[styles.rowKeyLabel, active && { color: colors.brand }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -212,9 +261,29 @@ const styles = StyleSheet.create({
   watchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 16,
-    paddingRight: 4,
-    paddingTop: 4,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.lineStrong,
   },
+  keyRow: {
+    flexDirection: 'row',
+    gap: 6,
+    padding: 8,
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.lineStrong,
+  },
+  rowKey: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceHigh,
+    overflow: 'hidden',
+  },
+  rowKeyActive: { backgroundColor: colors.brandSoft },
+  rowKeyLabel: { fontFamily: mono, fontSize: 14, fontWeight: '600', color: colors.fg },
 });

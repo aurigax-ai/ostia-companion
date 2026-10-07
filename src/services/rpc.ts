@@ -118,6 +118,11 @@ class OstiaRpcClient {
     this.socket = socket;
   }
 
+  public retry() {
+    this.reconnectDelay = MIN_RECONNECT_DELAY;
+    this.connect();
+  }
+
   public disconnect() {
     this.closeSocket();
     this.activePaneId = null;

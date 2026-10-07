@@ -1,7 +1,7 @@
-import { pinnedPost } from 'websocket-pinning';
+import { cancelPosts, pinnedPost } from 'websocket-pinning';
 import { generateDeviceKeyPair } from './crypto';
 import { pairFailure } from './pairFailure';
-import { requestPairing } from './pairFlow';
+import { PairCancelled, requestPairing, startPairing } from './pairFlow';
 import { PairingData } from './storage';
 
 export interface PairTarget {
@@ -12,32 +12,44 @@ export interface PairTarget {
   name: string;
 }
 
-export async function pairDevice(
+export interface PairingRun {
+  done: Promise<void>;
+  cancel: () => void;
+}
+
+export function pairDevice(
   target: PairTarget,
   deviceName: string,
-  onCheckCode: (code: string) => void,
-): Promise<PairingData> {
+  onCheckCode: (code: string, startedAt: number) => void,
+  save: (data: PairingData) => Promise<void>,
+): PairingRun {
   const { host, port, fingerprint, pairCode, name } = target;
   const keypair = generateDeviceKeyPair();
   const post = (path: string, body: object) => pinnedPost(`https://${host}:${port}${path}`, body, fingerprint);
-  try {
-    const result = await requestPairing(
-      post,
-      { pairCode, fingerprint, deviceName, pubkey: keypair.publicKeySpki },
-      onCheckCode,
-    );
-    return {
-      deviceToken: result.deviceToken,
-      deviceId: result.deviceId,
-      pinnedFingerprint: fingerprint,
-      desktopName: name,
-      gatewayHost: host,
-      gatewayPort: port,
-      privateKey: keypair.privateKeyRaw,
-      publicKey: keypair.publicKeySpki,
-    };
-  } catch (error: any) {
-    const failure = pairFailure(error?.message ?? '', host, port);
-    throw Object.assign(new Error(failure.text), { action: failure.action });
-  }
+  const run = startPairing(
+    () =>
+      requestPairing(post, { pairCode, fingerprint, deviceName, pubkey: keypair.publicKeySpki }, (code) =>
+        onCheckCode(code, Date.now()),
+      ),
+    cancelPosts,
+    (result) =>
+      save({
+        deviceToken: result.deviceToken,
+        deviceId: result.deviceId,
+        pinnedFingerprint: fingerprint,
+        desktopName: name,
+        gatewayHost: host,
+        gatewayPort: port,
+        privateKey: keypair.privateKeyRaw,
+        publicKey: keypair.publicKeySpki,
+      }),
+  );
+  return {
+    cancel: run.cancel,
+    done: run.done.catch((error: any) => {
+      if (error instanceof PairCancelled) throw error;
+      const failure = pairFailure(error?.message ?? '', host, port);
+      throw Object.assign(new Error(failure.text), { action: failure.action });
+    }),
+  };
 }

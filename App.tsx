@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -38,13 +38,7 @@ export default function App() {
 
   useEffect(() => {
     connect().catch(() => setPaired(false));
-    return OstiaRpc.addStatusListener((status, reason) => {
-      if (status !== 'revoked') return;
-      void unpair().then(() =>
-        Alert.alert('Pair this phone again', reason ?? 'The desktop no longer accepts this phone.'),
-      );
-    });
-  }, [connect, unpair]);
+  }, [connect]);
 
   if (paired === null) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
@@ -62,17 +56,9 @@ export default function App() {
         >
           {paired ? (
             <>
-              <Stack.Screen name="Home" component={HomeScreen} />
-              <Stack.Screen
-                name="Workspace"
-                component={WorkspaceScreen}
-                options={({ route }) => ({ title: route.params.name })}
-              />
-              <Stack.Screen
-                name="Terminal"
-                component={TerminalScreen}
-                options={({ route }) => ({ title: route.params.title })}
-              />
+              <Stack.Screen name="Home">{(props) => <HomeScreen {...props} onUnpair={unpair} />}</Stack.Screen>
+              <Stack.Screen name="Workspace" component={WorkspaceScreen} />
+              <Stack.Screen name="Terminal" component={TerminalScreen} />
               <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
                 {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
               </Stack.Screen>
