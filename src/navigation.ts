@@ -6,6 +6,8 @@ export type RootStack = {
   Terminal: { paneId: string; title: string };
   Settings: undefined;
   Desktops: undefined;
+  Files: { sessionId: string; path: string; title: string };
+  FileView: { sessionId: string; path: string; name: string };
   Pair: undefined;
   PairLink: undefined;
   PairCode: { name: string; host: string; port: number; fingerprint: string };
