@@ -1,39 +1,66 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { spacedCheckCode } from '../services/pairCheck';
-import { colors, type } from '../theme';
+import { approvalCountdown } from '../services/pairFlow';
+import { colors, mono, type } from '../theme';
+import { Button } from './ui';
 
-export function CheckCodeView({ code, desktop }: { code: string; desktop: string }) {
+export function CheckCodeView({
+  code,
+  startedAt,
+  desktop,
+  onCancel,
+}: {
+  code: string;
+  startedAt: number;
+  desktop: string;
+  onCancel: () => void;
+}) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
-    <View style={styles.screen} accessibilityLiveRegion="polite">
-      <Text style={[type.bodyMuted, styles.center]}>Check code</Text>
-      <Text style={styles.code} accessibilityLabel={code.split('').join(' ')}>
-        {spacedCheckCode(code)}
-      </Text>
-      <Text style={[type.title, styles.center, { marginTop: 24 }]}>Approve on {desktop}</Text>
-      <Text style={[type.bodyMuted, styles.center, { marginTop: 8 }]}>
-        Approve this phone in Ostia Settings → Remote only if the desktop shows the same code.
-      </Text>
-      <View style={styles.waiting}>
-        <ActivityIndicator color={colors.brand} />
-        <Text style={[type.bodyMuted, { marginLeft: 12 }]}>Waiting for the desktop…</Text>
+    <SafeAreaView style={styles.screen} edges={['bottom']}>
+      <View style={styles.body} accessibilityLiveRegion="polite">
+        <Text style={[type.bodyMuted, styles.center]}>Check code</Text>
+        <Text style={styles.code} accessibilityLabel={code.split('').join(' ')}>
+          {spacedCheckCode(code)}
+        </Text>
+        <Text style={[type.title, styles.center, { marginTop: 32 }]}>Does {desktop} show the same number?</Text>
+        <Text style={[type.bodyMuted, styles.center, { marginTop: 8 }]}>
+          If it does, click Approve there. If it doesn't, click Deny: something else answered on this network.
+        </Text>
+        <View style={styles.waiting}>
+          <ActivityIndicator color={colors.brand} />
+          <Text style={[type.bodyMuted, { marginLeft: 12 }]}>
+            Waiting for approval · {approvalCountdown(startedAt, now)}
+          </Text>
+        </View>
       </View>
-    </View>
+      <Button label="Cancel" variant="tonal" onPress={onCancel} style={styles.cancel} />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, justifyContent: 'center', paddingHorizontal: 32 },
+  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 24 },
+  body: { flex: 1, justifyContent: 'center' },
   center: { textAlign: 'center' },
   code: {
-    marginTop: 8,
+    marginTop: 16,
     textAlign: 'center',
     color: colors.fg,
-    fontFamily: 'monospace',
-    fontSize: 48,
-    lineHeight: 56,
+    fontFamily: mono,
+    fontSize: 44,
+    lineHeight: 52,
     fontWeight: '600',
-    letterSpacing: 2,
+    letterSpacing: 4,
   },
   waiting: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 40 },
+  cancel: { marginBottom: 16 },
 });

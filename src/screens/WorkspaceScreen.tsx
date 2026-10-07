@@ -1,23 +1,42 @@
-import React from 'react';
-import { FlatList, RefreshControl, Text } from 'react-native';
-import { BellRing, Globe, SquareTerminal, FileText, PanelsTopLeft } from 'lucide-react-native';
-import { Avatar, Divider, Empty, ListRow } from '../components/ui';
-import { Pane, failedExit, paneSubtitle, paneTitle } from '../model/workspaces';
+import React, { useLayoutEffect, useState } from 'react';
+import { RefreshControl, SectionList } from 'react-native';
+import { FileText, Globe, PanelsTopLeft, SquareTerminal } from 'lucide-react-native';
+import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
+import { Divider, Empty, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill } from '../components/ui';
+import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
-import { refreshWorkspaces, useWorkspaces } from '../services/workspaceStore';
-import { colors, type } from '../theme';
+import { OstiaRpc } from '../services/rpc';
+import { refreshWorkspaces, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
+import { colors } from '../theme';
 
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
-  const { sessions, panes, refreshing } = useWorkspaces();
+  const { sessions, panes, refreshing, loadedAt } = useWorkspaces();
+  const status = useConnectionStatus();
+  const [pairing] = useState(() => OstiaRpc.getPairing());
   const workDir = sessions.find((session) => session.sessionId === route.params.sessionId)?.workDir;
-  const sessionPanes = panes.filter((pane) => pane.sessionId === route.params.sessionId);
+  const groups = groupPanes(panes.filter((pane) => pane.sessionId === route.params.sessionId));
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => <HeaderTitle title={route.params.name || 'Workspace'} subtitle={shortPath(workDir)} mono />,
+    });
+  }, [navigation, route.params.name, workDir]);
 
   return (
-    <FlatList
-      data={sessionPanes}
+    <SectionList
+      sections={groups.map((group) => ({ title: group.title, data: group.panes }))}
       keyExtractor={(pane) => pane.paneId}
-      ItemSeparatorComponent={() => <Divider />}
-      contentContainerStyle={{ paddingTop: 8, paddingBottom: 32, flexGrow: 1 }}
+      ListHeaderComponent={
+        <ConnectionBanner
+          status={status}
+          host={pairing?.gatewayHost ?? ''}
+          desktop={pairing?.desktopName || 'the desktop'}
+          onPairAgain={() => navigation.popToTop()}
+        />
+      }
+      stickySectionHeadersEnabled={false}
+      ItemSeparatorComponent={() => <Divider inset={72} />}
+      contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -27,45 +46,43 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
           tintColor={colors.brand}
         />
       }
+      renderSectionHeader={({ section }) => (
+        <SectionHeader
+          title={section.title}
+          trailing={section.title === groups[0]?.title && status !== 'connected' ? <LoadedAt at={loadedAt} /> : null}
+        />
+      )}
       ListEmptyComponent={<Empty title="No panes" body="This workspace has no open panes on the desktop." />}
-      renderItem={({ item: pane }) => {
-        const terminal = pane.kind === 'terminal';
-        return (
+      renderItem={({ item: pane }) =>
+        pane.kind === 'terminal' ? (
           <ListRow
-            leading={<Avatar icon={iconFor(pane)} tone={toneFor(pane)} />}
+            leading={<IconTile icon={SquareTerminal} tone={pane.running ? 'brand' : 'neutral'} />}
             title={paneTitle(pane)}
             subtitle={paneSubtitle(pane, workDir)}
-            trailing={<PaneStatus pane={pane} />}
-            onPress={
-              terminal
-                ? () => navigation.navigate('Terminal', { paneId: pane.paneId, title: paneTitle(pane) })
-                : undefined
-            }
+            mono
+            trailing={<StatusPill status={paneStatus(pane)} />}
+            onPress={() => navigation.navigate('Terminal', { paneId: pane.paneId, title: paneTitle(pane) })}
           />
-        );
-      }}
+        ) : (
+          <ListRow
+            leading={<IconTile icon={iconFor(pane)} tone="ghost" />}
+            title={paneTitle(pane)}
+            subtitle={kindLabel(pane)}
+            mono
+            disabled
+          />
+        )
+      }
     />
   );
 }
 
-function PaneStatus({ pane }: { pane: Pane }) {
-  const exit = failedExit(pane);
-  if (pane.agentState === 'waiting') return <Text style={[type.caption, { color: colors.attnFg }]}>Needs you</Text>;
-  if (pane.running) return <Text style={[type.caption, { color: colors.brand }]}>Running</Text>;
-  if (exit !== null) return <Text style={[type.caption, { color: colors.attnFg }]}>Exit {exit}</Text>;
-  return null;
-}
-
 function iconFor(pane: Pane) {
-  if (pane.agentState === 'waiting') return BellRing;
-  if (pane.kind === 'terminal') return SquareTerminal;
   if (pane.kind === 'browser') return Globe;
   if (pane.kind === 'editor') return FileText;
   return PanelsTopLeft;
 }
 
-function toneFor(pane: Pane): 'neutral' | 'brand' | 'attn' {
-  if (pane.agentState === 'waiting' || failedExit(pane) !== null) return 'attn';
-  if (pane.running) return 'brand';
-  return 'neutral';
+function kindLabel(pane: Pane) {
+  return pane.kind.charAt(0).toUpperCase() + pane.kind.slice(1);
 }

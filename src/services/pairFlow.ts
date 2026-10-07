@@ -48,3 +48,44 @@ export async function requestPairing(
   }
   return result;
 }
+
+export const APPROVAL_WINDOW_MS = 120_000;
+
+export class PairCancelled extends Error {
+  constructor() {
+    super('Pairing cancelled');
+  }
+}
+
+export function approvalCountdown(startedAt: number, now: number): string {
+  const seconds = Math.max(0, Math.ceil((startedAt + APPROVAL_WINDOW_MS - now) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+export function startPairing(
+  run: () => Promise<PairResponse>,
+  abort: () => void,
+  save: (result: PairResponse) => Promise<void>,
+): { done: Promise<void>; cancel: () => void } {
+  let settled = false;
+  let cancelled = false;
+  let rejectCancelled: (err: PairCancelled) => void = () => {};
+  const cancelledSignal = new Promise<never>((_, reject) => (rejectCancelled = reject));
+  const finished = run().then(async (result) => {
+    if (cancelled) throw new PairCancelled();
+    settled = true;
+    await save(result);
+  });
+  const done = Promise.race([finished, cancelledSignal]);
+  finished.catch(() => {});
+  cancelledSignal.catch(() => {});
+  return {
+    done,
+    cancel: () => {
+      if (settled || cancelled) return;
+      cancelled = true;
+      abort();
+      rejectCancelled(new PairCancelled());
+    },
+  };
+}

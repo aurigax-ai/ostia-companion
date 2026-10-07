@@ -5,11 +5,13 @@ import {
   applyPaneUpdate,
   applySessionState,
   failedExit,
+  groupPanes,
   needsYou,
+  paneStatus,
   paneSubtitle,
-  paneSummary,
   paneTitle,
   shortPath,
+  workspaceStatus,
 } from './workspaces';
 
 function session(sessionId: string, name: string): Session {
@@ -51,12 +53,68 @@ describe('shortPath', () => {
   });
 });
 
-describe('paneSummary', () => {
-  it('counts running panes first, then all panes', () => {
-    expect(paneSummary([])).toBe('No panes');
-    expect(paneSummary([pane('a', 's'), pane('b', 's', { running: true })])).toBe('1 running');
-    expect(paneSummary([pane('a', 's')])).toBe('1 pane');
-    expect(paneSummary([pane('a', 's'), pane('b', 's')])).toBe('2 panes');
+describe('status', () => {
+  it('CRD-C1 a waiting agent is Waiting even while its command runs', () => {
+    expect(paneStatus(pane('a', 's', { agentState: 'waiting', running: true }))).toEqual({
+      kind: 'waiting',
+      tone: 'attn',
+      text: 'Waiting',
+    });
+  });
+
+  it('CRD-C2 a workspace with two running panes is "2 running"', () => {
+    const panes = [pane('a', 's', { running: true }), pane('b', 's', { running: true }), pane('c', 's')];
+    expect(workspaceStatus(session('s', 'api'), panes)).toEqual({ kind: 'running', tone: 'brand', text: '2 running' });
+  });
+
+  it('CRD-C3 a pane that exited 0 is idle, not a failure', () => {
+    expect(paneStatus(pane('a', 's', { lastExitCode: 0 }))).toEqual({ kind: 'idle', tone: 'muted', text: 'Idle' });
+  });
+
+  it('CRD-C4 a workspace with no panes is "No panes"', () => {
+    expect(workspaceStatus(session('s', 'api'), [])).toEqual({ kind: 'idle', tone: 'muted', text: 'No panes' });
+  });
+
+  it('ranks agent error and failed exits above running, and done above idle', () => {
+    expect(paneStatus(pane('a', 's', { agentState: 'error', running: true })).text).toBe('Error');
+    expect(paneStatus(pane('a', 's', { lastExitCode: 2 })).text).toBe('Exit 2');
+    expect(paneStatus(pane('a', 's', { agentState: 'done' })).kind).toBe('done');
+    expect(workspaceStatus(session('s', 'api'), [pane('a', 's'), pane('b', 's')]).text).toBe('2 panes');
+    expect(workspaceStatus(session('s', 'api'), [pane('a', 's', { lastExitCode: 1 })]).text).toBe('Exit 1');
+  });
+});
+
+describe('inbox', () => {
+  it('CRD-C5 keeps a multi-line agent message whole', () => {
+    const message = 'Apply this migration?\n\nALTER TABLE users\n  ADD COLUMN last_seen timestamptz;';
+    const [item] = needsYou([session('s1', 'api')], [pane('p1', 's1', { agentState: 'waiting', agentMessage: message })]);
+    expect(item.reason).toBe(message);
+  });
+
+  it('CRD-C6 a waiting agent with no message reads "Waiting for you"', () => {
+    expect(needsYou([], [pane('p1', 's1', { agentState: 'waiting', agentMessage: '' })])[0].reason).toBe(
+      'Waiting for you',
+    );
+  });
+});
+
+describe('groupPanes', () => {
+  it('CRD-C7 puts terminals first and every other kind under desktop only, in desktop order', () => {
+    const groups = groupPanes([
+      pane('t1', 's'),
+      pane('b1', 's', { kind: 'browser' }),
+      pane('t2', 's'),
+      pane('e1', 's', { kind: 'editor' }),
+    ]);
+    expect(groups.map((group) => [group.title, group.panes.map((p) => p.paneId)])).toEqual([
+      ['Terminals', ['t1', 't2']],
+      ['Desktop only', ['b1', 'e1']],
+    ]);
+  });
+
+  it('CRD-C8 leaves out the terminals group when there are none', () => {
+    const groups = groupPanes([pane('b1', 's', { kind: 'browser' })]);
+    expect(groups.map((group) => group.title)).toEqual(['Desktop only']);
   });
 });
 

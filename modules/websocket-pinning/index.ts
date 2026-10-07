@@ -71,3 +71,8 @@ export async function pinnedPost(url: string, body: object, fingerprint: string)
     return responseText;
   }
 }
+
+/** Cancel every pinned POST still waiting for an answer; each one rejects. */
+export function cancelPosts(): void {
+  WebSocketPinning.cancelPosts();
+}

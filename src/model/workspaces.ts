@@ -54,16 +54,61 @@ export function shortPath(path: string | undefined): string {
   return home ? `~${path.slice(home[0].length)}` : path;
 }
 
-export function paneSummary(panes: Pane[]): string {
-  if (panes.length === 0) return 'No panes';
-  const running = panes.filter((pane) => pane.running).length;
-  if (running > 0) return `${running} running`;
-  return panes.length === 1 ? '1 pane' : `${panes.length} panes`;
-}
-
 export function failedExit(pane: Pane): number | null {
   if (pane.running || pane.lastExitCode === undefined || pane.lastExitCode === 0) return null;
   return pane.lastExitCode;
+}
+
+export type StatusKind = 'waiting' | 'error' | 'running' | 'done' | 'idle';
+
+export interface Status {
+  kind: StatusKind;
+  tone: 'attn' | 'brand' | 'ok' | 'muted';
+  text: string;
+}
+
+const WAITING: Status = { kind: 'waiting', tone: 'attn', text: 'Waiting' };
+const ERROR: Status = { kind: 'error', tone: 'attn', text: 'Error' };
+const DONE: Status = { kind: 'done', tone: 'ok', text: 'Done' };
+
+function exitStatus(code: number): Status {
+  return { kind: 'error', tone: 'attn', text: `Exit ${code}` };
+}
+
+export function paneStatus(pane: Pane): Status {
+  const exit = failedExit(pane);
+  if (pane.agentState === 'waiting') return WAITING;
+  if (pane.agentState === 'error') return ERROR;
+  if (exit !== null) return exitStatus(exit);
+  if (pane.running) return { kind: 'running', tone: 'brand', text: 'Running' };
+  if (pane.agentState === 'done') return DONE;
+  return { kind: 'idle', tone: 'muted', text: 'Idle' };
+}
+
+export function workspaceStatus(session: Session, panes: Pane[]): Status {
+  const statuses = panes.map(paneStatus);
+  if (session.state === 'waiting' || statuses.some((status) => status === WAITING)) return WAITING;
+  const failed = statuses.find((status) => status.kind === 'error');
+  if (failed) return failed;
+  if (session.state === 'error') return ERROR;
+  const running = statuses.filter((status) => status.kind === 'running').length;
+  if (running > 0) return { kind: 'running', tone: 'brand', text: `${running} running` };
+  if (session.state === 'done' || statuses.some((status) => status === DONE)) return DONE;
+  const text = panes.length === 0 ? 'No panes' : panes.length === 1 ? '1 pane' : `${panes.length} panes`;
+  return { kind: 'idle', tone: 'muted', text };
+}
+
+export interface PaneGroup {
+  title: 'Terminals' | 'Desktop only';
+  panes: Pane[];
+}
+
+export function groupPanes(panes: Pane[]): PaneGroup[] {
+  const groups: PaneGroup[] = [
+    { title: 'Terminals', panes: panes.filter((pane) => pane.kind === 'terminal') },
+    { title: 'Desktop only', panes: panes.filter((pane) => pane.kind !== 'terminal') },
+  ];
+  return groups.filter((group) => group.panes.length > 0);
 }
 
 export function applyPaneUpdate(panes: Pane[], update: PaneUpdate): Pane[] {
@@ -82,7 +127,6 @@ export function paneTitle(pane: Pane): string {
 
 export function paneSubtitle(pane: Pane, workDir: string | undefined): string {
   if (pane.agentState === 'waiting' && pane.agentMessage) return pane.agentMessage;
-  if (pane.kind !== 'terminal') return 'Open on the desktop';
   if (pane.cwd && pane.cwd !== workDir) return shortPath(pane.cwd);
   return pane.agent && pane.agent !== 'other' ? pane.agent : shortPath(pane.cwd);
 }

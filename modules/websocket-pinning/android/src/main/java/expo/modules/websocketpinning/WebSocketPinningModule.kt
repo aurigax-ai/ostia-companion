@@ -20,6 +20,7 @@ import javax.net.ssl.X509TrustManager
 
 class WebSocketPinningModule : Module() {
   private var client: OkHttpClient? = null
+  private val postCalls = java.util.Collections.synchronizedSet(mutableSetOf<Call>())
   private var webSocket: WebSocket? = null
   private var expectedFingerprint: String? = null
 
@@ -115,12 +116,16 @@ class WebSocketPinningModule : Module() {
         val requestBody = bodyJson.toRequestBody(mediaType)
         val request = Request.Builder().url(url).post(requestBody).build()
 
-        activeClient.newCall(request).enqueue(object : Callback {
+        val postCall = activeClient.newCall(request)
+        postCalls.add(postCall)
+        postCall.enqueue(object : Callback {
           override fun onFailure(call: Call, e: java.io.IOException) {
+            postCalls.remove(call)
             promise.reject("POST_FAILED", e.message ?: "Network request failed", e)
           }
 
           override fun onResponse(call: Call, response: Response) {
+            postCalls.remove(call)
             if (!response.isSuccessful) {
               promise.reject("POST_HTTP_ERROR", "HTTP status code: ${response.code}", null)
               return
@@ -131,6 +136,13 @@ class WebSocketPinningModule : Module() {
         })
       } catch (e: Exception) {
         promise.reject("POST_ERROR", e.message ?: "Error setting up HTTP client", e)
+      }
+    }
+
+    Function("cancelPosts") {
+      synchronized(postCalls) {
+        postCalls.forEach { it.cancel() }
+        postCalls.clear()
       }
     }
 
