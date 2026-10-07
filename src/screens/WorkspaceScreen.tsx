@@ -1,14 +1,14 @@
 import React, { useLayoutEffect } from 'react';
 import { RefreshControl, SectionList } from 'react-native';
-import { FileText, Globe, PanelsTopLeft, SquareTerminal } from 'lucide-react-native';
+import { FileText, Globe, PanelsTopLeft } from 'lucide-react-native';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
-import { Divider, Empty, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill } from '../components/ui';
+import { Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
 import { attentionRank, byAttention } from '../model/order';
 import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { OstiaRpc } from '../services/rpc';
 import { refreshWorkspaces, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
-import { colors } from '../theme';
+import { colors, space } from '../theme';
 
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
   const { sessions, panes, refreshing, loadedAt } = useWorkspaces();
@@ -36,8 +36,9 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
         />
       }
       stickySectionHeadersEnabled={false}
-      ItemSeparatorComponent={() => <Divider inset={72} />}
-      contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
+      ItemSeparatorComponent={() => <Divider inset={TILE_INSET} />}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{ paddingBottom: space.xxl, flexGrow: 1 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -53,27 +54,29 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
           trailing={section.title === groups[0]?.title && status !== 'connected' ? <LoadedAt at={loadedAt} /> : null}
         />
       )}
-      ListEmptyComponent={<Empty title="No panes" body="Nothing open in this workspace." />}
-      renderItem={({ item: pane }) =>
-        pane.kind === 'terminal' ? (
-          <ListRow
-            leading={<IconTile icon={SquareTerminal} tone="neutral" />}
-            title={paneTitle(pane)}
-            subtitle={paneSubtitle(pane, workDir)}
-            mono
-            trailing={<StatusPill status={paneStatus(pane)} />}
-            onPress={() => navigation.navigate('Terminal', { paneId: pane.paneId, title: paneTitle(pane) })}
-          />
-        ) : (
-          <ListRow
-            leading={<IconTile icon={iconFor(pane)} tone="ghost" />}
-            title={paneTitle(pane)}
-            subtitle={kindLabel(pane)}
-            mono
-            disabled
-          />
-        )
-      }
+      ListEmptyComponent={<Empty icon={PanelsTopLeft} title="No panes" body="Nothing open in this workspace." />}
+      renderItem={({ item: pane, index, section }) => (
+        <GroupItem first={index === 0} last={index === section.data.length - 1}>
+          {pane.kind === 'terminal' ? (
+            <ListRow
+              leading={<IconTile icon={terminalIcon(pane)} tone={paneStatus(pane).tone === 'attn' ? 'attn' : 'neutral'} />}
+              title={paneTitle(pane)}
+              subtitle={paneSubtitle(pane, workDir)}
+              mono
+              trailing={<StatusPill status={paneStatus(pane)} />}
+              onPress={() => navigation.navigate('Terminal', { paneId: pane.paneId, title: paneTitle(pane) })}
+            />
+          ) : (
+            <ListRow
+              leading={<IconTile icon={iconFor(pane)} tone="ghost" />}
+              title={paneTitle(pane)}
+              subtitle={kindLabel(pane)}
+              mono
+              disabled
+            />
+          )}
+        </GroupItem>
+      )}
     />
   );
 }

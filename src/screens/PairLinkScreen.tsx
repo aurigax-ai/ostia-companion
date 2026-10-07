@@ -7,7 +7,7 @@ import { ScreenProps } from '../navigation';
 import { parsePairingPayload } from '../services/pairing';
 import { pairWith } from '../services/pairWith';
 import { usePairing } from '../services/usePairing';
-import { colors, mono, type } from '../theme';
+import { colors, font, radius, space, type } from '../theme';
 
 export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaired: () => Promise<void> }) {
   const [link, setLink] = useState('');
@@ -29,7 +29,7 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
 
   return (
     <KeyboardAvoidingView style={styles.fill} behavior="padding">
-      <View style={[styles.screen, { paddingBottom: 16 + insets.bottom }]}>
+      <View style={[styles.screen, { paddingBottom: space.lg + insets.bottom }]}>
       <Text style={type.bodyMuted}>
         Paste the link shown under the QR code.
       </Text>
@@ -56,16 +56,18 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  screen: { flex: 1, padding: 16 },
+  screen: { flex: 1, padding: space.lg },
   input: {
-    marginTop: 16,
+    marginTop: space.lg,
     minHeight: 120,
-    padding: 16,
-    borderRadius: 12,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
     backgroundColor: colors.surface,
     color: colors.fg,
-    fontFamily: mono,
+    fontFamily: font.mono,
     fontSize: 14,
+    lineHeight: 20,
     textAlignVertical: 'top',
   },
 });

@@ -3,8 +3,9 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { spacedCheckCode } from '../services/pairCheck';
 import { approvalCountdown } from '../services/pairFlow';
-import { colors, mono, type } from '../theme';
-import { Button } from './ui';
+import { ShieldCheck } from 'lucide-react-native';
+import { colors, font, space, type } from '../theme';
+import { Button, IconTile } from './ui';
 
 export function CheckCodeView({
   code,
@@ -27,17 +28,20 @@ export function CheckCodeView({
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <View style={styles.body} accessibilityLiveRegion="polite">
-        <Text style={[type.bodyMuted, styles.center]}>Check code</Text>
+        <View style={styles.mark}>
+          <IconTile icon={ShieldCheck} tone="brand" size="lg" />
+        </View>
+        <Text style={[type.label, styles.center, { color: colors.muted }]}>Check code</Text>
         <Text style={styles.code} accessibilityLabel={code.split('').join(' ')}>
           {spacedCheckCode(code)}
         </Text>
-        <Text style={[type.title, styles.center, { marginTop: 32 }]}>Does {desktop} show the same number?</Text>
-        <Text style={[type.bodyMuted, styles.center, { marginTop: 8 }]}>
+        <Text style={[type.title, styles.center, { marginTop: space.xxl }]}>Does {desktop} show the same number?</Text>
+        <Text style={[type.bodyMuted, styles.center, { marginTop: space.sm }]}>
           Approve on the desktop only if it matches.
         </Text>
         <View style={styles.waiting}>
           <ActivityIndicator color={colors.brand} />
-          <Text style={[type.bodyMuted, { marginLeft: 12 }]}>
+          <Text style={[type.bodyMuted, styles.countdown]}>
             Waiting · {approvalCountdown(startedAt, now)}
           </Text>
         </View>
@@ -48,19 +52,31 @@ export function CheckCodeView({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 24 },
+  screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.xl },
   body: { flex: 1, justifyContent: 'center' },
+  mark: { alignItems: 'center', marginBottom: space.xl },
   center: { textAlign: 'center' },
   code: {
-    marginTop: 16,
+    marginTop: space.md,
     textAlign: 'center',
     color: colors.fg,
-    fontFamily: mono,
+    fontFamily: font.monoSemibold,
     fontSize: 44,
     lineHeight: 52,
-    fontWeight: '600',
     letterSpacing: 4,
   },
-  waiting: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 40 },
-  cancel: { marginBottom: 16 },
+  waiting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: space.sm,
+    marginTop: space.xxl,
+    paddingHorizontal: space.lg,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+  },
+  countdown: { fontVariant: ['tabular-nums'] },
+  cancel: { marginBottom: space.lg },
 });
