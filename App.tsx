@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
+import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { clearPairingData, getPairingData } from './src/services/storage';
@@ -15,7 +15,20 @@ import { PairingScreen } from './src/screens/PairingScreen';
 import { PairCodeScreen } from './src/screens/PairCodeScreen';
 import { PairLinkScreen } from './src/screens/PairLinkScreen';
 import { RootStack } from './src/navigation';
-import { colors, navigationTheme } from './src/theme';
+import { colors } from './src/theme';
+
+const navigationTheme: Theme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: colors.brand,
+    background: colors.bg,
+    card: colors.bg,
+    text: colors.fg,
+    border: colors.line,
+    notification: colors.attn,
+  },
+};
 
 const Stack = createNativeStackNavigator<RootStack>();
 

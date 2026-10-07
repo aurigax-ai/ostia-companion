@@ -1,1 +1,1 @@
-{"test": "pnpm exec vitest run"}
+{"test": "pnpm run test"}
