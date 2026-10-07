@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Ask, AskChoice, detailPreview, waitedFor } from '../model/asks';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ask, AskChoice, detailPreview, needsConfirm, waitedFor } from '../model/asks';
 import { colors, font, radius, space, type } from '../theme';
 import { Button, Card } from './ui';
 
@@ -35,6 +35,14 @@ export function AskCard({
   const preview = ask.detail && !compact ? detailPreview(ask.detail) : null;
   const disabled = !canRespond || pending !== undefined;
 
+  const choose = (choice: AskChoice) => {
+    if (!needsConfirm(ask, choice)) return onAnswer({ choiceId: choice.id });
+    Alert.alert(`${choice.label}?`, ask.detail ?? ask.title, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Allow', style: 'destructive', onPress: () => onAnswer({ choiceId: choice.id }) },
+    ]);
+  };
+
   const secondary = ask.choices.filter((choice) => choice.tone !== 'approve');
   const primary = ask.choices.filter((choice) => choice.tone === 'approve');
   const choiceButton = (choice: AskChoice, variant: 'filled' | 'tonal') => (
@@ -44,7 +52,7 @@ export function AskCard({
       variant={variant}
       loading={pending === choice.id}
       disabled={disabled}
-      onPress={() => onAnswer({ choiceId: choice.id })}
+      onPress={() => choose(choice)}
       style={styles.choice}
     />
   );
