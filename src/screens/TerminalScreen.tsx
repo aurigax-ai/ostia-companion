@@ -15,10 +15,13 @@ const SETTLE_FALLBACK_MS = 400;
 const FULL_RESET = '\x1bc';
 const RPC_NEEDS_ELEVATION = -32003;
 const TERMINAL_THEME: TerminalTheme = {
-  background: colors.bgSunken,
-  foreground: colors.fg,
+  background: '#161616',
+  foreground: '#f2f4f8',
   cursorColor: colors.brand,
-  palette: ['#16161a', '#ff6c6b', '#98be65', '#ecbe7b', '#51afef', '#c678dd', '#46d9ff', '#bbc2cf'],
+  palette: [
+    '#161616', '#00dfdb', '#00b4ff', '#ff4297', '#00c15a', '#c693ff', '#ff74b8', '#f2f4f8',
+    '#585858', '#00dfdb', '#00b4ff', '#ff4297', '#00c15a', '#c693ff', '#ff74b8', '#f2f4f8',
+  ],
 };
 
 export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
@@ -199,10 +202,10 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: colors.bgSunken },
+  fill: { flex: 1, backgroundColor: TERMINAL_THEME.background },
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: TERMINAL_THEME.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
