@@ -3,6 +3,7 @@ import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from '
 import { ChevronDown, Settings } from 'lucide-react-native';
 import { Button, Divider, Empty, HeaderIcon, ListRow, Loading, SectionHeader, StatusPill } from '../components/ui';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
+import { byAttention, homeSections, workspaceRank } from '../model/order';
 import { InboxItem, Session, needsYou, paneTitle, shortPath, workspaceStatus } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { OstiaRpc } from '../services/rpc';
@@ -55,13 +56,15 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
 
   const sections = useMemo(() => {
     const inbox = needsYou(sessions, panes);
-    const list: { key: string; data: Row[] }[] = [];
-    if (inbox.length > 0) list.push({ key: 'inbox', data: inbox.map((item) => ({ kind: 'inbox', item })) });
-    if (sessions.length > 0) {
-      list.push({ key: 'workspaces', data: sessions.map((session) => ({ kind: 'workspace', session })) });
+    const list: { key: string; title: string; data: Row[] }[] = [];
+    if (inbox.length > 0) list.push({ key: 'inbox', title: 'Needs you', data: inbox.map((item) => ({ kind: 'inbox', item })) });
+    for (const group of homeSections(byAttention(sessions, workspaceRank(panes)))) {
+      list.push({ key: `group:${group.title}`, title: group.title, data: group.sessions.map((session) => ({ kind: 'workspace', session })) });
     }
     return list;
   }, [sessions, panes]);
+
+  const firstGroupKey = sections.find((section) => section.key !== 'inbox')?.key;
 
   if (loading) return <Loading />;
 
@@ -98,8 +101,8 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
           />
         ) : (
           <SectionHeader
-            title="Workspaces"
-            trailing={status === 'connected' ? null : <LoadedAt at={loadedAt} />}
+            title={section.title}
+            trailing={status !== 'connected' && section.key === firstGroupKey ? <LoadedAt at={loadedAt} /> : null}
           />
         )
       }

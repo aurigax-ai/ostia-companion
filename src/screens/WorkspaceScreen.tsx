@@ -3,6 +3,7 @@ import { RefreshControl, SectionList } from 'react-native';
 import { FileText, Globe, PanelsTopLeft, SquareTerminal } from 'lucide-react-native';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
 import { Divider, Empty, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill } from '../components/ui';
+import { attentionRank, byAttention } from '../model/order';
 import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { OstiaRpc } from '../services/rpc';
@@ -24,7 +25,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
 
   return (
     <SectionList
-      sections={groups.map((group) => ({ title: group.title, data: group.panes }))}
+      sections={groups.map((group) => ({ title: group.title, data: byAttention(group.panes, attentionRank) }))}
       keyExtractor={(pane) => pane.paneId}
       ListHeaderComponent={
         <ConnectionBanner

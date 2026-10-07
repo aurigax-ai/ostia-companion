@@ -194,7 +194,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | method | cap | params → result |
 |---|---|---|
 | `hello` | — | see §4 |
-| `session.list` | `read` | `{}` → `{ sessions: [{ sessionId, name, kind, workDir, state }] }` |
+| `session.list` | `read` | `{}` → `{ sessions: [{ sessionId, name, kind, workDir, state, group? }] }` — `group: { id, name }` when the workspace sits in a sidebar group (v1.5) |
 | `pane.list` | `read` | `{ sessionId? }` → `{ panes: [{ paneId, sessionId, kind, title, cwd?, running, blockCount, lastExitCode? }] }` |
 | `pane.info` | `read` | `{ paneId }` → `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` |
 | `cwd.get` | `read` | `{ paneId }` → `{ cwd: string \| null }` |
@@ -272,6 +272,9 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.5 — 2026-10-07 (groups, files)
+- **`session.list`:** each workspace may carry `group: { id, name }`, the desktop sidebar group it belongs to; absent when ungrouped. Additive; older phones ignore it.
 
 ### v1.4 — 2026-10-06 (code pairing, discovery, approval)
 - **Discovery:** `_ostia._tcp` with TXT `v`, `name`, `host`, `port`, `fp`, announced only while Discoverable is on and a pairing code is live (§3.3).
