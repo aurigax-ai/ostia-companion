@@ -1,6 +1,6 @@
-import React, { useLayoutEffect, useMemo, useState } from 'react';
-import { RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
-import { Settings } from 'lucide-react-native';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
+import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
+import { ChevronDown, Settings } from 'lucide-react-native';
 import { Button, Divider, Empty, HeaderIcon, ListRow, Loading, SectionHeader, StatusPill } from '../components/ui';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
 import { InboxItem, Session, needsYou, paneTitle, shortPath, workspaceStatus } from '../model/workspaces';
@@ -21,21 +21,31 @@ const STATUS = {
 export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onUnpair: () => Promise<void> }) {
   const { sessions, panes, loading, refreshing, loadedAt } = useWorkspaces();
   const status = useConnectionStatus();
-  const [pairing] = useState(() => OstiaRpc.getPairing());
+  const live = OstiaRpc.getPairing();
+  const last = useRef(live);
+  if (live) last.current = live;
+  const pairing = last.current;
   const desktop = pairing?.desktopName || 'Ostia desktop';
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerTitle: () => (
-        <View>
-          <Text style={type.title} numberOfLines={1}>
-            {desktop}
-          </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${desktop}, switch desktop`}
+          onPress={() => navigation.navigate('Desktops')}
+        >
+          <View style={styles.titleRow}>
+            <Text style={type.title} numberOfLines={1}>
+              {desktop}
+            </Text>
+            <ChevronDown size={20} color={colors.muted} style={{ marginLeft: 4 }} />
+          </View>
           <View style={styles.status}>
             <View style={[styles.dot, { backgroundColor: STATUS[status].color }]} />
             <Text style={type.caption}>{STATUS[status].text}</Text>
           </View>
-        </View>
+        </Pressable>
       ),
       headerRight: () => (
         <HeaderIcon icon={Settings} label="Settings" onPress={() => navigation.navigate('Settings')} />
@@ -137,6 +147,7 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
 }
 
 const styles = StyleSheet.create({
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
   status: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
   count: {

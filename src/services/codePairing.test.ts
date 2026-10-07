@@ -101,9 +101,7 @@ describe('code pairing', () => {
   });
 
   it('CPD-C21 says pairing expired when nobody approved in time', () => {
-    expect(pairFailure('HTTP status code: 408', '100.64.1.2', 8722).text).toBe(
-      'Pairing expired before the desktop approved it. Show a new code on the desktop and try again.',
-    );
+    expect(pairFailure('HTTP status code: 408', '100.64.1.2', 8722).text).toBe('Request expired. Try a new code.');
   });
 
   it('CPD-C24 declares the Bonjour service and local network use for iOS', () => {
