@@ -1,4 +1,8 @@
 import { registerRootComponent } from 'expo';
+import { getRandomValues } from 'expo-crypto';
+
+// Hermes has no Web Crypto; the pairing flow draws its nonces from crypto.getRandomValues.
+(globalThis as { crypto?: object }).crypto ??= { getRandomValues };
 
 import App from './App';
 

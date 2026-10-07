@@ -187,7 +187,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   return (
     <KeyboardAvoidingView
       style={styles.fill}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
       keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
     >
       <View style={styles.fill}>

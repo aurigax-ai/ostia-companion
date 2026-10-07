@@ -17,7 +17,9 @@ describe('parsePairingPayload', () => {
     expect(() => parsePairingPayload(JSON.stringify({ ...payload, pairCode: '' }))).toThrow(/incomplete/);
   });
 
-  it('refuses a loopback address and says to turn on remote access', () => {
-    expect(() => parsePairingPayload(JSON.stringify({ ...payload, host: '127.0.0.1' }))).toThrow(/Tailscale/);
+  it('refuses a loopback address and says to pick an address the phone can reach', () => {
+    expect(() => parsePairingPayload(JSON.stringify({ ...payload, host: '127.0.0.1' }))).toThrow(
+      /127\.0\.0\.1, which only the desktop itself can reach/,
+    );
   });
 });

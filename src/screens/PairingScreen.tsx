@@ -112,7 +112,9 @@ function SearchState({ searching }: { searching: boolean }) {
   if (!searching) return null;
   return (
     <View style={styles.searching}>
-      <View style={styles.radar} />
+      <View style={styles.radar}>
+        <View style={styles.radarDot} />
+      </View>
       <Text style={type.caption}>Searching</Text>
     </View>
   );
@@ -120,7 +122,7 @@ function SearchState({ searching }: { searching: boolean }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  hero: { paddingTop: 40, paddingHorizontal: 24 },
+  hero: { paddingTop: 40, paddingHorizontal: 16 },
   logo: {
     width: 56,
     height: 56,
@@ -132,14 +134,14 @@ const styles = StyleSheet.create({
   crumb: { fontFamily: mono, fontSize: 12, color: colors.fg, backgroundColor: colors.surfaceHigh },
   searching: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   radar: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.brand,
-    borderWidth: 3,
-    borderColor: colors.brandSoft,
-    boxSizing: 'content-box',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  radarDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand },
   none: { paddingHorizontal: 16, paddingVertical: 8 },
   actions: { marginTop: 'auto', paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, gap: 4 },
   camera: { flex: 1, backgroundColor: '#000' },
