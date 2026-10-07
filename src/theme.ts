@@ -1,5 +1,3 @@
-import { DarkTheme, Theme } from '@react-navigation/native';
-
 export const colors = {
   bg: '#161616',
   bgSunken: '#0d0d0d',
@@ -39,17 +37,4 @@ export const type = {
     color: colors.muted,
   },
   mono: { fontFamily: mono, fontSize: 12, lineHeight: 16, color: colors.muted },
-};
-
-export const navigationTheme: Theme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    primary: colors.brand,
-    background: colors.bg,
-    card: colors.bg,
-    text: colors.fg,
-    border: colors.line,
-    notification: colors.attn,
-  },
 };
