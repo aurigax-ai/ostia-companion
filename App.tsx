@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono/400Regular';
+import { JetBrainsMono_600SemiBold } from '@expo-google-fonts/jetbrains-mono/600SemiBold';
 import { createNavigationContainerRef, DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -25,7 +30,7 @@ import { DesktopsScreen } from './src/screens/DesktopsScreen';
 import { FilesScreen } from './src/screens/FilesScreen';
 import { FileViewerScreen } from './src/screens/FileViewerScreen';
 import { RootStack } from './src/navigation';
-import { colors } from './src/theme';
+import { colors, font } from './src/theme';
 
 const navigationTheme: Theme = {
   ...DarkTheme,
@@ -43,8 +48,26 @@ const navigationTheme: Theme = {
 const Stack = createNativeStackNavigator<RootStack>();
 const navigationRef = createNavigationContainerRef<RootStack>();
 
+const FONTS = { Inter_400Regular, Inter_600SemiBold, JetBrainsMono_400Regular, JetBrainsMono_600SemiBold };
+
+const headerTitleStyle = {
+  fontFamily: font.semibold,
+  fontSize: Platform.OS === 'ios' ? 16 : 22,
+  color: colors.fg,
+};
+
+const largeTitle = Platform.OS === 'ios'
+  ? {
+      headerLargeTitle: true,
+      headerLargeTitleShadowVisible: false,
+      headerLargeStyle: { backgroundColor: colors.bg },
+      headerLargeTitleStyle: { fontFamily: font.semibold, color: colors.fg },
+    }
+  : {};
+
 export default function App() {
   const [paired, setPaired] = useState<boolean | null>(null);
+  const [fontsLoaded, fontError] = useFonts(FONTS);
 
   const connect = useCallback(async () => {
     const data = await getPairingData();
@@ -69,7 +92,7 @@ export default function App() {
     connect().catch(() => setPaired(false));
   }, [connect]);
 
-  if (paired === null) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  if (paired === null || (!fontsLoaded && !fontError)) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -79,6 +102,8 @@ export default function App() {
           screenOptions={{
             headerStyle: { backgroundColor: colors.bg },
             headerTintColor: colors.fg,
+            headerTitleStyle,
+            headerBackButtonDisplayMode: 'minimal',
             headerShadowVisible: false,
             contentStyle: { backgroundColor: colors.bg },
             animation: 'default',
@@ -91,10 +116,10 @@ export default function App() {
               <Stack.Screen name="Terminal" component={TerminalScreen} />
               <Stack.Screen name="Files" component={FilesScreen} />
               <Stack.Screen name="FileView" component={FileViewerScreen} />
-              <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
+              <Stack.Screen name="Settings" options={{ title: 'Settings', ...largeTitle }}>
                 {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
               </Stack.Screen>
-              <Stack.Screen name="Desktops" options={{ title: 'Desktops' }}>
+              <Stack.Screen name="Desktops" options={{ title: 'Desktops', ...largeTitle }}>
                 {(props) => <DesktopsScreen {...props} onEmpty={() => setPaired(false)} />}
               </Stack.Screen>
               <Stack.Screen name="Pair" options={{ title: 'Add desktop' }}>

@@ -16,6 +16,10 @@ export function slideMs(): number {
   return reduceMotion ? 0 : 200;
 }
 
+export function prefersReducedMotion(): boolean {
+  return reduceMotion;
+}
+
 export function pillFade(): number {
   return pillFadeMs(reduceMotion);
 }

@@ -29,7 +29,7 @@ import { useCaps, useWorkspaces } from '../services/workspaceStore';
 import { KeyRowEvent, KeyRowState, RowKey, pressKeyRow } from '../model/terminalKeys';
 import { terminalFontSize } from '../model/prefs';
 import { getPrefs, usePrefs } from '../services/prefsStore';
-import { colors, mono, type } from '../theme';
+import { colors, radius, space, type } from '../theme';
 
 const RESIZE_DEBOUNCE_MS = 150;
 const SETTLE_FALLBACK_MS = 400;
@@ -151,7 +151,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           onPress={() => setSheetOpen(true)}
           style={{ flexShrink: 1 }}
         >
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={type.headline} numberOfLines={1}>
             {title}
           </Text>
           <View style={styles.headerSub}>
@@ -366,7 +366,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         </>
       ) : null}
       {(!isAgent || raw) && role === 'owner' && prefs.keyRow && !attaching && !error ? (
-        <View style={[styles.keyRow, { paddingBottom: 8 + insets.bottom }]}>
+        <View style={[styles.keyRow, { paddingBottom: space.sm + insets.bottom }]}>
           <RowButton label="esc" onPress={() => pressKey({ type: 'key', key: 'esc' })} />
           <RowButton label="tab" onPress={() => pressKey({ type: 'key', key: 'tab' })} />
           <RowButton label="ctrl" active={keyRow.ctrl} onPress={() => pressKey({ type: 'ctrl' })} />
@@ -376,9 +376,9 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         </View>
       ) : null}
       {(!isAgent || raw) && role === 'observer' && !attaching && !error ? (
-        <View style={[styles.watchBar, { paddingBottom: 12 + insets.bottom }]}>
-          <Eye size={18} color={colors.muted} />
-          <Text style={[type.bodyMuted, { flex: 1, marginLeft: 8 }]}>Watching</Text>
+        <View style={[styles.watchBar, { paddingBottom: space.md + insets.bottom }]}>
+          <Eye size={18} color={colors.muted} strokeWidth={2.25} />
+          <Text style={[type.bodyMuted, { flex: 1, marginLeft: space.sm }]}>Watching</Text>
           <Button label="Type" icon={Keyboard} compact onPress={takeControl} />
         </View>
       ) : null}
@@ -394,7 +394,7 @@ function RowButton({ label, active, onPress }: { label: string; active?: boolean
       accessibilityState={active === undefined ? undefined : { selected: active }}
       onPress={() => (tap(), onPress())}
       android_ripple={{ color: colors.ripple }}
-      style={[styles.rowKey, active && styles.rowKeyActive]}
+      style={({ pressed }) => [styles.rowKey, pressed && Platform.OS === 'ios' && styles.rowKeyPressed, active && styles.rowKeyActive]}
     >
       <Text style={[styles.rowKeyLabel, active && { color: colors.brand }]}>{label}</Text>
     </Pressable>
@@ -402,11 +402,10 @@ function RowButton({ label, active, onPress }: { label: string; active?: boolean
 }
 
 const styles = StyleSheet.create({
-  headerTitle: { fontSize: 16, lineHeight: 22, fontWeight: '600', color: colors.fg },
-  headerSub: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dots: { flexDirection: 'row', gap: 4 },
+  headerSub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  dots: { flexDirection: 'row', gap: space.xs },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.lineStrong },
-  dotOn: { backgroundColor: colors.fg },
+  dotOn: { width: 14, backgroundColor: colors.fg },
   fill: { flex: 1, backgroundColor: TERMINAL_THEME.background },
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
@@ -417,29 +416,30 @@ const styles = StyleSheet.create({
   watchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
     backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.lineStrong,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
   },
   keyRow: {
     flexDirection: 'row',
     gap: 6,
-    padding: 8,
+    paddingHorizontal: space.sm,
+    paddingTop: space.sm,
     backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.lineStrong,
   },
   rowKey: {
     flex: 1,
-    minHeight: 40,
-    borderRadius: 8,
+    minHeight: 44,
+    borderRadius: radius.sm + 2,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceHigh,
     overflow: 'hidden',
   },
+  rowKeyPressed: { backgroundColor: colors.surfacePressed },
   rowKeyActive: { backgroundColor: colors.brandSoft },
-  rowKeyLabel: { fontFamily: mono, fontSize: 14, fontWeight: '600', color: colors.fg },
+  rowKeyLabel: { ...type.monoLabel },
 });

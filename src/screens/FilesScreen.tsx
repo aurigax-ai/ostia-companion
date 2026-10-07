@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { FlatList } from 'react-native';
-import { File, Folder } from 'lucide-react-native';
-import { Button, Divider, Empty, HeaderTitle, IconTile, ListRow, Loading } from '../components/ui';
+import { File, Folder, FolderOpen } from 'lucide-react-native';
+import { Button, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, Loading, TILE_INSET } from '../components/ui';
 import { FileEntry, formatSize, sortEntries } from '../model/files';
 import { ScreenProps } from '../navigation';
 import { OstiaRpc } from '../services/rpc';
@@ -48,10 +48,11 @@ export function FilesScreen({ navigation, route }: ScreenProps<'Files'>) {
     <FlatList
       data={state.entries}
       keyExtractor={(entry) => entry.name}
-      ItemSeparatorComponent={() => <Divider inset={72} />}
+      ItemSeparatorComponent={() => <Divider inset={TILE_INSET} />}
       contentContainerStyle={{ paddingVertical: 8, flexGrow: 1 }}
-      ListEmptyComponent={<Empty title="Empty folder" body="This folder is empty." />}
-      renderItem={({ item: entry }) => (
+      ListEmptyComponent={<Empty icon={FolderOpen} title="Empty folder" body="This folder is empty." />}
+      renderItem={({ item: entry, index }) => (
+        <GroupItem first={index === 0} last={index === state.entries.length - 1}>
         <ListRow
           leading={<IconTile icon={entry.kind === 'dir' ? Folder : File} />}
           title={entry.name}
@@ -63,6 +64,7 @@ export function FilesScreen({ navigation, route }: ScreenProps<'Files'>) {
               : navigation.navigate('FileView', { sessionId, path: join(entry.name), name: entry.name })
           }
         />
+        </GroupItem>
       )}
     />
   );
