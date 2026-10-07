@@ -7,6 +7,7 @@ export interface Session {
   kind: string;
   workDir: string;
   state: SessionState;
+  group?: { id: string; name: string };
 }
 
 export interface Pane {

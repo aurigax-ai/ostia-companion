@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes, X509Certificate } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -23,6 +23,7 @@ export interface MockGatewayOptions {
   reusableCode?: boolean;
   helloTimeoutMs?: number;
   scenario?: Scenario;
+  devicesFile?: string;
   log?: (line: string) => void;
 }
 
@@ -131,12 +132,14 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     reusableCode = false,
     helloTimeoutMs = 10_000,
     scenario = demoScenario(),
+    devicesFile,
     log = () => {},
   } = options;
   const { key, cert, fingerprint } = certificate(name);
   const codes = new Map<string, number>();
   const pending = new Map<string, PendingPair>();
-  const devices: MockDevice[] = [];
+  const devices: MockDevice[] = devicesFile && existsSync(devicesFile) ? JSON.parse(readFileSync(devicesFile, 'utf8')) : [];
+  const saveDevices = () => devicesFile && writeFileSync(devicesFile, JSON.stringify(devices));
   const checkCodes: string[] = [];
   const connections = new Set<Connection>();
   const output = new Map<string, string>();
@@ -221,6 +224,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
           caps: canonical(caps),
         };
         devices.push(device);
+        saveDevices();
         log(`pair: approved ${device.deviceId}`);
         send(res, 200, { deviceId: device.deviceId, deviceToken: device.deviceToken, caps: device.caps, expiresAt: null });
       }, approveAfterMs);
@@ -344,6 +348,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       const index = devices.findIndex((d) => d.deviceId === deviceId);
       if (index < 0) return;
       const [device] = devices.splice(index, 1);
+      saveDevices();
       connections.forEach((c) => c.device === device && c.socket.close(CLOSE_REVOKED, 'revoked'));
     },
     setCaps: (deviceId, next) => {

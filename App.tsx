@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getPairingData, loadDesktops } from './src/services/storage';
 import { loadPrefs } from './src/services/prefsStore';
@@ -62,6 +63,7 @@ export default function App() {
   if (paired === null) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <NavigationContainer theme={navigationTheme}>
         <Stack.Navigator
@@ -111,5 +113,6 @@ export default function App() {
       </NavigationContainer>
       <StatusBar style="light" />
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

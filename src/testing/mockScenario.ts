@@ -10,9 +10,9 @@ const MIGRATION = 'Apply this migration to the dev database?\n\nALTER TABLE user
 export function demoScenario(): Scenario {
   return {
     sessions: [
-      { sessionId: 's-api', name: 'api-server', kind: 'project', workDir: '/home/marco/work/api-server', state: 'waiting' },
-      { sessionId: 's-web', name: 'website', kind: 'project', workDir: '/home/marco/Personal/site', state: 'error' },
-      { sessionId: 's-ostia', name: 'ostia', kind: 'project', workDir: '/home/marco/Personal/ostia', state: 'working' },
+      { sessionId: 's-api', name: 'api-server', kind: 'project', workDir: '/home/marco/work/api-server', state: 'waiting', group: { id: 'g-work', name: 'Work' } },
+      { sessionId: 's-web', name: 'website', kind: 'project', workDir: '/home/marco/Personal/site', state: 'error', group: { id: 'g-personal', name: 'Personal' } },
+      { sessionId: 's-ostia', name: 'ostia', kind: 'project', workDir: '/home/marco/Personal/ostia', state: 'working', group: { id: 'g-personal', name: 'Personal' } },
       { sessionId: 's-dot', name: 'dotfiles', kind: 'project', workDir: '/home/marco/.config', state: 'done' },
     ],
     panes: [
