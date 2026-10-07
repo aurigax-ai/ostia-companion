@@ -117,6 +117,9 @@ importers:
       '@types/ws':
         specifier: ^8.18.2
         version: 8.18.2
+      babel-preset-expo:
+        specifier: ~57.0.14
+        version: 57.0.14(@babel/core@7.29.7)(@babel/runtime@7.29.7)(expo@57.0.27)(react-refresh@0.14.2)
       jest:
         specifier: ~29.7.0
         version: 29.7.0(@types/node@26.6.4)
