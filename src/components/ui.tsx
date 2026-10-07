@@ -83,7 +83,6 @@ export function IconTile({ icon: Icon, tone = 'neutral' }: { icon: LucideIcon; t
 const PILL_TONES = {
   attn: { fg: colors.attn, bg: colors.attnSoft },
   brand: { fg: colors.brand, bg: colors.brandSoft },
-  ok: { fg: colors.ok, bg: colors.okSoft },
   muted: { fg: colors.muted, bg: colors.surfaceHigh },
 };
 
@@ -198,9 +197,9 @@ export function HeaderTitle({ title, subtitle, mono }: { title: string; subtitle
 export function Warning({ text, actions }: { text: string; actions?: React.ReactNode }) {
   return (
     <View style={styles.warning} accessibilityRole="alert">
-      <TriangleAlert size={18} color={colors.warn} style={styles.warningIcon} />
+      <TriangleAlert size={18} color={colors.brand} style={styles.warningIcon} />
       <View style={{ flex: 1 }}>
-        <Text style={[type.bodyMuted, { color: colors.warn }]}>{text}</Text>
+        <Text style={[type.bodyMuted, { color: colors.brand }]}>{text}</Text>
         {actions ? <View style={styles.warningActions}>{actions}</View> : null}
       </View>
     </View>

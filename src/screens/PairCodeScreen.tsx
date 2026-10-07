@@ -48,7 +48,7 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
     <KeyboardAvoidingView style={styles.screen} behavior="padding">
       <Text style={type.title}>Enter the pairing code</Text>
       <Text style={[type.bodyMuted, { marginTop: 8 }]}>
-        It's under the QR code in Settings › Remote on the desktop and changes every 2 minutes.
+        Shown under the QR code on your desktop.
       </Text>
       <Pressable style={styles.boxes} onPress={() => input.current?.focus()} accessible={false}>
         {boxes.map((char, index) => (
@@ -75,9 +75,9 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
         />
       </Pressable>
       {failed && code === failed ? (
-        <Text style={[type.bodyMuted, styles.hint]}>Change the code to try again.</Text>
+        <Text style={[type.bodyMuted, styles.hint]}>Check the code and try again.</Text>
       ) : pairing.busy ? (
-        <Text style={[type.bodyMuted, styles.hint]}>Sending the code…</Text>
+        <Text style={[type.bodyMuted, styles.hint]}>Pairing…</Text>
       ) : null}
     </KeyboardAvoidingView>
   );

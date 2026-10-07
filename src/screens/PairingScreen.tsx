@@ -54,13 +54,13 @@ export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { 
         <SafeAreaView style={styles.cameraUi}>
           <View style={styles.cameraTop}>
             <HeaderIcon icon={X} label="Close scanner" onPress={() => setScanning(false)} color="#fff" />
-            <Text style={[type.label, { color: '#fff', marginLeft: 8 }]}>Scan the QR code on your desktop</Text>
+            <Text style={[type.label, { color: '#fff', marginLeft: 8 }]}>Scan the desktop's QR code</Text>
           </View>
           <View style={styles.viewfinder}>
             {pairing.busy ? <ActivityIndicator size="large" color="#fff" /> : null}
           </View>
           <Text style={[type.bodyMuted, styles.cameraHint]}>
-            {pairing.busy ? 'Sending the code…' : 'Settings › Remote on the desktop shows it.'}
+            {pairing.busy ? 'Pairing…' : 'Settings › Remote'}
           </Text>
         </SafeAreaView>
       </View>
@@ -88,14 +88,14 @@ export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { 
               title={desktop.name}
               subtitle={desktop.host}
               mono
-              leading={<IconTile icon={Monitor} tone="brand" />}
+              leading={<IconTile icon={Monitor} />}
               onPress={() => navigation.navigate('PairCode', desktop)}
             />
           </View>
         ))}
         {state.kind === 'none' ? (
           <Text style={[type.bodyMuted, styles.none]}>
-            None found. Turn on Discoverable in Settings › Remote, or scan the QR code.
+            None found. Turn on Discoverable, or scan the QR code.
           </Text>
         ) : null}
 

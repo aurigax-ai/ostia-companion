@@ -14,9 +14,6 @@ export const colors = {
   onBrand: '#161616',
   attn: '#ee5396',
   attnSoft: 'rgba(238, 83, 150, 0.18)',
-  warn: '#f2c55c',
-  ok: '#42be65',
-  okSoft: 'rgba(66, 190, 101, 0.14)',
   scrim: 'rgba(0, 0, 0, 0.6)',
 };
 

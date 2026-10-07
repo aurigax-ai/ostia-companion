@@ -15,14 +15,14 @@ export function parsePairingPayload(text: string): PairingPayload {
   try {
     config = JSON.parse(json);
   } catch {
-    throw new Error('This is not an Ostia pairing code. Scan the QR code from Settings › Remote on the desktop.');
+    throw new Error('Not an Ostia pairing code.');
   }
   if (!config?.host || !config.port || !config.fingerprint || !config.pairCode) {
-    throw new Error('This pairing code is incomplete. Show a new QR code on the desktop and scan it again.');
+    throw new Error('Incomplete pairing code. Show a new one.');
   }
   if (isLoopbackHost(config.host)) {
     throw new Error(
-      `This code points at ${config.host}, which only the desktop itself can reach. In Settings › Remote on the desktop, choose an address this phone can reach, then show the code again.`,
+      `${config.host} only works on the desktop itself. Pick another address in Settings › Remote.`,
     );
   }
   return config;

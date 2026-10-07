@@ -12,7 +12,7 @@ import { colors, mono, type } from '../theme';
 type Row = { kind: 'inbox'; item: InboxItem } | { kind: 'workspace'; session: Session };
 
 const STATUS = {
-  connected: { text: 'Connected', color: colors.ok },
+  connected: { text: 'Connected', color: colors.muted },
   connecting: { text: 'Connecting…', color: colors.brand },
   disconnected: { text: 'Offline', color: colors.attn },
   revoked: { text: 'Removed', color: colors.attn },
@@ -53,7 +53,7 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
     return list;
   }, [sessions, panes]);
 
-  if (loading) return <Loading label={`Loading ${desktop}…`} />;
+  if (loading) return <Loading />;
 
   const openPane = (paneId: string, title: string) => navigation.navigate('Terminal', { paneId, title });
 
@@ -84,7 +84,6 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
         section.key === 'inbox' ? (
           <SectionHeader
             title="Needs you"
-            tone="attn"
             trailing={<Text style={[type.caption, styles.count]}>{section.data.length}</Text>}
           />
         ) : (
@@ -97,7 +96,7 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
       ItemSeparatorComponent={({ leadingItem }) => (leadingItem?.kind === 'workspace' ? <Divider /> : null)}
       ListEmptyComponent={
         status === 'connected' ? (
-          <Empty title="No workspaces" body={`Open a workspace in Ostia on ${desktop} and it shows up here.`} />
+          <Empty title="No workspaces" body="Open one in Ostia on your desktop." />
         ) : null
       }
       renderItem={({ item: row }) => {
@@ -107,7 +106,6 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
           return (
             <View style={styles.card}>
               <Text style={styles.meta} numberOfLines={1}>
-                <Text style={{ color: colors.attn }}>● </Text>
                 {[workspace, pane.agent && pane.agent !== 'other' ? pane.agent : title].filter(Boolean).join(' · ')}
               </Text>
               <Text style={[type.body, styles.message]}>{reason}</Text>

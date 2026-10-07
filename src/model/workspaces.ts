@@ -44,7 +44,7 @@ export function needsYou(sessions: Session[], panes: Pane[]): InboxItem[] {
     .map((pane) => ({
       pane,
       workspace: names.get(pane.sessionId) ?? '',
-      reason: pane.agentMessage || (pane.agentState === 'error' ? 'Stopped with an error' : 'Waiting for you'),
+      reason: pane.agentMessage || (pane.agentState === 'error' ? 'Failed' : 'Waiting for you'),
     }));
 }
 
@@ -63,13 +63,13 @@ export type StatusKind = 'waiting' | 'error' | 'running' | 'done' | 'idle';
 
 export interface Status {
   kind: StatusKind;
-  tone: 'attn' | 'brand' | 'ok' | 'muted';
+  tone: 'attn' | 'brand' | 'muted';
   text: string;
 }
 
 const WAITING: Status = { kind: 'waiting', tone: 'attn', text: 'Waiting' };
 const ERROR: Status = { kind: 'error', tone: 'attn', text: 'Error' };
-const DONE: Status = { kind: 'done', tone: 'ok', text: 'Done' };
+const DONE: Status = { kind: 'done', tone: 'muted', text: 'Done' };
 
 function exitStatus(code: number): Status {
   return { kind: 'error', tone: 'attn', text: `Exit ${code}` };

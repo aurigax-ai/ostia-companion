@@ -81,7 +81,7 @@ export default function App() {
               <Stack.Screen name="Pair" options={{ headerShown: false }}>
                 {(props) => <PairingScreen {...props} onPaired={connect} />}
               </Stack.Screen>
-              <Stack.Screen name="PairLink" options={{ title: 'Paste pairing link', presentation: 'modal' }}>
+              <Stack.Screen name="PairLink" options={{ title: 'Pairing link', presentation: 'modal' }}>
                 {(props) => <PairLinkScreen {...props} onPaired={connect} />}
               </Stack.Screen>
               <Stack.Screen name="PairCode" options={{ title: 'Pair', presentation: 'modal' }}>

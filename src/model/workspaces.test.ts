@@ -35,7 +35,7 @@ describe('needsYou', () => {
     );
     expect(items.map((item) => [item.pane.paneId, item.workspace, item.reason])).toEqual([
       ['p1', 'api', 'Allow Bash?'],
-      ['p3', 'web', 'Stopped with an error'],
+      ['p3', 'web', 'Failed'],
     ]);
   });
 

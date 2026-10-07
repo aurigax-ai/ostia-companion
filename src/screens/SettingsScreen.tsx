@@ -56,7 +56,7 @@ export function SettingsScreen({ onUnpair }: ScreenProps<'Settings'> & { onUnpai
             <ListRow
               title={title}
               subtitle={body}
-              trailing={<Icon size={20} color={granted ? colors.ok : colors.dim} />}
+              trailing={<Icon size={20} color={granted ? colors.fg : colors.dim} />}
             />
           </React.Fragment>
         );
