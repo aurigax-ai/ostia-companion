@@ -3,7 +3,7 @@ import { Alert, Platform, ScrollView, Share, StyleSheet, Switch, Text, View } fr
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Check, Minus, Plus } from 'lucide-react-native';
-import { Button, Divider, HeaderIcon, ListRow, SectionHeader } from '../components/ui';
+import { Button, Group, IconButton, ListRow, SectionHeader } from '../components/ui';
 import { connectionRows, routeLabel } from '../model/connectionInfo';
 import { MAX_FONT_SIZE, MIN_FONT_SIZE, TerminalPrefs } from '../model/prefs';
 import { ScreenProps } from '../navigation';
@@ -14,7 +14,7 @@ import { setAlertPrefs, useAlertPrefs } from '../services/alertPrefsStore';
 import type { AlertPrefs } from '../model/alertPrefs';
 import { Cap, OstiaRpc } from '../services/rpc';
 import { useCaps, useConnectionStatus } from '../services/workspaceStore';
-import { colors, mono, type } from '../theme';
+import { colors, space, type } from '../theme';
 
 const CONTRACT_VERSION = '1.4';
 
@@ -41,7 +41,7 @@ const TOGGLES: { key: keyof TerminalPrefs; title: string }[] = [
 
 function Value({ text, mono: isMono }: { text: string; mono?: boolean }) {
   return (
-    <Text style={[isMono ? styles.mono : type.bodyMuted, styles.value]} numberOfLines={1}>
+    <Text style={[isMono ? type.mono : type.bodyMuted, styles.value]} numberOfLines={1} selectable>
       {text}
     </Text>
   );
@@ -67,39 +67,41 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
     ]);
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: space.xxxl }}>
       <SectionHeader title="Desktop" />
-      <ListRow title={name} trailing={<Value text={STATE[status]} />} />
-      {pairing
-        ? connectionRows(pairing).map((row) => (
-            <React.Fragment key={row.title}>
-              <Divider />
-              <ListRow title={row.title} trailing={<Value text={row.value} mono={row.mono} />} />
-            </React.Fragment>
-          ))
-        : null}
-      {pairing && routeLabel(pairing.gatewayHost) === 'Tailscale' ? (
-        <>
-          <Divider />
+      <Group>
+        <ListRow title={name} trailing={<Value text={STATE[status]} />} />
+        {pairing
+          ? connectionRows(pairing).map((row) => (
+              <ListRow key={row.title} title={row.title} trailing={<Value text={row.value} mono={row.mono} />} />
+            ))
+          : null}
+        {pairing && routeLabel(pairing.gatewayHost) === 'Tailscale' ? (
           <ListRow title="Open Tailscale" onPress={() => void openTailscaleApp()} />
-        </>
-      ) : null}
-      <Divider />
-      <ListRow title="Desktops" onPress={() => navigation.navigate('Desktops')} />
+        ) : null}
+        <ListRow title="Desktops" onPress={() => navigation.navigate('Desktops')} />
+      </Group>
 
       <SectionHeader title="Access" />
-      {ACCESS.map(({ cap, title }, index) => (
-        <React.Fragment key={cap}>
-          {index > 0 ? <Divider /> : null}
+      <Group>
+        {ACCESS.map(({ cap, title }) => (
           <ListRow
+            key={cap}
             title={title}
-            trailing={caps.includes(cap) ? <Check size={20} color={colors.fg} /> : <Minus size={20} color={colors.dim} />}
+            trailing={
+              caps.includes(cap) ? (
+                <Check size={18} color={colors.fg} strokeWidth={2.5} />
+              ) : (
+                <Minus size={18} color={colors.dim} strokeWidth={2.25} />
+              )
+            }
           />
-        </React.Fragment>
-      ))}
+        ))}
+      </Group>
       <Text style={[type.caption, styles.note]}>Change access in Settings › Remote on your desktop.</Text>
 
       <SectionHeader title="Notifications" />
+      <Group>
       <ListRow
         title="Permission"
         trailing={
@@ -114,9 +116,8 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
         }
       />
       {ALERTS.map(({ key, title }) => (
-        <React.Fragment key={key}>
-          <Divider />
           <ListRow
+            key={key}
             title={title}
             trailing={
               <Switch
@@ -128,8 +129,8 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
               />
             }
           />
-        </React.Fragment>
       ))}
+      </Group>
       <Text style={[type.caption, styles.note]}>
         {Platform.OS === 'ios'
           ? 'On iPhone, alerts arrive only while Ostia is open.'
@@ -137,20 +138,20 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
       </Text>
 
       <SectionHeader title="Terminal" />
-      <ListRow
-        title="Text size"
-        trailing={
-          <View style={styles.stepper}>
-            <HeaderIcon icon={Minus} label="Smaller text" onPress={() => setPrefs({ fontSize: prefs.fontSize - 1 })} />
-            <Text style={[styles.mono, styles.size]}>{prefs.fontSize}</Text>
-            <HeaderIcon icon={Plus} label="Larger text" onPress={() => setPrefs({ fontSize: prefs.fontSize + 1 })} />
-          </View>
-        }
-      />
-      {TOGGLES.map(({ key, title }) => (
-        <React.Fragment key={key}>
-          <Divider />
+      <Group>
+        <ListRow
+          title="Text size"
+          trailing={
+            <View style={styles.stepper}>
+              <IconButton icon={Minus} variant="tonal" label="Smaller text" onPress={() => setPrefs({ fontSize: prefs.fontSize - 1 })} />
+              <Text style={styles.size}>{prefs.fontSize}</Text>
+              <IconButton icon={Plus} variant="tonal" label="Larger text" onPress={() => setPrefs({ fontSize: prefs.fontSize + 1 })} />
+            </View>
+          }
+        />
+        {TOGGLES.map(({ key, title }) => (
           <ListRow
+            key={key}
             title={title}
             trailing={
               <Switch
@@ -162,18 +163,18 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
               />
             }
           />
-        </React.Fragment>
-      ))}
+        ))}
+      </Group>
       <Text style={[type.caption, styles.note]}>
         Text size {MIN_FONT_SIZE}–{MAX_FONT_SIZE}. Applies to terminals on this phone.
       </Text>
 
       <SectionHeader title="About" />
-      <ListRow title="Version" trailing={<Value text={Constants.expoConfig?.version ?? '—'} mono />} />
-      <Divider />
-      <ListRow title="Contract" trailing={<Value text={CONTRACT_VERSION} mono />} />
-      <Divider />
-      <ListRow title="Share connection log" onPress={() => void Share.share({ message: connectionLogText() })} />
+      <Group>
+        <ListRow title="Version" trailing={<Value text={Constants.expoConfig?.version ?? '—'} mono />} />
+        <ListRow title="Contract" trailing={<Value text={CONTRACT_VERSION} mono />} />
+        <ListRow title="Share connection log" onPress={() => void Share.share({ message: connectionLogText() })} />
+      </Group>
 
       <Button label="Remove this desktop" variant="danger" onPress={confirmRemove} style={styles.remove} />
     </ScrollView>
@@ -181,10 +182,9 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
 }
 
 const styles = StyleSheet.create({
-  mono: { fontFamily: mono, fontSize: 12, lineHeight: 16, color: colors.muted },
   value: { maxWidth: 200, textAlign: 'right' },
-  note: { paddingHorizontal: 16, paddingTop: 8 },
-  stepper: { flexDirection: 'row', alignItems: 'center' },
-  size: { width: 28, textAlign: 'center', color: colors.fg, fontSize: 14 },
-  remove: { margin: 16, marginTop: 32 },
+  note: { paddingHorizontal: space.lg + space.xs, paddingTop: space.sm },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  size: { ...type.monoLabel, minWidth: 24, textAlign: 'center' },
+  remove: { marginHorizontal: space.lg, marginTop: space.xxl },
 });

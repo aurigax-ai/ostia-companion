@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Ask, detailPreview, waitedFor } from '../model/asks';
-import { colors, mono, type } from '../theme';
-import { Button } from './ui';
-
-const VARIANT = { approve: 'filled', deny: 'tonal', neutral: 'text' } as const;
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ask, AskChoice, detailPreview, waitedFor } from '../model/asks';
+import { colors, font, radius, space, type } from '../theme';
+import { Button, Card } from './ui';
 
 export function AskCard({
   ask,
@@ -31,18 +29,33 @@ export function AskCard({
   const preview = ask.detail ? detailPreview(ask.detail) : null;
   const disabled = !canRespond || pending !== undefined;
 
+  const secondary = ask.choices.filter((choice) => choice.tone !== 'approve');
+  const primary = ask.choices.filter((choice) => choice.tone === 'approve');
+  const choiceButton = (choice: AskChoice, variant: 'filled' | 'tonal') => (
+    <Button
+      key={choice.id}
+      label={choice.label}
+      variant={variant}
+      loading={pending === choice.id}
+      disabled={disabled}
+      onPress={() => onAnswer({ choiceId: choice.id })}
+      style={styles.choice}
+    />
+  );
+
   return (
-    <View style={styles.card}>
+    <Card>
       <View style={styles.metaRow}>
-        <Text style={styles.meta} numberOfLines={1}>
+        <View style={styles.attnDot} />
+        <Text style={[type.mono, styles.meta]} numberOfLines={1}>
           {[workspace, ask.agent].filter(Boolean).join(' · ')}
         </Text>
         <Text style={type.caption}>{waitedFor(ask.since, now)}</Text>
       </View>
-      <Text style={[type.body, styles.title]}>{ask.title}</Text>
+      <Text style={[type.headline, styles.title]}>{ask.title}</Text>
       {preview ? (
         <View style={styles.detail}>
-          <Text style={styles.detailText}>{expanded ? ask.detail : preview.text}</Text>
+          <Text style={styles.detailText} selectable>{expanded ? ask.detail : preview.text}</Text>
           {preview.more && !expanded ? (
             <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} hitSlop={8}>
               <Text style={styles.more}>Show all</Text>
@@ -60,6 +73,7 @@ export function AskCard({
             onChangeText={setReply}
             editable={!disabled}
             cursorColor={colors.brand}
+            selectionColor={colors.brandSoft}
             accessibilityLabel={`Reply to ${ask.title}`}
           />
           <Button
@@ -71,57 +85,48 @@ export function AskCard({
         </View>
       ) : null}
       <View style={styles.actions}>
-        {ask.choices.map((choice) =>
-          pending === choice.id ? (
-            <ActivityIndicator key={choice.id} color={colors.brand} style={styles.spinner} />
-          ) : (
-            <Button
-              key={choice.id}
-              label={choice.label}
-              compact
-              variant={VARIANT[choice.tone]}
-              disabled={disabled}
-              onPress={() => onAnswer({ choiceId: choice.id })}
-            />
-          ),
-        )}
+        {secondary.length > 0 ? (
+          <View style={styles.choiceRow}>{secondary.map((choice) => choiceButton(choice, 'tonal'))}</View>
+        ) : null}
+        {primary.map((choice) => choiceButton(choice, 'filled'))}
       </View>
       {!canRespond ? (
         <Text style={[type.caption, styles.note]}>Turn on Respond for this phone in Settings › Remote.</Text>
       ) : null}
       {error ? <Text style={[type.caption, styles.error]}>{error}</Text> : null}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.lineStrong,
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  attnDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.attn },
+  meta: { flex: 1 },
+  title: { marginTop: space.sm },
+  detail: {
+    marginTop: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm + 2,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    backgroundColor: colors.bgSunken,
   },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  meta: { fontFamily: mono, fontSize: 12, lineHeight: 16, color: colors.muted, flex: 1 },
-  title: { marginTop: 8 },
-  detail: { marginTop: 12, padding: 12, borderRadius: 8, backgroundColor: colors.bgSunken },
-  detailText: { fontFamily: mono, fontSize: 12, lineHeight: 18, color: colors.muted },
-  more: { ...type.label, color: colors.brand, marginTop: 8 },
-  replyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  detailText: { ...type.mono, lineHeight: 18 },
+  more: { ...type.label, color: colors.brand, marginTop: space.sm },
+  replyRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md },
   reply: {
     flex: 1,
     minHeight: 40,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.full,
     backgroundColor: colors.bgSunken,
     color: colors.fg,
+    fontFamily: font.regular,
     fontSize: 14,
   },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, marginTop: 16 },
-  spinner: { minHeight: 40, paddingHorizontal: 16 },
-  note: { marginTop: 8 },
-  error: { marginTop: 8, color: colors.attn },
+  actions: { gap: space.sm, marginTop: space.lg },
+  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  choice: { flexGrow: 1, flexBasis: '40%', minHeight: 44 },
+  note: { marginTop: space.md },
+  error: { marginTop: space.sm, color: colors.attn },
 });

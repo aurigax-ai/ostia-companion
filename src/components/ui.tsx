@@ -1,9 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { Check, ChevronRight, CircleAlert, LoaderCircle, LucideIcon, TriangleAlert, X } from 'lucide-react-native';
-import { Status } from '../model/workspaces';
-import { haptic, pillFade } from '../services/motion';
-import { colors, type } from '../theme';
+import { Bot, ChevronRight, LucideIcon, SquareTerminal, TriangleAlert } from 'lucide-react-native';
+import { Pane, Status } from '../model/workspaces';
+import { haptic, pillFade, prefersReducedMotion } from '../services/motion';
+import { colors, radius, space, type } from '../theme';
+
+export const ROW_INSET = space.lg;
+export const TILE_INSET = space.lg + 36 + space.md;
 
 export function tap() {
   haptic('tap');
@@ -32,7 +35,11 @@ export function ListRow({
       accessibilityState={disabled ? { disabled } : undefined}
       onPress={onPress ? () => (tap(), onPress()) : undefined}
       android_ripple={onPress ? { color: colors.ripple } : undefined}
-      style={({ pressed }) => [styles.row, pressed && Platform.OS === 'ios' && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        subtitle ? styles.rowTall : null,
+        pressed && Platform.OS === 'ios' && styles.rowPressed,
+      ]}
     >
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.rowText}>
@@ -40,15 +47,45 @@ export function ListRow({
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[mono ? type.mono : type.bodyMuted, styles.subtitle, disabled && styles.dim]} numberOfLines={1}>
+          <Text style={[mono ? type.mono : type.caption, styles.subtitle, disabled && styles.dim]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
-      {onPress ? <ChevronRight size={18} color={colors.dim} style={styles.chevron} /> : null}
+      {onPress ? <ChevronRight size={16} color={colors.dim} strokeWidth={2.25} style={styles.chevron} /> : null}
     </Pressable>
   );
+}
+
+export function Group({ children, inset = ROW_INSET, style }: { children: React.ReactNode; inset?: number; style?: ViewStyle }) {
+  const items = React.Children.toArray(children).filter(Boolean);
+  return (
+    <View style={[styles.group, style]}>
+      {items.map((child, index) => (
+        <React.Fragment key={index}>
+          {index > 0 ? <View style={[styles.line, { marginLeft: inset }]} /> : null}
+          {child}
+        </React.Fragment>
+      ))}
+    </View>
+  );
+}
+
+export function GroupItem({ first, last, children }: { first: boolean; last: boolean; children: React.ReactNode }) {
+  return <View style={[styles.groupItem, first && styles.groupFirst, last && styles.groupLast]}>{children}</View>;
+}
+
+export function Divider({ inset = ROW_INSET }: { inset?: number }) {
+  return (
+    <View style={styles.groupItem}>
+      <View style={[styles.line, { marginLeft: inset }]} />
+    </View>
+  );
+}
+
+export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+  return <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function SectionHeader({
@@ -62,41 +99,65 @@ export function SectionHeader({
 }) {
   return (
     <View style={styles.section}>
-      <Text style={[type.overline, tone === 'attn' && { color: colors.attn }]}>{title}</Text>
+      <Text style={[type.label, styles.sectionTitle, tone === 'attn' && { color: colors.attn }]} numberOfLines={1}>
+        {title}
+      </Text>
       {trailing}
     </View>
   );
 }
 
-export function Divider({ inset = 16 }: { inset?: number }) {
-  return <View style={[styles.divider, { marginLeft: inset }]} />;
-}
-
-export function IconTile({ icon: Icon, tone = 'neutral' }: { icon: LucideIcon; tone?: 'neutral' | 'brand' | 'ghost' }) {
+export function Badge({ text, tone = 'attn' }: { text: string; tone?: 'attn' | 'brand' }) {
   return (
-    <View style={[styles.tile, tone === 'ghost' && styles.tileGhost]}>
-      <Icon size={20} color={tone === 'brand' ? colors.brand : tone === 'ghost' ? colors.dim : colors.fg} />
+    <View style={[styles.badge, { backgroundColor: tone === 'attn' ? colors.attnSoft : colors.brandSoft }]}>
+      <Text style={[type.captionStrong, { color: tone === 'attn' ? colors.attn : colors.brand }]}>{text}</Text>
     </View>
   );
 }
 
-const PILL_TONES = {
-  attn: { fg: colors.attn, bg: colors.attnSoft },
-  brand: { fg: colors.brand, bg: colors.brandSoft },
-  muted: { fg: colors.muted, bg: colors.surfaceHigh },
+const TILE_TONES = {
+  neutral: { bg: colors.surfaceHigh, fg: colors.fg },
+  brand: { bg: colors.brandSoft, fg: colors.brand },
+  attn: { bg: colors.attnSoft, fg: colors.attn },
+  ghost: { bg: 'transparent', fg: colors.dim },
 };
 
-const PILL_ICONS: Record<Status['kind'], LucideIcon | null> = {
-  waiting: CircleAlert,
-  error: X,
-  running: LoaderCircle,
-  done: Check,
-  idle: null,
+export function IconTile({
+  icon: Icon,
+  tone = 'neutral',
+  size = 'md',
+}: {
+  icon: LucideIcon;
+  tone?: keyof typeof TILE_TONES;
+  size?: 'md' | 'lg';
+}) {
+  const palette = TILE_TONES[tone];
+  return (
+    <View
+      style={[
+        styles.tile,
+        size === 'lg' && styles.tileLarge,
+        { backgroundColor: palette.bg },
+        tone === 'ghost' && styles.tileGhost,
+      ]}
+    >
+      <Icon size={size === 'lg' ? 28 : 18} color={palette.fg} strokeWidth={size === 'lg' ? 1.75 : 2} />
+    </View>
+  );
+}
+
+export function terminalIcon(pane: Pane): LucideIcon {
+  return pane.agent && pane.agent !== 'other' ? Bot : SquareTerminal;
+}
+
+const PILL_TONES = {
+  attn: { fg: colors.attn, dot: colors.attn },
+  brand: { fg: colors.brand, dot: colors.brand },
+  muted: { fg: colors.muted, dot: colors.dim },
 };
 
 export function StatusPill({ status }: { status: Status }) {
   const tone = PILL_TONES[status.tone];
-  const Icon = PILL_ICONS[status.kind];
   const opacity = useRef(new Animated.Value(1)).current;
   const shown = useRef(status.text);
   useEffect(() => {
@@ -106,12 +167,19 @@ export function StatusPill({ status }: { status: Status }) {
     Animated.timing(opacity, { toValue: 1, duration: pillFade(), useNativeDriver: true }).start();
   }, [status.text, opacity]);
   return (
-    <Animated.View style={[styles.pill, { backgroundColor: tone.bg, opacity }]}>
-      {Icon ? <Icon size={12} color={tone.fg} strokeWidth={3} /> : null}
-      <Text style={[type.caption, styles.pillText, { color: tone.fg }]}>{status.text}</Text>
+    <Animated.View style={[styles.pill, status.tone === 'attn' && styles.pillAttn, { opacity }]}>
+      <View style={[styles.pillDot, { backgroundColor: tone.dot }]} />
+      <Text style={[type.captionStrong, { color: tone.fg }]}>{status.text}</Text>
     </Animated.View>
   );
 }
+
+const BUTTON_PALETTE = {
+  filled: { bg: colors.brand, fg: colors.onBrand },
+  tonal: { bg: colors.surfaceHigh, fg: colors.fg },
+  text: { bg: 'transparent', fg: colors.brand },
+  danger: { bg: colors.attnSoft, fg: colors.attn },
+};
 
 export function Button({
   label,
@@ -126,28 +194,25 @@ export function Button({
   label: string;
   onPress: () => void;
   icon?: LucideIcon;
-  variant?: 'filled' | 'tonal' | 'text' | 'danger';
+  variant?: keyof typeof BUTTON_PALETTE;
   compact?: boolean;
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
 }) {
-  const palette = {
-    filled: { bg: colors.brand, fg: colors.onBrand },
-    tonal: { bg: colors.surfaceHigh, fg: colors.fg },
-    text: { bg: 'transparent', fg: colors.brand },
-    danger: { bg: colors.attnSoft, fg: colors.attn },
-  }[variant];
+  const palette = BUTTON_PALETTE[variant];
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={loading ? { busy: true, disabled: true } : disabled ? { disabled: true } : undefined}
       disabled={disabled || loading}
       onPress={() => (tap(), onPress())}
       android_ripple={{ color: colors.ripple, foreground: true }}
-      style={[
+      style={({ pressed }) => [
         styles.button,
         compact && styles.buttonCompact,
-        { backgroundColor: palette.bg, opacity: disabled ? 0.4 : 1 },
+        variant === 'text' && styles.buttonText,
+        { backgroundColor: palette.bg, opacity: disabled ? 0.4 : pressed && Platform.OS === 'ios' ? 0.8 : 1 },
         style,
       ]}
     >
@@ -155,30 +220,54 @@ export function Button({
         <ActivityIndicator color={palette.fg} />
       ) : (
         <>
-          {Icon ? <Icon size={18} color={palette.fg} style={{ marginRight: 8 }} /> : null}
-          <Text style={[compact ? type.label : styles.buttonLabel, { color: palette.fg }]}>{label}</Text>
+          {Icon ? <Icon size={compact ? 16 : 18} color={palette.fg} strokeWidth={2.25} /> : null}
+          <Text style={[compact ? type.label : type.headline, { color: palette.fg }]} numberOfLines={1}>
+            {label}
+          </Text>
         </>
       )}
     </Pressable>
   );
 }
 
-export function HeaderIcon({ icon: Icon, label, onPress, color = colors.fg }: {
+const ICON_BUTTON = {
+  plain: { bg: 'transparent', fg: colors.fg, size: 44 },
+  tonal: { bg: colors.surfaceHigh, fg: colors.fg, size: 36 },
+  filled: { bg: colors.brand, fg: colors.onBrand, size: 40 },
+};
+
+export function IconButton({
+  icon: Icon,
+  label,
+  onPress,
+  color,
+  variant = 'plain',
+  disabled,
+}: {
   icon: LucideIcon;
   label: string;
   onPress: () => void;
   color?: string;
+  variant?: keyof typeof ICON_BUTTON;
+  disabled?: boolean;
 }) {
+  const look = ICON_BUTTON[variant];
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={disabled ? { disabled } : undefined}
+      disabled={disabled}
       onPress={() => (tap(), onPress())}
-      android_ripple={{ color: colors.ripple, borderless: true, radius: 22 }}
-      hitSlop={8}
-      style={styles.headerIcon}
+      android_ripple={{ color: colors.ripple, borderless: variant === 'plain', radius: look.size / 2, foreground: true }}
+      hitSlop={(48 - look.size) / 2}
+      style={({ pressed }) => [
+        styles.iconButton,
+        { width: look.size, height: look.size, backgroundColor: look.bg },
+        pressed && Platform.OS === 'ios' && { opacity: 0.7 },
+      ]}
     >
-      <Icon size={22} color={color} />
+      <Icon size={variant === 'plain' ? 22 : 18} color={color ?? look.fg} strokeWidth={2.25} />
     </Pressable>
   );
 }
@@ -186,7 +275,7 @@ export function HeaderIcon({ icon: Icon, label, onPress, color = colors.fg }: {
 export function HeaderTitle({ title, subtitle, mono }: { title: string; subtitle?: React.ReactNode; mono?: boolean }) {
   return (
     <View style={{ flexShrink: 1 }}>
-      <Text style={styles.headerTitle} numberOfLines={1}>
+      <Text style={type.headline} numberOfLines={1}>
         {title}
       </Text>
       {subtitle ? (
@@ -205,7 +294,7 @@ export function HeaderTitle({ title, subtitle, mono }: { title: string; subtitle
 export function Warning({ text, actions }: { text: string; actions?: React.ReactNode }) {
   return (
     <View style={styles.warning} accessibilityRole="alert">
-      <TriangleAlert size={18} color={colors.brand} style={styles.warningIcon} />
+      <TriangleAlert size={16} color={colors.brand} strokeWidth={2.25} style={styles.warningIcon} />
       <View style={{ flex: 1 }}>
         <Text style={[type.bodyMuted, { color: colors.brand }]}>{text}</Text>
         {actions ? <View style={styles.warningActions}>{actions}</View> : null}
@@ -214,12 +303,23 @@ export function Warning({ text, actions }: { text: string; actions?: React.React
   );
 }
 
-export function Empty({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
+export function Empty({
+  title,
+  body,
+  action,
+  icon,
+}: {
+  title: string;
+  body: string;
+  action?: React.ReactNode;
+  icon?: LucideIcon;
+}) {
   return (
     <View style={styles.empty}>
-      <Text style={[type.body, styles.emptyTitle]}>{title}</Text>
-      <Text style={[type.bodyMuted, { textAlign: 'center', marginTop: 8 }]}>{body}</Text>
-      {action ? <View style={{ marginTop: 24 }}>{action}</View> : null}
+      {icon ? <View style={styles.emptyIcon}><IconTile icon={icon} size="lg" /></View> : null}
+      <Text style={[type.headline, styles.center]}>{title}</Text>
+      <Text style={[type.bodyMuted, styles.center, { marginTop: space.xs }]}>{body}</Text>
+      {action ? <View style={{ marginTop: space.xl }}>{action}</View> : null}
     </View>
   );
 }
@@ -227,70 +327,130 @@ export function Empty({ title, body, action }: { title: string; body: string; ac
 export function Loading({ label }: { label?: string }) {
   return (
     <View style={styles.empty}>
-      <ActivityIndicator size="large" color={colors.brand} />
-      {label ? <Text style={[type.bodyMuted, { marginTop: 16 }]}>{label}</Text> : null}
+      <ActivityIndicator color={colors.brand} />
+      {label ? <Text style={[type.bodyMuted, { marginTop: space.md }]}>{label}</Text> : null}
     </View>
+  );
+}
+
+export function Skeleton({ rows = 4 }: { rows?: number }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [opacity]);
+  return (
+    <Animated.View style={{ opacity }} accessibilityLabel="Loading" accessibilityRole="progressbar">
+      <View style={styles.section}>
+        <View style={[styles.bar, { width: 96 }]} />
+      </View>
+      <Group>
+        {Array.from({ length: rows }, (_, index) => (
+          <View key={index} style={[styles.row, styles.rowTall]}>
+            <View style={styles.rowText}>
+              <View style={[styles.bar, { width: `${60 - index * 8}%` }]} />
+              <View style={[styles.bar, styles.barSmall, { width: `${40 + index * 6}%` }]} />
+            </View>
+            <View style={[styles.bar, { width: 56 }]} />
+          </View>
+        ))}
+      </Group>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 64,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    minHeight: 52,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  rowPressed: { backgroundColor: colors.ripple },
-  leading: { marginRight: 16 },
+  rowTall: { minHeight: 64 },
+  rowPressed: { backgroundColor: colors.surfacePressed },
+  leading: { marginRight: space.md },
   rowText: { flex: 1, justifyContent: 'center' },
   subtitle: { marginTop: 2 },
   dim: { color: colors.dim },
-  trailing: { marginLeft: 12, alignItems: 'flex-end' },
-  chevron: { marginLeft: 8, marginRight: -4 },
+  trailing: { marginLeft: space.md, alignItems: 'flex-end' },
+  chevron: { marginLeft: space.sm, marginRight: -space.xs },
+  group: {
+    marginHorizontal: space.lg,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  groupItem: { marginHorizontal: space.lg, backgroundColor: colors.surface, overflow: 'hidden' },
+  groupFirst: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg },
+  groupLast: { borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
+  line: { height: StyleSheet.hairlineWidth, backgroundColor: colors.lineStrong },
+  card: {
+    marginHorizontal: space.lg,
+    marginBottom: space.md,
+    padding: space.lg,
+    borderRadius: radius.xl,
+    borderCurve: 'continuous',
+    backgroundColor: colors.surface,
+  },
   section: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 8,
+    gap: space.sm,
+    paddingHorizontal: space.lg + space.xs,
+    paddingTop: space.xl,
+    paddingBottom: space.sm,
   },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.lineStrong },
-  tile: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  sectionTitle: { flexShrink: 1, color: colors.muted },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceHigh,
   },
-  tileGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.line },
-  pill: {
-    flexDirection: 'row',
+  tile: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    justifyContent: 'center',
   },
-  pillText: { fontWeight: '600' },
+  tileLarge: { width: 64, height: 64, borderRadius: radius.xl },
+  tileGhost: { borderWidth: 1, borderColor: colors.lineStrong, borderStyle: 'dashed' },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 24 },
+  pillAttn: { backgroundColor: colors.attnSoft, borderRadius: radius.full, paddingHorizontal: space.sm },
+  pillDot: { width: 6, height: 6, borderRadius: 3 },
   button: {
     minHeight: 48,
-    borderRadius: 24,
-    paddingHorizontal: 24,
+    borderRadius: radius.full,
+    paddingHorizontal: space.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: space.sm,
     overflow: 'hidden',
   },
-  buttonCompact: { minHeight: 40, borderRadius: 20, paddingHorizontal: 16 },
-  buttonLabel: { fontSize: 16, lineHeight: 22, fontWeight: '600' },
-  headerIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 16, lineHeight: 22, fontWeight: '600', color: colors.fg },
-  warning: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12 },
-  warningIcon: { marginTop: 1, marginRight: 12 },
-  warningActions: { flexDirection: 'row', flexWrap: 'wrap', marginLeft: -16, marginTop: 4 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  emptyTitle: { fontWeight: '600', textAlign: 'center' },
+  buttonCompact: { minHeight: 36, paddingHorizontal: space.lg, gap: 6 },
+  buttonText: { paddingHorizontal: space.md },
+  iconButton: { borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  warning: { flexDirection: 'row', paddingHorizontal: space.lg + space.xs, paddingTop: space.md },
+  warningIcon: { marginTop: 2, marginRight: space.sm },
+  warningActions: { flexDirection: 'row', flexWrap: 'wrap', marginLeft: -space.md, marginTop: space.xs },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xxl },
+  emptyIcon: { marginBottom: space.lg },
+  center: { textAlign: 'center' },
+  bar: { height: 12, borderRadius: 6, backgroundColor: colors.surfaceHigh },
+  barSmall: { height: 8, marginTop: space.sm },
 });

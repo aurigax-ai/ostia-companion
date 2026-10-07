@@ -4,13 +4,13 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Monitor, ScanLine, X } from 'lucide-react-native';
 import { CheckCodeView } from '../components/CheckCodeView';
-import { Button, Divider, HeaderIcon, IconTile, ListRow, SectionHeader } from '../components/ui';
+import { Button, Group, IconButton, IconTile, ListRow, SectionHeader, TILE_INSET } from '../components/ui';
 import { ScreenProps } from '../navigation';
 import { parsePairingPayload } from '../services/pairing';
 import { pairWith } from '../services/pairWith';
 import { useNearbyDesktops } from '../services/useNearbyDesktops';
 import { usePairing } from '../services/usePairing';
-import { colors, mono, type } from '../theme';
+import { colors, font, radius, space, type } from '../theme';
 
 export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { onPaired: () => Promise<void> }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -53,10 +53,14 @@ export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { 
         />
         <SafeAreaView style={styles.cameraUi}>
           <View style={styles.cameraTop}>
-            <HeaderIcon icon={X} label="Close scanner" onPress={() => setScanning(false)} color="#fff" />
-            <Text style={[type.label, { color: '#fff', marginLeft: 8 }]}>Scan the desktop's QR code</Text>
+            <IconButton icon={X} label="Close scanner" onPress={() => setScanning(false)} color="#fff" />
+            <Text style={[type.headline, { color: '#fff', marginLeft: space.xs }]}>Scan the desktop's QR code</Text>
           </View>
           <View style={styles.viewfinder}>
+            <View style={[styles.corner, styles.topLeft]} />
+            <View style={[styles.corner, styles.topRight]} />
+            <View style={[styles.corner, styles.bottomLeft]} />
+            <View style={[styles.corner, styles.bottomRight]} />
             {pairing.busy ? <ActivityIndicator size="large" color="#fff" /> : null}
           </View>
           <Text style={[type.bodyMuted, styles.cameraHint]}>
@@ -71,28 +75,28 @@ export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { 
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={styles.hero}>
-          <View style={styles.logo}>
-            <Monitor size={28} color={colors.brand} />
-          </View>
-          <Text style={[type.title, { marginTop: 24 }]}>Connect to your desktop</Text>
-          <Text style={[type.bodyMuted, { marginTop: 8 }]}>
-            On the desktop, open <Text style={styles.crumb}> Settings › Remote </Text> and show a pairing code.
+          <IconTile icon={Monitor} tone="brand" size="lg" />
+          <Text style={[type.title, { marginTop: space.xl }]}>Connect to your desktop</Text>
+          <Text style={[type.bodyMuted, { marginTop: space.sm }]}>
+            On the desktop, open <Text style={styles.crumb}>Settings › Remote</Text> and show a pairing code.
           </Text>
         </View>
 
         <SectionHeader title="Nearby" trailing={<SearchState searching={state.kind === 'searching'} />} />
-        {desktops.map((desktop, index) => (
-          <View key={`${desktop.host}:${desktop.port}`}>
-            {index > 0 ? <Divider inset={72} /> : null}
-            <ListRow
-              title={desktop.name}
-              subtitle={desktop.host}
-              mono
-              leading={<IconTile icon={Monitor} />}
-              onPress={() => navigation.navigate('PairCode', desktop)}
-            />
-          </View>
-        ))}
+        {desktops.length > 0 ? (
+          <Group inset={TILE_INSET}>
+            {desktops.map((desktop) => (
+              <ListRow
+                key={`${desktop.host}:${desktop.port}`}
+                title={desktop.name}
+                subtitle={desktop.host}
+                mono
+                leading={<IconTile icon={Monitor} />}
+                onPress={() => navigation.navigate('PairCode', desktop)}
+              />
+            ))}
+          </Group>
+        ) : null}
         {state.kind === 'none' ? (
           <Text style={[type.bodyMuted, styles.none]}>
             None found. Turn on Discoverable in Settings › Remote, or scan the QR code.
@@ -101,7 +105,7 @@ export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { 
 
         <View style={styles.actions}>
           <Button label="Scan QR code" icon={ScanLine} onPress={() => void startScan()} />
-          <Button label="Paste a pairing link" variant="text" onPress={() => navigation.navigate('PairLink')} />
+          <Button label="Paste a pairing link" variant="tonal" onPress={() => navigation.navigate('PairLink')} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -120,19 +124,14 @@ function SearchState({ searching }: { searching: boolean }) {
   );
 }
 
+const CORNER = 28;
+const CORNER_WIDTH = 4;
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  hero: { paddingTop: 40, paddingHorizontal: 16 },
-  logo: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceHigh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  crumb: { fontFamily: mono, fontSize: 12, color: colors.fg, backgroundColor: colors.surfaceHigh },
-  searching: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  hero: { paddingTop: space.xxxl, paddingHorizontal: space.xl },
+  crumb: { fontFamily: font.mono, color: colors.fg },
+  searching: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   radar: {
     width: 16,
     height: 16,
@@ -142,31 +141,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radarDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand },
-  none: { paddingHorizontal: 16, paddingVertical: 8 },
-  actions: { marginTop: 'auto', paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, gap: 4 },
+  none: { paddingHorizontal: space.lg + space.xs },
+  actions: { marginTop: 'auto', paddingHorizontal: space.lg, paddingTop: space.xl, paddingBottom: space.lg, gap: space.md },
   camera: { flex: 1, backgroundColor: '#000' },
   cameraUi: { flex: 1, justifyContent: 'space-between' },
   cameraTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.sm,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
-  viewfinder: {
-    alignSelf: 'center',
-    width: 260,
-    height: 260,
-    borderRadius: 28,
-    borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  viewfinder: { alignSelf: 'center', width: 248, height: 248, alignItems: 'center', justifyContent: 'center' },
+  corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: '#fff' },
+  topLeft: { top: 0, left: 0, borderTopWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderTopLeftRadius: radius.xl },
+  topRight: { top: 0, right: 0, borderTopWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderTopRightRadius: radius.xl },
+  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: CORNER_WIDTH, borderLeftWidth: CORNER_WIDTH, borderBottomLeftRadius: radius.xl },
+  bottomRight: { bottom: 0, right: 0, borderBottomWidth: CORNER_WIDTH, borderRightWidth: CORNER_WIDTH, borderBottomRightRadius: radius.xl },
   cameraHint: {
     color: '#fff',
     textAlign: 'center',
-    paddingVertical: 20,
+    paddingVertical: space.lg + space.xs,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
 });

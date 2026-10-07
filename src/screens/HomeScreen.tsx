@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
-import { ChevronDown, Settings } from 'lucide-react-native';
-import { Button, Divider, Empty, HeaderIcon, ListRow, Loading, SectionHeader, StatusPill } from '../components/ui';
+import { ChevronDown, FolderOpen, Settings } from 'lucide-react-native';
+import { Badge, Button, Card, Divider, Empty, GroupItem, IconButton, ListRow, SectionHeader, Skeleton, StatusPill } from '../components/ui';
 import { AskCard } from '../components/AskCard';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
 import { Ask, needsYouItems } from '../model/asks';
@@ -11,7 +11,7 @@ import { InboxItem, Session, paneTitle, shortPath, workspaceStatus } from '../mo
 import { ScreenProps } from '../navigation';
 import { OstiaRpc } from '../services/rpc';
 import { refreshWorkspaces, useCaps, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
-import { colors, mono, type } from '../theme';
+import { colors, space, type } from '../theme';
 
 type Row = { kind: 'ask'; ask: Ask } | { kind: 'inbox'; item: InboxItem } | { kind: 'workspace'; session: Session };
 
@@ -45,7 +45,7 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
             <Text style={type.title} numberOfLines={1}>
               {desktop}
             </Text>
-            <ChevronDown size={20} color={colors.muted} style={{ marginLeft: 4 }} />
+            <ChevronDown size={18} color={colors.muted} strokeWidth={2.25} style={{ marginLeft: space.xs }} />
           </View>
           <View style={styles.status}>
             <View style={[styles.dot, { backgroundColor: STATUS[status].color }]} />
@@ -54,7 +54,7 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
         </Pressable>
       ),
       headerRight: () => (
-        <HeaderIcon icon={Settings} label="Settings" onPress={() => navigation.navigate('Settings')} />
+        <IconButton icon={Settings} label="Settings" onPress={() => navigation.navigate('Settings')} />
       ),
     });
   }, [navigation, desktop, status]);
@@ -73,7 +73,7 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
 
   const firstGroupKey = sections.find((section) => section.key !== 'inbox')?.key;
 
-  if (loading) return <Loading />;
+  if (loading) return <Skeleton />;
 
   const openPane = (paneId: string, title: string) => navigation.navigate('Terminal', { paneId, title });
 
@@ -97,7 +97,8 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
         </>
       }
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{ paddingBottom: space.xxl, flexGrow: 1 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -111,7 +112,7 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
         section.key === 'inbox' ? (
           <SectionHeader
             title="Needs you"
-            trailing={<Text style={[type.caption, styles.count]}>{section.data.length}</Text>}
+            trailing={<Badge text={String(section.data.length)} />}
           />
         ) : (
           <SectionHeader
@@ -123,10 +124,10 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
       ItemSeparatorComponent={({ leadingItem }) => (leadingItem?.kind === 'workspace' ? <Divider /> : null)}
       ListEmptyComponent={
         status === 'connected' ? (
-          <Empty title="No workspaces" body="Open one in Ostia on your desktop." />
+          <Empty icon={FolderOpen} title="No workspaces" body="Open one in Ostia on your desktop." />
         ) : null
       }
-      renderItem={({ item: row }) => {
+      renderItem={({ item: row, index, section }) => {
         if (row.kind === 'ask') {
           const { ask } = row;
           return (
@@ -144,11 +145,11 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
           const { pane, workspace, reason } = row.item;
           const title = paneTitle(pane);
           return (
-            <View style={styles.card}>
-              <Text style={styles.meta} numberOfLines={1}>
+            <Card>
+              <Text style={type.mono} numberOfLines={1}>
                 {[workspace, pane.agent && pane.agent !== 'other' ? pane.agent : title].filter(Boolean).join(' · ')}
               </Text>
-              <Text style={[type.body, styles.message]}>{reason}</Text>
+              <Text style={[type.headline, styles.message]}>{reason}</Text>
               <View style={styles.cardActions}>
                 <Button
                   label="Open"
@@ -157,19 +158,21 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
                   onPress={() => openPane(pane.paneId, title)}
                 />
               </View>
-            </View>
+            </Card>
           );
         }
         const { session } = row;
         const sessionPanes = panes.filter((pane) => pane.sessionId === session.sessionId);
         return (
-          <ListRow
-            title={session.name || 'Untitled workspace'}
-            subtitle={shortPath(session.workDir)}
-            mono
-            trailing={<StatusPill status={workspaceStatus(session, sessionPanes)} />}
-            onPress={() => navigation.navigate('Workspace', { sessionId: session.sessionId, name: session.name })}
-          />
+          <GroupItem first={index === 0} last={index === section.data.length - 1}>
+            <ListRow
+              title={session.name || 'Untitled workspace'}
+              subtitle={shortPath(session.workDir)}
+              mono
+              trailing={<StatusPill status={workspaceStatus(session, sessionPanes)} />}
+              onPress={() => navigation.navigate('Workspace', { sessionId: session.sessionId, name: session.name })}
+            />
+          </GroupItem>
         );
       }}
     />
@@ -179,26 +182,8 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
 const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   status: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  count: {
-    color: colors.attn,
-    backgroundColor: colors.attnSoft,
-    fontWeight: '600',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    overflow: 'hidden',
-  },
-  card: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.lineStrong,
-  },
-  meta: { fontFamily: mono, fontSize: 12, lineHeight: 16, color: colors.muted },
-  message: { marginTop: 8 },
-  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 },
-  note: { paddingHorizontal: 16, paddingTop: 12 },
+  dot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  message: { marginTop: space.sm },
+  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: space.lg },
+  note: { paddingHorizontal: space.lg + space.xs, paddingTop: space.md },
 });
