@@ -3,6 +3,7 @@ name: Build
 on:
   push:
     branches: [master]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -22,6 +23,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "$GITHUB_REF_NAME" = "v$(jq -r .expo.version app.json)"
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
         with:
           runtime: node@26
@@ -43,12 +47,32 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - name: Set the build number
+        run: |
+          jq --argjson n "$GITHUB_RUN_NUMBER" '.expo.android.versionCode = $n' app.json > app.json.tmp
+          mv app.json.tmp app.json
       - run: pnpm exec expo prebuild --platform android --no-install
-      # Release is signed with the debug keystore from Expo's template: installable, not for Play.
+      # Tags sign with the release key; other builds keep the debug keystore from Expo's template.
       - name: Build APK
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a
+          signing=()
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            test -n "$ANDROID_KEYSTORE_BASE64"
+            base64 -d <<< "$ANDROID_KEYSTORE_BASE64" > "$RUNNER_TEMP/release.jks"
+            signing=(
+              -Pandroid.injected.signing.store.file="$RUNNER_TEMP/release.jks"
+              -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD"
+              -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS"
+              -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+            )
+          fi
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a "${signing[@]}"
           mv app/build/outputs/apk/release/app-release.apk ../ostia.apk
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -66,6 +90,10 @@ jobs:
         with:
           runtime: node@26
           cache: true
+      - name: Set the build number
+        run: |
+          jq --arg n "$GITHUB_RUN_NUMBER" '.expo.ios.buildNumber = $n' app.json > app.json.tmp
+          mv app.json.tmp app.json
       - run: pnpm exec expo prebuild --platform ios --no-install
       - name: Install pods
         working-directory: ios
@@ -90,3 +118,23 @@ jobs:
           path: ostia-unsigned.ipa
           archive: false
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv dist/ostia.apk "dist/ostia-$GITHUB_REF_NAME.apk"
+          mv dist/ostia-unsigned.ipa "dist/ostia-$GITHUB_REF_NAME-unsigned.ipa"
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes

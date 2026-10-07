@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ostia",
     "slug": "ostia",
-    "version": "1.0.0",
+    "version": "0.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
         ],
         "NSLocalNetworkUsageDescription": "Ostia looks for your desktop on this network so you can pair by typing a code."
       },
-      "bundleIdentifier": "com.anonymous.ostia"
+      "bundleIdentifier": "ai.aurigax.ostia"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +24,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.ostia"
+      "package": "ai.aurigax.ostia"
     },
     "web": {
       "favicon": "./assets/favicon.png"

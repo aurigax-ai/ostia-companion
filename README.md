@@ -93,3 +93,19 @@ To check TypeScript compilation and make sure there are no type-safety errors:
 pnpm tsc --noEmit
 ```
 This should compile with **zero errors**.
+
+---
+
+## 📦 Releasing
+CI (`.github/workflows/build.yml`) runs the tests and builds `ostia.apk` and `ostia-unsigned.ipa` on every push to `master` and every pull request. The files are attached to each run as artifacts.
+
+To release, set `expo.version` in `app.json`, commit, and push a matching tag:
+```bash
+git tag v0.0.1 && git push origin v0.0.1
+```
+CI fails if the tag doesn't match `app.json`. The build number (`versionCode` / `CFBundleVersion`) is the CI run number. The APK is signed with the release key, and both files are published to a GitHub Release with generated notes.
+
+- **Android:** builds from a tag are signed with the release key, so each release installs over the previous one. Builds from branches use Expo's debug keystore and can't update a release install.
+- **iOS:** there's no Apple signing in CI. Re-sign the `.ipa` with your Apple ID (AltStore or Sideloadly) to install it.
+
+Release signing reads four repository secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Keep a backup of the keystore. Without it, a new release can't update installed apps.
