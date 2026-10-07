@@ -12,6 +12,7 @@ import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { PairingScreen } from './src/screens/PairingScreen';
+import { PairCodeScreen } from './src/screens/PairCodeScreen';
 import { PairLinkScreen } from './src/screens/PairLinkScreen';
 import { RootStack } from './src/navigation';
 import { colors, navigationTheme } from './src/theme';
@@ -83,6 +84,9 @@ export default function App() {
               </Stack.Screen>
               <Stack.Screen name="PairLink" options={{ title: 'Paste pairing link', presentation: 'modal' }}>
                 {(props) => <PairLinkScreen {...props} onPaired={connect} />}
+              </Stack.Screen>
+              <Stack.Screen name="PairCode" options={{ title: 'Pair', presentation: 'modal' }}>
+                {(props) => <PairCodeScreen {...props} onPaired={connect} />}
               </Stack.Screen>
             </>
           )}

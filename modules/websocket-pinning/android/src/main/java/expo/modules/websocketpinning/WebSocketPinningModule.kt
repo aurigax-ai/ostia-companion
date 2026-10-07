@@ -107,7 +107,10 @@ class WebSocketPinningModule : Module() {
 
     AsyncFunction("post") { url: String, bodyJson: String, fingerprint: String, promise: Promise ->
       try {
-        val activeClient = createPinnedClient(fingerprint)
+        val activeClient = createPinnedClient(fingerprint).newBuilder()
+          .readTimeout(POST_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+          .callTimeout(POST_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+          .build()
         val mediaType = "application/json; charset=utf-8".toMediaType()
         val requestBody = bodyJson.toRequestBody(mediaType)
         val request = Request.Builder().url(url).post(requestBody).build()
@@ -147,3 +150,5 @@ class WebSocketPinningModule : Module() {
     }
   }
 }
+
+private const val POST_TIMEOUT_SECONDS = 130L

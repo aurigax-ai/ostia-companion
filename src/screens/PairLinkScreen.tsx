@@ -1,23 +1,19 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { CheckCodeView } from '../components/CheckCodeView';
 import { Button } from '../components/ui';
 import { ScreenProps } from '../navigation';
-import { pairWith, showPairingError } from '../services/pairWith';
+import { pairWith } from '../services/pairWith';
+import { usePairing } from '../services/usePairing';
 import { colors, type } from '../theme';
 
 export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaired: () => Promise<void> }) {
   const [link, setLink] = useState('');
-  const [busy, setBusy] = useState(false);
+  const pairing = usePairing(onPaired);
 
-  const submit = async () => {
-    setBusy(true);
-    try {
-      await pairWith(link);
-      await onPaired();
-    } catch (err) {
-      showPairingError(err, () => setBusy(false));
-    }
-  };
+  if (pairing.checkCode) return <CheckCodeView code={pairing.checkCode} desktop="your desktop" />;
+
+  const submit = () => void pairing.run((onCheck) => pairWith(link, onCheck));
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -38,7 +34,7 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
         selectionColor={colors.brandSoft}
       />
       <View style={{ marginTop: 'auto' }}>
-        <Button label="Pair" onPress={() => void submit()} loading={busy} disabled={!link.trim()} />
+        <Button label="Pair" onPress={submit} loading={pairing.busy} disabled={!link.trim()} />
       </View>
     </KeyboardAvoidingView>
   );

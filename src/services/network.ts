@@ -1,50 +1,36 @@
 import { pinnedPost } from 'websocket-pinning';
 import { generateDeviceKeyPair } from './crypto';
 import { pairFailure } from './pairFailure';
+import { requestPairing } from './pairFlow';
 import { PairingData } from './storage';
 
-export interface PairResponse {
-  deviceId: string;
-  deviceToken: string;
-  caps: string[];
-  expiresAt: string | null;
+export interface PairTarget {
+  host: string;
+  port: number;
+  fingerprint: string;
+  pairCode: string;
+  name: string;
 }
 
-/**
- * Executes the pairing request against the desktop gateway.
- * Verifies the self-signed TLS cert against the expected fingerprint using the native pinned client.
- */
 export async function pairDevice(
-  host: string,
-  port: number,
-  fingerprint: string,
-  pairCode: string,
-  deviceName: string
+  target: PairTarget,
+  deviceName: string,
+  onCheckCode: (code: string) => void,
 ): Promise<PairingData> {
-  const url = `https://${host}:${port}/pair`;
+  const { host, port, fingerprint, pairCode, name } = target;
   const keypair = generateDeviceKeyPair();
-
-  const payload = {
-    v: 1,
-    pairCode,
-    device: {
-      name: deviceName,
-      pubkey: keypair.publicKeySpki,
-    },
-  };
-
+  const post = (path: string, body: object) => pinnedPost(`https://${host}:${port}${path}`, body, fingerprint);
   try {
-    const result: PairResponse = await pinnedPost(url, payload, fingerprint);
-
-    if (!result.deviceToken || !result.deviceId) {
-      throw new Error('Invalid pairing response format from server');
-    }
-
+    const result = await requestPairing(
+      post,
+      { pairCode, fingerprint, deviceName, pubkey: keypair.publicKeySpki },
+      onCheckCode,
+    );
     return {
       deviceToken: result.deviceToken,
       deviceId: result.deviceId,
       pinnedFingerprint: fingerprint,
-      desktopName: '', // Will be updated or can be set from host info
+      desktopName: name,
       gatewayHost: host,
       gatewayPort: port,
       privateKey: keypair.privateKeyRaw,
