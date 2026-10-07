@@ -10,16 +10,16 @@ describe('parsePairingPayload', () => {
   });
 
   it('refuses text that is not a pairing code', () => {
-    expect(() => parsePairingPayload('https://example.com')).toThrow(/not an Ostia pairing code/);
+    expect(() => parsePairingPayload('https://example.com')).toThrow(/Not an Ostia pairing code/);
   });
 
   it('refuses a code missing a field', () => {
-    expect(() => parsePairingPayload(JSON.stringify({ ...payload, pairCode: '' }))).toThrow(/incomplete/);
+    expect(() => parsePairingPayload(JSON.stringify({ ...payload, pairCode: '' }))).toThrow(/Incomplete/);
   });
 
   it('refuses a loopback address and says to pick an address the phone can reach', () => {
     expect(() => parsePairingPayload(JSON.stringify({ ...payload, host: '127.0.0.1' }))).toThrow(
-      /127\.0\.0\.1, which only the desktop itself can reach/,
+      /127\.0\.0\.1 only works on the desktop itself/,
     );
   });
 });

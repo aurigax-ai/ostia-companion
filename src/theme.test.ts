@@ -25,4 +25,20 @@ describe('theme', () => {
     });
     expect(copies).toEqual([]);
   });
+
+  it('CRD-C33 keeps every saturated colour to the amber accent or the attention pink', () => {
+    const hue = ([r, g, b]: number[]) => {
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      if (max - min < 40) return null;
+      const h = max === r ? (g - b) / (max - min) : max === g ? 2 + (b - r) / (max - min) : 4 + (r - g) / (max - min);
+      return ((h * 60) + 360) % 360;
+    };
+    const allowed = [hue(rgb(colors.brand)!), hue(rgb(colors.attn)!)] as number[];
+    const stray = Object.entries(colors).filter(([, value]) => {
+      const h = hue(rgb(value) ?? [0, 0, 0]);
+      return h !== null && allowed.every((a) => Math.min(Math.abs(h - a), 360 - Math.abs(h - a)) > 12);
+    });
+    expect(stray).toEqual([]);
+  });
 });

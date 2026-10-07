@@ -31,7 +31,7 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
     <KeyboardAvoidingView style={styles.fill} behavior="padding">
       <View style={[styles.screen, { paddingBottom: 16 + insets.bottom }]}>
       <Text style={type.bodyMuted}>
-        Copy the link under the QR code in Settings › Remote on the desktop and paste it here.
+        Paste the link shown under the QR code.
       </Text>
       <TextInput
         style={styles.input}

@@ -110,7 +110,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     try {
       await OstiaRpc.attachPty(paneId, target);
     } catch (err: any) {
-      setError(err?.message || 'Could not open this terminal');
+      setError(err?.message || "Couldn't open this terminal");
     } finally {
       setAttaching(false);
     }
@@ -118,8 +118,8 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
 
   const explainInput = () => {
     Alert.alert(
-      'Typing is off for this phone',
-      'On your desktop, open Ostia Settings → Remote and turn on Input for this phone. This terminal switches to typing as soon as it is on.',
+      'Typing is off',
+      'Turn on Input for this phone in Settings › Remote on your desktop.',
     );
   };
 

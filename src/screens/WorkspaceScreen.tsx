@@ -52,11 +52,11 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
           trailing={section.title === groups[0]?.title && status !== 'connected' ? <LoadedAt at={loadedAt} /> : null}
         />
       )}
-      ListEmptyComponent={<Empty title="No panes" body="This workspace has no open panes on the desktop." />}
+      ListEmptyComponent={<Empty title="No panes" body="Nothing open in this workspace." />}
       renderItem={({ item: pane }) =>
         pane.kind === 'terminal' ? (
           <ListRow
-            leading={<IconTile icon={SquareTerminal} tone={pane.running ? 'brand' : 'neutral'} />}
+            leading={<IconTile icon={SquareTerminal} tone="neutral" />}
             title={paneTitle(pane)}
             subtitle={paneSubtitle(pane, workDir)}
             mono

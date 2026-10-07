@@ -11,16 +11,16 @@ export interface ConnectionNotice {
 export function connectionNotice(status: ConnectionStatus, host: string, desktop = 'the desktop'): ConnectionNotice | null {
   if (status === 'connected' || status === 'connecting') return null;
   if (status === 'revoked') {
-    return { text: `${desktop} removed this phone. Pair again to reconnect.`, actions: ['pair-again'] };
+    return { text: `${desktop} removed this phone.`, actions: ['pair-again'] };
   }
   if (isTailnetAddress(host)) {
     return {
-      text: `Can't reach ${desktop} at ${host}. Is Tailscale on and signed in to the same account?`,
+      text: `Can't reach ${desktop}. Is Tailscale on?`,
       actions: ['open-tailscale', 'retry'],
     };
   }
   return {
-    text: `Can't reach ${desktop} at ${host}. This phone needs to be on a network that reaches it.`,
+    text: `Can't reach ${desktop} at ${host}.`,
     actions: ['retry', 'pair-again'],
   };
 }

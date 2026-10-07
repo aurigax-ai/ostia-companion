@@ -21,5 +21,5 @@ export function showPairingError(err: any, onDismiss: () => void) {
   const buttons: { text: string; onPress?: () => void; style?: 'cancel' }[] = [];
   if (err?.action === 'open-tailscale') buttons.push({ text: 'Open Tailscale', onPress: () => void openTailscaleApp() });
   buttons.push({ text: 'Try again', style: 'cancel', onPress: onDismiss });
-  Alert.alert('Could not pair', err?.message || 'Pairing failed.', buttons, { onDismiss });
+  Alert.alert("Couldn't pair", err?.message || 'Pairing failed.', buttons, { onDismiss });
 }

@@ -33,12 +33,12 @@ export function CheckCodeView({
         </Text>
         <Text style={[type.title, styles.center, { marginTop: 32 }]}>Does {desktop} show the same number?</Text>
         <Text style={[type.bodyMuted, styles.center, { marginTop: 8 }]}>
-          If it does, click Approve there. If it doesn't, click Deny: something else answered on this network.
+          Approve on the desktop only if it matches.
         </Text>
         <View style={styles.waiting}>
           <ActivityIndicator color={colors.brand} />
           <Text style={[type.bodyMuted, { marginLeft: 12 }]}>
-            Waiting for approval · {approvalCountdown(startedAt, now)}
+            Waiting · {approvalCountdown(startedAt, now)}
           </Text>
         </View>
       </View>
