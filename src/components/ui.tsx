@@ -1,12 +1,12 @@
-import React from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import React, { useEffect, useRef } from 'react';
+import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Check, ChevronRight, CircleAlert, LoaderCircle, LucideIcon, TriangleAlert, X } from 'lucide-react-native';
 import { Status } from '../model/workspaces';
+import { haptic, pillFade } from '../services/motion';
 import { colors, type } from '../theme';
 
 export function tap() {
-  void Haptics.selectionAsync();
+  haptic('tap');
 }
 
 export function ListRow({
@@ -97,11 +97,19 @@ const PILL_ICONS: Record<Status['kind'], LucideIcon | null> = {
 export function StatusPill({ status }: { status: Status }) {
   const tone = PILL_TONES[status.tone];
   const Icon = PILL_ICONS[status.kind];
+  const opacity = useRef(new Animated.Value(1)).current;
+  const shown = useRef(status.text);
+  useEffect(() => {
+    if (shown.current === status.text) return;
+    shown.current = status.text;
+    opacity.setValue(0);
+    Animated.timing(opacity, { toValue: 1, duration: pillFade(), useNativeDriver: true }).start();
+  }, [status.text, opacity]);
   return (
-    <View style={[styles.pill, { backgroundColor: tone.bg }]}>
+    <Animated.View style={[styles.pill, { backgroundColor: tone.bg, opacity }]}>
       {Icon ? <Icon size={12} color={tone.fg} strokeWidth={3} /> : null}
       <Text style={[type.caption, styles.pillText, { color: tone.fg }]}>{status.text}</Text>
-    </View>
+    </Animated.View>
   );
 }
 

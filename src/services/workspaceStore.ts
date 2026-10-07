@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { EMPTY_SNAPSHOT, Snapshot, applyLoad } from '../model/snapshot';
 import { applyPaneUpdate, applySessionState } from '../model/workspaces';
+import { animateNextLayout } from './motion';
 import { OstiaRpc } from './rpc';
 
 const AGENT_REFETCH_MS = 300;
@@ -15,6 +16,7 @@ function update(patch: Partial<Snapshot>) {
 }
 
 function set(next: Snapshot) {
+  if (next.sessions !== snapshot.sessions || next.panes !== snapshot.panes) animateNextLayout();
   snapshot = next;
   listeners.forEach((listener) => listener());
 }
