@@ -75,7 +75,7 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
         />
       </Pressable>
       {failed && code === failed ? (
-        <Text style={[type.bodyMuted, styles.hint]}>Check the code and try again.</Text>
+        <Text style={[type.bodyMuted, styles.hint]}>Edit the code to try again.</Text>
       ) : pairing.busy ? (
         <Text style={[type.bodyMuted, styles.hint]}>Pairing…</Text>
       ) : null}
