@@ -14,7 +14,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Eye, Keyboard } from 'lucide-react-native';
 import { TerminalTheme, TerminalView, TerminalViewRef } from 'expo-libghostty';
-import { AskCard } from '../components/AskCard';
+import { AskHeadsUp } from '../components/AskHeadsUp';
+import { AskSheet } from '../components/AskSheet';
 import { PromptComposer } from '../components/PromptComposer';
 import { TerminalSheet } from '../components/TerminalSheet';
 import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/askStore';
@@ -74,6 +75,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const [raw, setRaw] = useState(false);
   const asks = useAsks();
   const paneAsk = asks.asks.find((ask) => ask.paneId === paneId);
+  const [askOpen, setAskOpen] = useState(false);
   const { width } = useWindowDimensions();
   const slide = useRef(new Animated.Value(0)).current;
   const shownIds = useRef(ids);
@@ -309,14 +311,16 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     >
       <GestureDetector gesture={pager}>
       <Animated.View style={[styles.fill, { transform: [{ translateX: slide }] }]}>
-        <TerminalView
-          ref={terminalRef}
-          style={styles.fill}
-          theme={TERMINAL_THEME}
-          fontSize={fontSize}
-          onInput={({ nativeEvent }) => handleInput(nativeEvent.data)}
-          onResize={({ nativeEvent }) => handleResize(nativeEvent.cols, nativeEvent.rows)}
-        />
+        <View style={styles.inset}>
+          <TerminalView
+            ref={terminalRef}
+            style={styles.fill}
+            theme={TERMINAL_THEME}
+            fontSize={fontSize}
+            onInput={({ nativeEvent }) => handleInput(nativeEvent.data)}
+            onResize={({ nativeEvent }) => handleResize(nativeEvent.cols, nativeEvent.rows)}
+          />
+        </View>
         {attaching ? (
           <View style={styles.overlay}>
             <Loading label={`Attaching to ${title}…`} />
@@ -333,6 +337,19 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         ) : null}
       </Animated.View>
       </GestureDetector>
+      <AskSheet
+        ask={askOpen && paneAsk ? paneAsk : null}
+        workspace={workspace}
+        canRespond={canRespond}
+        pending={paneAsk ? asks.pending[paneAsk.askId] : undefined}
+        error={paneAsk ? asks.errors[paneAsk.askId] : undefined}
+        onAnswer={(answer) => {
+          if (!paneAsk) return;
+          setAskOpen(false);
+          void answerAsk(paneAsk.askId, answer);
+        }}
+        onClose={() => setAskOpen(false)}
+      />
       <TerminalSheet
         visible={sheetOpen}
         workspace={workspace}
@@ -346,16 +363,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
       />
       {isAgent && !raw && !error ? (
         <>
-          {paneAsk ? (
-            <AskCard
-              ask={paneAsk}
-              workspace={workspace}
-              canRespond={canRespond}
-              pending={asks.pending[paneAsk.askId]}
-              error={asks.errors[paneAsk.askId]}
-              onAnswer={(answer) => void answerAsk(paneAsk.askId, answer)}
-            />
-          ) : null}
+          {paneAsk ? <AskHeadsUp ask={paneAsk} onOpen={() => setAskOpen(true)} /> : null}
           <PromptComposer
             canRespond={canRespond}
             bottomInset={insets.bottom}
@@ -402,6 +410,7 @@ function RowButton({ label, active, onPress }: { label: string; active?: boolean
 }
 
 const styles = StyleSheet.create({
+  inset: { flex: 1, paddingHorizontal: space.gutter, backgroundColor: TERMINAL_THEME.background },
   headerSub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dots: { flexDirection: 'row', gap: space.xs },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.lineStrong },
@@ -416,7 +425,7 @@ const styles = StyleSheet.create({
   watchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.gutter,
     paddingTop: space.md,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
@@ -425,7 +434,7 @@ const styles = StyleSheet.create({
   keyRow: {
     flexDirection: 'row',
     gap: 6,
-    paddingHorizontal: space.sm,
+    paddingHorizontal: space.gutter,
     paddingTop: space.sm,
     backgroundColor: colors.surface,
   },

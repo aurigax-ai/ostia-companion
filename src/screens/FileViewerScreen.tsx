@@ -4,7 +4,7 @@ import { Empty, HeaderTitle, Loading } from '../components/ui';
 import { FileContent, formatSize, numberedLines, previewKind } from '../model/files';
 import { ScreenProps } from '../navigation';
 import { OstiaRpc } from '../services/rpc';
-import { colors, font, type } from '../theme';
+import { colors, font, space, type } from '../theme';
 
 export function FileViewerScreen({ navigation, route }: ScreenProps<'FileView'>) {
   const { sessionId, path, name } = route.params;
@@ -59,8 +59,8 @@ const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.bgSunken },
   image: { flex: 1, margin: 16 },
   code: { paddingVertical: 12, backgroundColor: colors.bgSunken, flexGrow: 1 },
-  line: { flexDirection: 'row', paddingHorizontal: 12 },
-  number: { fontFamily: font.mono, fontSize: 12, lineHeight: 18, color: colors.dim, width: 40, textAlign: 'right', marginRight: 12 },
+  line: { flexDirection: 'row', paddingHorizontal: space.gutter },
+  number: { fontFamily: font.mono, fontSize: 12, lineHeight: 18, color: colors.dim, minWidth: 24, textAlign: 'right', marginRight: space.md },
   text: { fontFamily: font.mono, fontSize: 12, lineHeight: 18, color: colors.fg, flex: 1 },
-  footer: { padding: 16 },
+  footer: { padding: space.gutter },
 });

@@ -185,5 +185,5 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
   message: { marginTop: space.sm },
   cardActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: space.lg },
-  note: { paddingHorizontal: space.lg + space.xs, paddingTop: space.md },
+  note: { paddingHorizontal: space.gutter, paddingTop: space.md },
 });

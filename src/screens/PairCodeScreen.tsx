@@ -84,7 +84,7 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, paddingHorizontal: space.xl, paddingTop: space.xl },
+  screen: { flex: 1, paddingHorizontal: space.gutter, paddingTop: space.xl },
   boxes: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: space.xxl },
   box: {
     width: 34,

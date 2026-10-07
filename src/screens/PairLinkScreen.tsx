@@ -56,7 +56,7 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  screen: { flex: 1, padding: space.lg },
+  screen: { flex: 1, padding: space.gutter },
   input: {
     marginTop: space.lg,
     minHeight: 120,

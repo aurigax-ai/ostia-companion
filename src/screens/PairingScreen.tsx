@@ -129,7 +129,7 @@ const CORNER_WIDTH = 4;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  hero: { paddingTop: space.xxxl, paddingHorizontal: space.xl },
+  hero: { paddingTop: space.xxxl, paddingHorizontal: space.gutter },
   crumb: { fontFamily: font.mono, color: colors.fg },
   searching: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   radar: {
@@ -141,8 +141,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radarDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand },
-  none: { paddingHorizontal: space.lg + space.xs },
-  actions: { marginTop: 'auto', paddingHorizontal: space.lg, paddingTop: space.xl, paddingBottom: space.lg, gap: space.md },
+  none: { paddingHorizontal: space.gutter },
+  actions: { marginTop: 'auto', paddingHorizontal: space.gutter, paddingTop: space.xl, paddingBottom: space.lg, gap: space.md },
   camera: { flex: 1, backgroundColor: '#000' },
   cameraUi: { flex: 1, justifyContent: 'space-between' },
   cameraTop: {
