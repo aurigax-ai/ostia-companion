@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
+import { createNavigationContainerRef, DarkTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getPairingData, loadDesktops } from './src/services/storage';
 import { loadPrefs } from './src/services/prefsStore';
 import { startConnectionLog } from './src/services/connectionLog';
+import { startAgentAlerts } from './src/services/agentWatch';
+import { loadAlertPrefs } from './src/services/alertPrefsStore';
 import { removeDesktopAndReconnect } from './src/services/desktopSession';
 import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
@@ -37,6 +39,7 @@ const navigationTheme: Theme = {
 };
 
 const Stack = createNativeStackNavigator<RootStack>();
+const navigationRef = createNavigationContainerRef<RootStack>();
 
 export default function App() {
   const [paired, setPaired] = useState<boolean | null>(null);
@@ -59,6 +62,8 @@ export default function App() {
   useEffect(() => {
     startConnectionLog();
     void loadPrefs();
+    void loadAlertPrefs();
+    startAgentAlerts((target) => navigationRef.isReady() && navigationRef.navigate(target.screen, target.params));
     connect().catch(() => setPaired(false));
   }, [connect]);
 
@@ -67,7 +72,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer ref={navigationRef} theme={navigationTheme}>
         <Stack.Navigator
           screenOptions={{
             headerStyle: { backgroundColor: colors.bg },

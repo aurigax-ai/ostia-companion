@@ -73,6 +73,11 @@ function subscribe(listener: () => void) {
   };
 }
 
+export function onWorkspaces(listener: (snapshot: Snapshot) => void): () => void {
+  start();
+  return subscribe(() => listener(snapshot));
+}
+
 export function useWorkspaces(): Snapshot {
   useEffect(start, []);
   return useSyncExternalStore(subscribe, () => snapshot);

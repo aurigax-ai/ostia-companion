@@ -30,7 +30,14 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#f2b347"
+        }
+      ]
     ],
     "backgroundColor": "#161616"
   }
