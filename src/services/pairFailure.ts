@@ -10,7 +10,7 @@ export function pairFailure(message: string, host: string, port: number): PairFa
     return { text: 'The desktop declined this phone.' };
   }
   if (/\b408\b/.test(message)) {
-    return { text: 'Pairing expired before the desktop approved it. Show a new code on the desktop and try again.' };
+    return { text: 'Request expired. Try a new code.' };
   }
   if (/401/.test(message)) {
     return { text: 'Code expired or already used.' };

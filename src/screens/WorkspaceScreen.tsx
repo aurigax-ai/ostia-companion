@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useLayoutEffect } from 'react';
 import { RefreshControl, SectionList } from 'react-native';
 import { FileText, Globe, PanelsTopLeft, SquareTerminal } from 'lucide-react-native';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
@@ -12,7 +12,7 @@ import { colors } from '../theme';
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
   const { sessions, panes, refreshing, loadedAt } = useWorkspaces();
   const status = useConnectionStatus();
-  const [pairing] = useState(() => OstiaRpc.getPairing());
+  const pairing = OstiaRpc.getPairing();
   const workDir = sessions.find((session) => session.sessionId === route.params.sessionId)?.workDir;
   const groups = groupPanes(panes.filter((pane) => pane.sessionId === route.params.sessionId));
 

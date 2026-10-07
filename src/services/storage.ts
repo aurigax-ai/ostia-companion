@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { activeDesktop, addDesktop, chooseDesktop, DesktopList, EMPTY_DESKTOPS, removeDesktop } from '../model/desktops';
 
 export interface PairingData {
   deviceToken: string;
@@ -9,94 +10,67 @@ export interface PairingData {
   gatewayPort: number;
   privateKey: string;
   publicKey: string;
+  pairedAt?: number;
 }
 
-const KEYS = {
-  DEVICE_TOKEN: 'ostia_device_token',
-  DEVICE_ID: 'ostia_device_id',
-  PINNED_FINGERPRINT: 'ostia_pinned_fingerprint',
-  DESKTOP_NAME: 'ostia_desktop_name',
-  GATEWAY_HOST: 'ostia_gateway_host',
-  GATEWAY_PORT: 'ostia_gateway_port',
-  PRIVATE_KEY: 'ostia_private_key',
-  PUBLIC_KEY: 'ostia_public_key',
-};
+const INDEX = 'ostia_desktops';
+const ACTIVE = 'ostia_active_desktop';
+const entry = (deviceId: string) => `ostia_desktop_${deviceId}`;
 
-/**
- * Saves all pairing details into secure storage.
- */
-export async function savePairingData(data: PairingData): Promise<void> {
-  await SecureStore.setItemAsync(KEYS.DEVICE_TOKEN, data.deviceToken);
-  await SecureStore.setItemAsync(KEYS.DEVICE_ID, data.deviceId);
-  await SecureStore.setItemAsync(KEYS.PINNED_FINGERPRINT, data.pinnedFingerprint);
-  await SecureStore.setItemAsync(KEYS.DESKTOP_NAME, data.desktopName);
-  await SecureStore.setItemAsync(KEYS.GATEWAY_HOST, data.gatewayHost);
-  await SecureStore.setItemAsync(KEYS.GATEWAY_PORT, data.gatewayPort.toString());
-  await SecureStore.setItemAsync(KEYS.PRIVATE_KEY, data.privateKey);
-  await SecureStore.setItemAsync(KEYS.PUBLIC_KEY, data.publicKey);
-}
-
-/**
- * Retrieves pairing data from secure storage. Returns null if not paired.
- */
-export async function getPairingData(): Promise<PairingData | null> {
+function parseDesktop(text: string | null): PairingData | null {
+  if (!text) return null;
   try {
-    const deviceToken = await SecureStore.getItemAsync(KEYS.DEVICE_TOKEN);
-    const deviceId = await SecureStore.getItemAsync(KEYS.DEVICE_ID);
-    const pinnedFingerprint = await SecureStore.getItemAsync(KEYS.PINNED_FINGERPRINT);
-    const desktopName = await SecureStore.getItemAsync(KEYS.DESKTOP_NAME);
-    const gatewayHost = await SecureStore.getItemAsync(KEYS.GATEWAY_HOST);
-    const gatewayPortStr = await SecureStore.getItemAsync(KEYS.GATEWAY_PORT);
-    const privateKey = await SecureStore.getItemAsync(KEYS.PRIVATE_KEY);
-    const publicKey = await SecureStore.getItemAsync(KEYS.PUBLIC_KEY);
-
-    if (
-      !deviceToken ||
-      !deviceId ||
-      !pinnedFingerprint ||
-      !desktopName ||
-      !gatewayHost ||
-      !gatewayPortStr ||
-      !privateKey ||
-      !publicKey
-    ) {
-      return null;
-    }
-
-    return {
-      deviceToken,
-      deviceId,
-      pinnedFingerprint,
-      desktopName,
-      gatewayHost,
-      gatewayPort: parseInt(gatewayPortStr, 10),
-      privateKey,
-      publicKey,
-    };
-  } catch (error) {
-    console.error('Failed to retrieve pairing data from SecureStore:', error);
+    const data = JSON.parse(text);
+    return typeof data?.deviceToken === 'string' && typeof data.gatewayHost === 'string' ? data : null;
+  } catch {
     return null;
   }
 }
 
-/**
- * Deletes all pairing data (equivalent to revoking/forgetting the device).
- */
-export async function clearPairingData(): Promise<void> {
-  await SecureStore.deleteItemAsync(KEYS.DEVICE_TOKEN);
-  await SecureStore.deleteItemAsync(KEYS.DEVICE_ID);
-  await SecureStore.deleteItemAsync(KEYS.PINNED_FINGERPRINT);
-  await SecureStore.deleteItemAsync(KEYS.DESKTOP_NAME);
-  await SecureStore.deleteItemAsync(KEYS.GATEWAY_HOST);
-  await SecureStore.deleteItemAsync(KEYS.GATEWAY_PORT);
-  await SecureStore.deleteItemAsync(KEYS.PRIVATE_KEY);
-  await SecureStore.deleteItemAsync(KEYS.PUBLIC_KEY);
+export async function loadDesktops(): Promise<DesktopList> {
+  let ids: string[] = [];
+  try {
+    ids = JSON.parse((await SecureStore.getItemAsync(INDEX)) ?? '[]');
+  } catch {
+    ids = [];
+  }
+  const desktops = (await Promise.all(ids.map(async (id) => parseDesktop(await SecureStore.getItemAsync(entry(id))))))
+    .filter((d): d is PairingData => d !== null);
+  if (desktops.length === 0) return EMPTY_DESKTOPS;
+  const stored = await SecureStore.getItemAsync(ACTIVE);
+  const activeId = desktops.some((d) => d.deviceId === stored) ? stored : desktops[desktops.length - 1].deviceId;
+  return { desktops, activeId };
 }
 
-/**
- * Checks if the device is currently paired.
- */
-export async function isPaired(): Promise<boolean> {
-  const token = await SecureStore.getItemAsync(KEYS.DEVICE_TOKEN);
-  return token !== null;
+async function saveDesktops(previous: DesktopList, next: DesktopList): Promise<void> {
+  for (const desktop of next.desktops) await SecureStore.setItemAsync(entry(desktop.deviceId), JSON.stringify(desktop));
+  for (const gone of previous.desktops.filter((d) => !next.desktops.some((n) => n.deviceId === d.deviceId))) {
+    await SecureStore.deleteItemAsync(entry(gone.deviceId));
+  }
+  await SecureStore.setItemAsync(INDEX, JSON.stringify(next.desktops.map((d) => d.deviceId)));
+  if (next.activeId) await SecureStore.setItemAsync(ACTIVE, next.activeId);
+  else await SecureStore.deleteItemAsync(ACTIVE);
+}
+
+async function update(change: (list: DesktopList) => DesktopList): Promise<DesktopList> {
+  const previous = await loadDesktops();
+  const next = change(previous);
+  await saveDesktops(previous, next);
+  return next;
+}
+
+export async function savePairingData(data: PairingData): Promise<void> {
+  await update((list) => addDesktop(list, { pairedAt: Date.now(), ...data }));
+}
+
+export async function getPairingData(): Promise<PairingData | null> {
+  return activeDesktop(await loadDesktops());
+}
+
+export function chooseSavedDesktop(deviceId: string): Promise<DesktopList> {
+  return update((list) => chooseDesktop(list, deviceId));
+}
+
+export function forgetDesktop(deviceId: string): Promise<DesktopList> {
+  return update((list) => removeDesktop(list, deviceId));
 }

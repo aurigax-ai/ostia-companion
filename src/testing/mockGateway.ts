@@ -59,13 +59,13 @@ const UNAUTHENTICATED = -32001;
 const NEEDS_ELEVATION = -32003;
 const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
-const CERT_DIR = join(tmpdir(), 'ostia-mock-gateway');
 
-function certificate() {
-  const key = join(CERT_DIR, 'key.pem');
-  const cert = join(CERT_DIR, 'cert.pem');
+function certificate(name: string) {
+  const dir = join(tmpdir(), 'ostia-mock-gateway', name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+  const key = join(dir, 'key.pem');
+  const cert = join(dir, 'cert.pem');
   if (!existsSync(cert)) {
-    mkdirSync(CERT_DIR, { recursive: true });
+    mkdirSync(dir, { recursive: true });
     execFileSync(
       'openssl',
       ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes',
@@ -133,7 +133,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     scenario = demoScenario(),
     log = () => {},
   } = options;
-  const { key, cert, fingerprint } = certificate();
+  const { key, cert, fingerprint } = certificate(name);
   const codes = new Map<string, number>();
   const pending = new Map<string, PendingPair>();
   const devices: MockDevice[] = [];

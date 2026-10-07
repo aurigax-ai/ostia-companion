@@ -5,6 +5,7 @@ export type RootStack = {
   Workspace: { sessionId: string; name: string };
   Terminal: { paneId: string; title: string };
   Settings: undefined;
+  Desktops: undefined;
   Pair: undefined;
   PairLink: undefined;
   PairCode: { name: string; host: string; port: number; fingerprint: string };
