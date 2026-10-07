@@ -1,11 +1,13 @@
 import { activeDesktop } from '../model/desktops';
 import { OstiaRpc } from './rpc';
 import { chooseSavedDesktop, forgetDesktop } from './storage';
+import { resetAsks } from './askStore';
 import { resetWorkspaces } from './workspaceStore';
 
 function connectTo(list: Awaited<ReturnType<typeof chooseSavedDesktop>>): boolean {
   OstiaRpc.disconnect();
   resetWorkspaces();
+  resetAsks();
   const desktop = activeDesktop(list);
   if (desktop) OstiaRpc.initialize(desktop);
   return desktop !== null;

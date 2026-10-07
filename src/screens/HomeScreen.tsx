@@ -2,15 +2,18 @@ import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { ChevronDown, Settings } from 'lucide-react-native';
 import { Button, Divider, Empty, HeaderIcon, ListRow, Loading, SectionHeader, StatusPill } from '../components/ui';
+import { AskCard } from '../components/AskCard';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
+import { Ask, needsYouItems } from '../model/asks';
+import { answerAsk, useAsks } from '../services/askStore';
 import { byAttention, homeSections, workspaceRank } from '../model/order';
-import { InboxItem, Session, needsYou, paneTitle, shortPath, workspaceStatus } from '../model/workspaces';
+import { InboxItem, Session, paneTitle, shortPath, workspaceStatus } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { OstiaRpc } from '../services/rpc';
-import { refreshWorkspaces, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
+import { refreshWorkspaces, useCaps, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
 import { colors, mono, type } from '../theme';
 
-type Row = { kind: 'inbox'; item: InboxItem } | { kind: 'workspace'; session: Session };
+type Row = { kind: 'ask'; ask: Ask } | { kind: 'inbox'; item: InboxItem } | { kind: 'workspace'; session: Session };
 
 const STATUS = {
   connected: { text: 'Connected', color: colors.muted },
@@ -22,6 +25,8 @@ const STATUS = {
 export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onUnpair: () => Promise<void> }) {
   const { sessions, panes, loading, refreshing, loadedAt } = useWorkspaces();
   const status = useConnectionStatus();
+  const asks = useAsks();
+  const canRespond = useCaps().includes('respond');
   const live = OstiaRpc.getPairing();
   const last = useRef(live);
   if (live) last.current = live;
@@ -55,14 +60,16 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
   }, [navigation, desktop, status]);
 
   const sections = useMemo(() => {
-    const inbox = needsYou(sessions, panes);
+    const inbox: Row[] = needsYouItems(asks.asks, sessions, panes).map((entry) =>
+      entry.kind === 'ask' ? { kind: 'ask', ask: entry.ask } : { kind: 'inbox', item: entry.item },
+    );
     const list: { key: string; title: string; data: Row[] }[] = [];
-    if (inbox.length > 0) list.push({ key: 'inbox', title: 'Needs you', data: inbox.map((item) => ({ kind: 'inbox', item })) });
+    if (inbox.length > 0) list.push({ key: 'inbox', title: 'Needs you', data: inbox });
     for (const group of homeSections(byAttention(sessions, workspaceRank(panes)))) {
       list.push({ key: `group:${group.title}`, title: group.title, data: group.sessions.map((session) => ({ kind: 'workspace', session })) });
     }
     return list;
-  }, [sessions, panes]);
+  }, [sessions, panes, asks.asks]);
 
   const firstGroupKey = sections.find((section) => section.key !== 'inbox')?.key;
 
@@ -73,14 +80,21 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
   return (
     <SectionList
       sections={sections}
-      keyExtractor={(row) => (row.kind === 'inbox' ? `inbox:${row.item.pane.paneId}` : row.session.sessionId)}
+      keyExtractor={(row) =>
+        row.kind === 'ask' ? `ask:${row.ask.askId}` : row.kind === 'inbox' ? `inbox:${row.item.pane.paneId}` : row.session.sessionId
+      }
       ListHeaderComponent={
-        <ConnectionBanner
-          status={status}
-          host={pairing?.gatewayHost ?? ''}
-          desktop={desktop}
-          onPairAgain={() => void onUnpair()}
-        />
+        <>
+          <ConnectionBanner
+            status={status}
+            host={pairing?.gatewayHost ?? ''}
+            desktop={desktop}
+            onPairAgain={() => void onUnpair()}
+          />
+          {asks.unsupported ? (
+            <Text style={[type.caption, styles.note]}>Update Ostia on the desktop to answer from here.</Text>
+          ) : null}
+        </>
       }
       stickySectionHeadersEnabled={false}
       contentContainerStyle={{ paddingBottom: 32, flexGrow: 1 }}
@@ -113,6 +127,19 @@ export function HomeScreen({ navigation, onUnpair }: ScreenProps<'Home'> & { onU
         ) : null
       }
       renderItem={({ item: row }) => {
+        if (row.kind === 'ask') {
+          const { ask } = row;
+          return (
+            <AskCard
+              ask={ask}
+              workspace={sessions.find((session) => session.sessionId === ask.sessionId)?.name ?? ''}
+              canRespond={canRespond}
+              pending={asks.pending[ask.askId]}
+              error={asks.errors[ask.askId]}
+              onAnswer={(answer) => void answerAsk(ask.askId, answer)}
+            />
+          );
+        }
         if (row.kind === 'inbox') {
           const { pane, workspace, reason } = row.item;
           const title = paneTitle(pane);
@@ -173,4 +200,5 @@ const styles = StyleSheet.create({
   meta: { fontFamily: mono, fontSize: 12, lineHeight: 16, color: colors.muted },
   message: { marginTop: 8 },
   cardActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 },
+  note: { paddingHorizontal: 16, paddingTop: 12 },
 });

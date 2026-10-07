@@ -1,8 +1,10 @@
+import type { Ask } from '../model/asks.ts';
 import type { Pane, Session } from '../model/workspaces.ts';
 
 export interface Scenario {
   sessions: Session[];
   panes: Pane[];
+  asks: Ask[];
 }
 
 const MIGRATION = 'Apply this migration to the dev database?\n\nALTER TABLE users\n  ADD COLUMN last_seen timestamptz;';
@@ -24,6 +26,38 @@ export function demoScenario(): Scenario {
       { paneId: 'p-browser', sessionId: 's-ostia', kind: 'browser', title: 'localhost:5173', running: false, blockCount: 0 },
       { paneId: 'p-editor', sessionId: 's-ostia', kind: 'editor', title: 'theme.ts', running: false, blockCount: 0 },
       { paneId: 'p-dot', sessionId: 's-dot', kind: 'terminal', title: 'zsh', cwd: '/home/marco/.config', running: false, blockCount: 5, lastExitCode: 0, agent: 'claude', agentState: 'done' },
+    ],
+    asks: [
+      {
+        askId: 'ask-migration',
+        sessionId: 's-api',
+        paneId: 'p-claude',
+        kind: 'permission',
+        agent: 'claude',
+        title: 'Run Bash: apply the migration to the dev database?',
+        detail: 'psql "$DEV_DATABASE_URL" -f db/migrations/0042.sql\n\nALTER TABLE users\n  ADD COLUMN last_seen timestamptz;',
+        choices: [
+          { id: 'allow-once', label: 'Allow once', tone: 'approve' },
+          { id: 'allow-always', label: 'Always allow', tone: 'neutral' },
+          { id: 'deny', label: 'Deny', tone: 'deny' },
+        ],
+        allowText: false,
+        since: Date.now() - 3 * 60_000,
+      },
+      {
+        askId: 'ask-target',
+        sessionId: 's-ostia',
+        paneId: 'p-agent',
+        kind: 'question',
+        agent: 'claude',
+        title: 'Which environment should the release notes cover?',
+        choices: [
+          { id: 'staging', label: 'Staging', tone: 'neutral' },
+          { id: 'production', label: 'Production', tone: 'neutral' },
+        ],
+        allowText: true,
+        since: Date.now() - 60_000,
+      },
     ],
   };
 }

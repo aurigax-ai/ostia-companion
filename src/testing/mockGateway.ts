@@ -10,7 +10,7 @@ import type { Pane, SessionState } from '../model/workspaces.ts';
 import { checkCode } from '../services/pairCheck.ts';
 import { agentPromptScreen, demoScenario, PROMPT_OPTIONS, type Scenario, shellScreen } from './mockScenario.ts';
 
-export type MockCap = 'read' | 'notify' | 'command' | 'input' | 'destructive';
+export type MockCap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
 export type MockDecision = 'approve' | 'deny' | 'never';
 
 export interface MockGatewayOptions {
@@ -48,11 +48,12 @@ export interface MockGateway {
   setCaps: (deviceId: string, caps: MockCap[]) => void;
   updatePane: (paneId: string, patch: Partial<Pane>) => void;
   setSessionState: (sessionId: string, state: SessionState) => void;
+  typed: (paneId: string) => string[];
   close: () => Promise<void>;
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const CAP_ORDER: MockCap[] = ['read', 'notify', 'command', 'input', 'destructive'];
+const CAP_ORDER: MockCap[] = ['read', 'notify', 'respond', 'command', 'input', 'destructive'];
 const CLOSE_UNAUTHENTICATED = 4001;
 const CLOSE_REVOKED = 4003;
 const CLOSE_CAPS_CHANGED = 4004;
@@ -138,11 +139,14 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const { key, cert, fingerprint } = certificate(name);
   const codes = new Map<string, number>();
   const pending = new Map<string, PendingPair>();
-  const devices: MockDevice[] = devicesFile && existsSync(devicesFile) ? JSON.parse(readFileSync(devicesFile, 'utf8')) : [];
+  const devices: MockDevice[] = (devicesFile && existsSync(devicesFile) ? JSON.parse(readFileSync(devicesFile, 'utf8')) : []).map(
+    (device: MockDevice) => ({ ...device, caps: canonical(caps) }),
+  );
   const saveDevices = () => devicesFile && writeFileSync(devicesFile, JSON.stringify(devices));
   const checkCodes: string[] = [];
   const connections = new Set<Connection>();
   const output = new Map<string, string>();
+  const typed = new Map<string, string[]>();
   let selected = 0;
 
   const mintCode = () => {
@@ -297,10 +301,37 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         fail(id, UNAUTHENTICATED, 'unauthenticated');
         return socket.close(CLOSE_UNAUTHENTICATED, 'unauthenticated');
       }
-      if (['session.list', 'pane.list', 'pty.attach', 'pty.detach'].includes(method) && !has('read')) {
+      if (['ask.answer', 'agent.prompt', 'agent.interrupt'].includes(method) && !has('respond')) {
+        return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'respond' });
+      }
+      if (['session.list', 'pane.list', 'pty.attach', 'pty.detach', 'ask.list'].includes(method) && !has('read')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
       }
       if (method === 'session.list') return respond(id, { sessions: scenario.sessions });
+      if (method === 'ask.list') return respond(id, { asks: scenario.asks });
+      if (method === 'ask.answer') {
+        const ask = scenario.asks.find((a) => a.askId === params.askId);
+        const choice = ask?.choices.find((c) => c.id === params.choiceId);
+        if (!ask || (!choice && !(ask.allowText && params.text))) return fail(id, INVALID_PARAMS, 'unknown-ask');
+        scenario.asks = scenario.asks.filter((a) => a !== ask);
+        const outcome = choice?.id ?? 'text';
+        if (ask.paneId === 'p-claude') writePane(ask.paneId, agentPromptScreen(0, choice?.tone === 'deny' ? 2 : 0));
+        updatePane(ask.paneId, { agentState: choice?.tone === 'deny' ? 'waiting' : 'working', agentMessage: undefined });
+        setSessionState(ask.sessionId, choice?.tone === 'deny' ? 'waiting' : 'working');
+        event('ask.resolved', { askId: ask.askId, outcome });
+        log(`ask: ${ask.askId} answered ${outcome}`);
+        return respond(id, { ok: true });
+      }
+      if (method === 'agent.prompt' || method === 'agent.interrupt') {
+        const pane = scenario.panes.find((p) => p.paneId === params.paneId);
+        if (!pane?.agent || pane.agent === 'other') return fail(id, INVALID_PARAMS, 'not-an-agent');
+        const keys = method === 'agent.prompt' ? `${params.text}\r` : params.key === 'ctrl-c' ? '\x03' : '\x1b';
+        typed.set(pane.paneId, [...(typed.get(pane.paneId) ?? []), keys]);
+        if (method === 'agent.prompt') writePane(pane.paneId, `\r\n\x1b[36m>\x1b[0m ${params.text}\r\n`);
+        else writePane(pane.paneId, '\r\n\x1b[90m(interrupted)\x1b[0m\r\n');
+        log(`agent: ${method} ${pane.paneId}`);
+        return respond(id, { ok: true });
+      }
       if (method === 'pane.list') {
         const panes = params.sessionId ? scenario.panes.filter((p) => p.sessionId === params.sessionId) : scenario.panes;
         return respond(id, { panes });
@@ -364,6 +395,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     },
     updatePane,
     setSessionState,
+    typed: (paneId) => typed.get(paneId) ?? [],
     close: () =>
       new Promise<void>((resolve) => {
         connections.forEach((c) => c.socket.terminate());
