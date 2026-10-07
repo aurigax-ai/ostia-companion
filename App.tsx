@@ -22,6 +22,8 @@ import { PairingScreen } from './src/screens/PairingScreen';
 import { PairCodeScreen } from './src/screens/PairCodeScreen';
 import { PairLinkScreen } from './src/screens/PairLinkScreen';
 import { DesktopsScreen } from './src/screens/DesktopsScreen';
+import { FilesScreen } from './src/screens/FilesScreen';
+import { FileViewerScreen } from './src/screens/FileViewerScreen';
 import { RootStack } from './src/navigation';
 import { colors } from './src/theme';
 
@@ -87,6 +89,8 @@ export default function App() {
               <Stack.Screen name="Home">{(props) => <HomeScreen {...props} onUnpair={unpair} />}</Stack.Screen>
               <Stack.Screen name="Workspace" component={WorkspaceScreen} />
               <Stack.Screen name="Terminal" component={TerminalScreen} />
+              <Stack.Screen name="Files" component={FilesScreen} />
+              <Stack.Screen name="FileView" component={FileViewerScreen} />
               <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
                 {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
               </Stack.Screen>

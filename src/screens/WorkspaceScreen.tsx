@@ -1,6 +1,6 @@
 import React, { useLayoutEffect } from 'react';
 import { RefreshControl, SectionList } from 'react-native';
-import { FileText, Globe, PanelsTopLeft, SquareTerminal } from 'lucide-react-native';
+import { FileText, FolderOpen, Globe, PanelsTopLeft, SquareTerminal } from 'lucide-react-native';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
 import { Divider, Empty, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill } from '../components/ui';
 import { attentionRank, byAttention } from '../model/order';
@@ -28,12 +28,23 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
       sections={groups.map((group) => ({ title: group.title, data: byAttention(group.panes, attentionRank) }))}
       keyExtractor={(pane) => pane.paneId}
       ListHeaderComponent={
-        <ConnectionBanner
-          status={status}
-          host={pairing?.gatewayHost ?? ''}
-          desktop={pairing?.desktopName || 'the desktop'}
-          onPairAgain={() => navigation.popToTop()}
-        />
+        <>
+          <ConnectionBanner
+            status={status}
+            host={pairing?.gatewayHost ?? ''}
+            desktop={pairing?.desktopName || 'the desktop'}
+            onPairAgain={() => navigation.popToTop()}
+          />
+          <ListRow
+            leading={<IconTile icon={FolderOpen} />}
+            title="Files"
+            subtitle={shortPath(workDir)}
+            mono
+            onPress={() =>
+              navigation.navigate('Files', { sessionId: route.params.sessionId, path: '', title: route.params.name || 'Files' })
+            }
+          />
+        </>
       }
       stickySectionHeadersEnabled={false}
       ItemSeparatorComponent={() => <Divider inset={72} />}

@@ -5,6 +5,7 @@ export interface Scenario {
   sessions: Session[];
   panes: Pane[];
   asks: Ask[];
+  files: Record<string, Record<string, string>>;
 }
 
 const MIGRATION = 'Apply this migration to the dev database?\n\nALTER TABLE users\n  ADD COLUMN last_seen timestamptz;';
@@ -27,6 +28,17 @@ export function demoScenario(): Scenario {
       { paneId: 'p-editor', sessionId: 's-ostia', kind: 'editor', title: 'theme.ts', running: false, blockCount: 0 },
       { paneId: 'p-dot', sessionId: 's-dot', kind: 'terminal', title: 'zsh', cwd: '/home/marco/.config', running: false, blockCount: 5, lastExitCode: 0, agent: 'claude', agentState: 'done' },
     ],
+    files: {
+      's-ostia': {
+        'README.md': '# ostia\n\nA terminal for agents.\n',
+        '.env': 'PORT=5173\n',
+        'package.json': '{\n  "name": "ostia",\n  "private": true\n}\n',
+        'src/main.ts': "import { start } from './app';\n\nstart();\n",
+        'src/app.ts': 'export function start() {\n  console.log("ready");\n}\n',
+        'logs/build.log': 'x'.repeat(300 * 1024),
+        'assets/logo.bin': '\u0000\u0001\u0002binary',
+      },
+    },
     asks: [
       {
         askId: 'ask-migration',

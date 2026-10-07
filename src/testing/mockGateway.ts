@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Pane, SessionState } from '../model/workspaces.ts';
 import { checkCode } from '../services/pairCheck.ts';
@@ -61,6 +61,7 @@ const UNAUTHENTICATED = -32001;
 const NEEDS_ELEVATION = -32003;
 const METHOD_NOT_FOUND = -32601;
 const INVALID_PARAMS = -32602;
+const READ_LIMIT = 256 * 1024;
 
 function certificate(name: string) {
   const dir = join(tmpdir(), 'ostia-mock-gateway', name.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
@@ -304,11 +305,35 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       if (['ask.answer', 'agent.prompt', 'agent.interrupt'].includes(method) && !has('respond')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'respond' });
       }
-      if (['session.list', 'pane.list', 'pty.attach', 'pty.detach', 'ask.list'].includes(method) && !has('read')) {
+      if (['session.list', 'pane.list', 'pty.attach', 'pty.detach', 'ask.list', 'fs.list', 'fs.read'].includes(method) && !has('read')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
       }
       if (method === 'session.list') return respond(id, { sessions: scenario.sessions });
       if (method === 'ask.list') return respond(id, { asks: scenario.asks });
+      if (method === 'fs.list' || method === 'fs.read') {
+        const tree = scenario.files[params.sessionId] ?? {};
+        const raw = String(params.path ?? '');
+        const normal = posix.normalize(raw || '.');
+        if (raw.startsWith('/') || normal === '..' || normal.startsWith('../')) return fail(id, INVALID_PARAMS, 'outside-workspace');
+        const path = normal === '.' ? '' : normal.replace(/\/$/, '');
+        if (method === 'fs.read') {
+          const content = tree[path];
+          if (content === undefined) return fail(id, INVALID_PARAMS, 'not-found');
+          const size = Buffer.byteLength(content);
+          const binary = /[\u0000-\u0008]/.test(content);
+          const slice = content.slice(0, READ_LIMIT);
+          return respond(id, binary ? { base64: Buffer.from(slice).toString('base64'), size, truncated: size > READ_LIMIT } : { text: slice, size, truncated: size > READ_LIMIT });
+        }
+        const prefix = path ? `${path}/` : '';
+        const names = new Map<string, { kind: 'file' | 'dir'; size: number }>();
+        for (const [file, content] of Object.entries(tree)) {
+          if (!file.startsWith(prefix)) continue;
+          const [head, ...rest] = file.slice(prefix.length).split('/');
+          names.set(head, rest.length > 0 ? { kind: 'dir', size: 0 } : { kind: 'file', size: Buffer.byteLength(content) });
+        }
+        if (path && names.size === 0) return fail(id, INVALID_PARAMS, 'not-found');
+        return respond(id, { entries: [...names].map(([name, info]) => ({ name, ...info, mtime: Date.now() })) });
+      }
       if (method === 'ask.answer') {
         const ask = scenario.asks.find((a) => a.askId === params.askId);
         const choice = ask?.choices.find((c) => c.id === params.choiceId);
