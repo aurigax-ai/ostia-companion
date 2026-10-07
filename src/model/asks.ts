@@ -47,3 +47,11 @@ export function waitedFor(since: number, now: number): string {
   if (minutes < 60) return `${minutes} min`;
   return `${Math.floor(minutes / 60)} h`;
 }
+
+const DESTRUCTIVE = /\brm\s+-[a-z]*r|--force\b|\bpush\b.*\s-f\b|reset\s+--hard|\b(drop|truncate)\s+(table|database|schema)\b|\bsudo\b|\bmkfs|\bdd\s+.*of=/i;
+
+export function needsConfirm(ask: Ask, choice: AskChoice): boolean {
+  if (choice.tone === 'deny') return false;
+  if (/always/i.test(choice.id) || /always/i.test(choice.label)) return true;
+  return choice.tone === 'approve' && DESTRUCTIVE.test(`${ask.title}\n${ask.detail ?? ''}`);
+}
