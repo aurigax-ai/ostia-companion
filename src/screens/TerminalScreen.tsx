@@ -14,7 +14,10 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Eye, Keyboard } from 'lucide-react-native';
 import { TerminalTheme, TerminalView, TerminalViewRef } from 'expo-libghostty';
+import { AskCard } from '../components/AskCard';
+import { PromptComposer } from '../components/PromptComposer';
 import { TerminalSheet } from '../components/TerminalSheet';
+import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/askStore';
 import { Button, Empty, Loading, tap } from '../components/ui';
 import { attentionRank, byAttention } from '../model/order';
 import { acceptsSwipe, afterClose, EDGE_PT, step } from '../model/terminalPager';
@@ -66,6 +69,11 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const ids = terminals.map((pane) => pane.paneId);
   const index = Math.max(0, ids.indexOf(paneId));
   const [sheetOpen, setSheetOpen] = useState(false);
+  const currentPane = panes.find((pane) => pane.paneId === paneId);
+  const isAgent = !!currentPane?.agent && currentPane.agent !== 'other';
+  const [raw, setRaw] = useState(false);
+  const asks = useAsks();
+  const paneAsk = asks.asks.find((ask) => ask.paneId === paneId);
   const { width } = useWindowDimensions();
   const slide = useRef(new Animated.Value(0)).current;
   const shownIds = useRef(ids);
@@ -75,8 +83,10 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const terminalRef = useRef<TerminalViewRef>(null);
   const caps = useCaps();
   const canInput = caps.includes('input');
+  const canRespond = caps.includes('respond');
   const [role, setRole] = useState<Role>('observer');
   const [attaching, setAttaching] = useState(true);
+  const attachingRef = useRef(false);
   const prefs = usePrefs();
   const [fontSize, setFontSize] = useState(getPrefs().fontSize);
   const fontSizeRef = useRef(getPrefs().fontSize);
@@ -159,9 +169,11 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         </Pressable>
       ),
       headerRight: () =>
-        role === 'owner' ? <Button label="Done" variant="text" compact onPress={watch} /> : null,
+        role === 'owner' && (!isAgent || raw) ? (
+          <Button label="Done" variant="text" compact onPress={() => (setRaw(false), watch())} />
+        ) : null,
     });
-  }, [navigation, role, title, workspace, index, ids.join('|')]);
+  }, [navigation, role, title, workspace, index, ids.join('|'), isAgent, raw]);
 
   useEffect(() => {
     const unsubscribePty = OstiaRpc.addPtyListener((base64) => {
@@ -173,6 +185,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
       else if (type === 'rpc.error' && payload?.code === RPC_NEEDS_ELEVATION) explainInput();
     });
     terminalRef.current?.writeText(FULL_RESET);
+    setRaw(false);
     held.current = [];
     attach(OstiaRpc.hasCap('input') ? 'owner' : 'observer');
     return () => {
@@ -185,7 +198,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   }, [paneId]);
 
   useEffect(() => {
-    if (canInput && wantsOwner.current && roleRef.current === 'observer') attach('owner');
+    if (canInput && wantsOwner.current && roleRef.current === 'observer' && !attachingRef.current) attach('owner');
   }, [canInput]);
 
   useEffect(() => {
@@ -205,6 +218,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   };
 
   const attach = async (target: Role) => {
+    attachingRef.current = true;
     setAttaching(true);
     setError(null);
     try {
@@ -212,6 +226,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     } catch (err: any) {
       setError(err?.message || "Couldn't open this terminal");
     } finally {
+      attachingRef.current = false;
       setAttaching(false);
     }
   };
@@ -329,7 +344,28 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         }}
         onClose={() => setSheetOpen(false)}
       />
-      {role === 'owner' && prefs.keyRow && !attaching && !error ? (
+      {isAgent && !raw && !error ? (
+        <>
+          {paneAsk ? (
+            <AskCard
+              ask={paneAsk}
+              workspace={workspace}
+              canRespond={canRespond}
+              pending={asks.pending[paneAsk.askId]}
+              error={asks.errors[paneAsk.askId]}
+              onAnswer={(answer) => void answerAsk(paneAsk.askId, answer)}
+            />
+          ) : null}
+          <PromptComposer
+            canRespond={canRespond}
+            bottomInset={insets.bottom}
+            onPrompt={(text) => void promptAgent(paneId, text)}
+            onInterrupt={(key) => void interruptAgent(paneId, key)}
+            onKeyboard={() => (setRaw(true), takeControl())}
+          />
+        </>
+      ) : null}
+      {(!isAgent || raw) && role === 'owner' && prefs.keyRow && !attaching && !error ? (
         <View style={[styles.keyRow, { paddingBottom: 8 + insets.bottom }]}>
           <RowButton label="esc" onPress={() => pressKey({ type: 'key', key: 'esc' })} />
           <RowButton label="tab" onPress={() => pressKey({ type: 'key', key: 'tab' })} />
@@ -339,7 +375,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           ))}
         </View>
       ) : null}
-      {role === 'observer' && !attaching && !error ? (
+      {(!isAgent || raw) && role === 'observer' && !attaching && !error ? (
         <View style={[styles.watchBar, { paddingBottom: 12 + insets.bottom }]}>
           <Eye size={18} color={colors.muted} />
           <Text style={[type.bodyMuted, { flex: 1, marginLeft: 8 }]}>Watching</Text>

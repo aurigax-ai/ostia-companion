@@ -123,6 +123,7 @@ Mirrors the desktop's pane-scoped-trust broker, but a **phone gets a strict subs
 | `read` | list sessions/panes, `pane.info`, `cwd.get`, **read-only** pty stream (observer) |
 | `notify` | receive push/notification events |
 | `command` | run **non-destructive** commands (`command.exec` for commands whose descriptor caps ⊆ granted) |
+| `respond` | answer the desktop's asks and prompt or interrupt agents (`ask.answer`, `agent.prompt`, `agent.interrupt`) — **elevated**, never raw keystrokes (v1.6) |
 | `input` | send keystrokes to a pty (owner mode) — **elevated**, off by default |
 | `destructive` | commands flagged destructive — elevated, **always** requires an on-device confirm |
 
@@ -199,6 +200,10 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `pane.info` | `read` | `{ paneId }` → `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` |
 | `cwd.get` | `read` | `{ paneId }` → `{ cwd: string \| null }` |
 | `command.list` | `read` | `{}` → `{ commands: [ CommandDescriptor ] }` (id, title, argsSchema, capabilities, target) |
+| `ask.list` | `read` | `{}` → `{ asks: [Ask] }` — open asks: `{ askId, sessionId, paneId, kind: "permission"\|"question"\|"approval", agent?, title, detail?, choices: [{ id, label, tone: "approve"\|"deny"\|"neutral" }], allowText, since }` (v1.6) |
+| `ask.answer` | `respond` | `{ askId, choiceId?, text? }` → `{ ok: true }`; `-32602 unknown-ask` once resolved. The desktop routes it to the agent hook, `ostia ask` or approval card that raised it (v1.6) |
+| `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }`: types `text` then Enter into an agent pane; `-32602 not-an-agent` otherwise (v1.6) |
+| `agent.interrupt` | `respond` | `{ paneId, key: "esc"\|"ctrl-c" }` → `{ ok: true }`; `-32602 not-an-agent` otherwise (v1.6) |
 | `command.exec` | `command` (+ the command's own caps) | `{ id, args?, target? }` → `CommandResult` = `{ ok:true, result } \| { ok:false, error:{ code, message } }` |
 | `pty.attach` / `pty.detach` | `read` (owner role needs `input`, else downgraded) | §6.1 |
 | `device.caps` | — | `{}` → `{ caps: [...] }` (the device's current caps; implemented v1.1) |
@@ -272,6 +277,10 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.6 — 2026-10-07 (agent control)
+- **Asks:** `ask.list`, `ask.answer`, and events `ask.created { ask }` / `ask.resolved { askId, outcome }` (`read`). Permission prompts from agent hooks, `ostia ask` questions and approval cards reach the phone as structured asks.
+- **`respond` cap** (grantable, elevated): `ask.answer`, `agent.prompt`, `agent.interrupt`. Canonical cap order is now `read, notify, respond, command, input, destructive`.
 
 ### v1.5 — 2026-10-07 (groups, files)
 - **`session.list`:** each workspace may carry `group: { id, name }`, the desktop sidebar group it belongs to; absent when ungrouped. Additive; older phones ignore it.

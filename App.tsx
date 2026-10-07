@@ -11,6 +11,7 @@ import { startConnectionLog } from './src/services/connectionLog';
 import { removeDesktopAndReconnect } from './src/services/desktopSession';
 import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
+import { resetAsks } from './src/services/askStore';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
@@ -44,6 +45,7 @@ export default function App() {
     const data = await getPairingData();
     OstiaRpc.disconnect();
     resetWorkspaces();
+    resetAsks();
     if (!data) return setPaired(false);
     OstiaRpc.initialize(data);
     setPaired(true);

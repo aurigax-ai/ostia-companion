@@ -6,7 +6,7 @@ const decision = (process.env.MOCK_DECISION ?? 'approve') as 'approve' | 'deny' 
 const gateway = await startMockGateway({
   port: Number(process.env.MOCK_PORT ?? 8723),
   name: process.env.MOCK_NAME ?? 'Mock desktop',
-  caps: ['read', 'notify', 'command', 'input'],
+  caps: ['read', 'notify', 'respond', 'command', 'input'],
   decision,
   approveAfterMs: Number(process.env.MOCK_APPROVE_MS ?? 4000),
   reusableCode: true,

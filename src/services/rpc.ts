@@ -1,7 +1,7 @@
 import { PinnedWebSocket } from 'websocket-pinning';
 import { PairingData } from './storage';
 
-export type Cap = 'read' | 'notify' | 'command' | 'input' | 'destructive';
+export type Cap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
 export type Role = 'observer' | 'owner';
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'revoked';
 
