@@ -1,5 +1,6 @@
-import React from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Platform, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Check, Minus, Plus } from 'lucide-react-native';
 import { Button, Divider, HeaderIcon, ListRow, SectionHeader } from '../components/ui';
@@ -9,6 +10,8 @@ import { ScreenProps } from '../navigation';
 import { connectionLogText } from '../services/connectionLog';
 import { openTailscaleApp } from '../services/openTailscaleApp';
 import { setPrefs, usePrefs } from '../services/prefsStore';
+import { setAlertPrefs, useAlertPrefs } from '../services/alertPrefsStore';
+import type { AlertPrefs } from '../model/alertPrefs';
 import { Cap, OstiaRpc } from '../services/rpc';
 import { useCaps, useConnectionStatus } from '../services/workspaceStore';
 import { colors, mono, type } from '../theme';
@@ -23,6 +26,12 @@ const ACCESS: { cap: Cap; title: string }[] = [
 ];
 
 const STATE = { connected: 'Connected', connecting: 'Connecting…', disconnected: 'Offline', revoked: 'Removed' };
+
+const ALERTS: { key: keyof AlertPrefs; title: string }[] = [
+  { key: 'waiting', title: 'Agent needs you' },
+  { key: 'done', title: 'Agent finished' },
+  { key: 'failed', title: 'Agent failed' },
+];
 
 const TOGGLES: { key: keyof TerminalPrefs; title: string }[] = [
   { key: 'fitWhenWatching', title: 'Fit desktop width when watching' },
@@ -43,6 +52,12 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
   const caps = useCaps();
   const status = useConnectionStatus();
   const prefs = usePrefs();
+  const alerts = useAlertPrefs();
+  const [permission, setPermission] = useState<boolean | null>(null);
+  useEffect(() => {
+    void Notifications.getPermissionsAsync().then((p) => setPermission(p.granted));
+  }, []);
+  const allow = async () => setPermission((await Notifications.requestPermissionsAsync()).granted);
   const name = pairing?.desktopName || 'Desktop';
 
   const confirmRemove = () =>
@@ -83,6 +98,43 @@ export function SettingsScreen({ navigation, onUnpair }: ScreenProps<'Settings'>
         </React.Fragment>
       ))}
       <Text style={[type.caption, styles.note]}>Change access in Settings › Remote on your desktop.</Text>
+
+      <SectionHeader title="Notifications" />
+      <ListRow
+        title="Permission"
+        trailing={
+          permission === false ? (
+            <View style={styles.stepper}>
+              <Value text="Off" />
+              <Button label="Allow" variant="text" compact onPress={() => void allow()} />
+            </View>
+          ) : (
+            <Value text={permission ? 'On' : '…'} />
+          )
+        }
+      />
+      {ALERTS.map(({ key, title }) => (
+        <React.Fragment key={key}>
+          <Divider />
+          <ListRow
+            title={title}
+            trailing={
+              <Switch
+                accessibilityLabel={title}
+                value={alerts[key]}
+                onValueChange={(value) => setAlertPrefs({ [key]: value })}
+                trackColor={{ true: colors.brand, false: colors.surfaceHigh }}
+                thumbColor={colors.fg}
+              />
+            }
+          />
+        </React.Fragment>
+      ))}
+      <Text style={[type.caption, styles.note]}>
+        {Platform.OS === 'ios'
+          ? 'On iPhone, alerts arrive only while Ostia is open.'
+          : 'While agents run, Ostia keeps a quiet notification so alerts reach you.'}
+      </Text>
 
       <SectionHeader title="Terminal" />
       <ListRow

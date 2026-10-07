@@ -77,6 +77,13 @@ export function interruptAgent(paneId: string, key: 'esc' | 'ctrl-c'): Promise<u
   return OstiaRpc.call('agent.interrupt', { paneId, key });
 }
 
+export function onAsks(listener: (asks: Ask[]) => void): () => void {
+  start();
+  const wrapped = () => listener(snapshot.asks);
+  listeners.add(wrapped);
+  return () => void listeners.delete(wrapped);
+}
+
 export function useAsks(): AskSnapshot {
   start();
   return useSyncExternalStore(
