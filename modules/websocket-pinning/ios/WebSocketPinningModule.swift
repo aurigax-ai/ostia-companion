@@ -38,8 +38,10 @@ public class WebSocketPinningModule: Module {
       request.httpMethod = "POST"
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       request.httpBody = bodyString.data(using: .utf8)
-      
+      request.timeoutInterval = 130
+
       let configuration = URLSessionConfiguration.default
+      configuration.timeoutIntervalForRequest = 130
       let delegate = WebSocketSessionDelegate(module: self, expectedFingerprint: fingerprint)
       let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: OperationQueue.main)
       
