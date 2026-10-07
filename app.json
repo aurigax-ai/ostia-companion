@@ -7,7 +7,13 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBonjourServices": [
+          "_ostia._tcp"
+        ],
+        "NSLocalNetworkUsageDescription": "Ostia looks for your desktop on this network so you can pair by typing a code."
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -6,8 +6,14 @@ export interface PairFailure {
 }
 
 export function pairFailure(message: string, host: string, port: number): PairFailure {
+  if (/\b403\b/.test(message)) {
+    return { text: 'The desktop declined this phone.' };
+  }
+  if (/\b408\b/.test(message)) {
+    return { text: 'Pairing expired before the desktop approved it. Show a new code on the desktop and try again.' };
+  }
   if (/401/.test(message)) {
-    return { text: 'The pairing code was already used or expired. Show a new QR on the desktop and scan again.' };
+    return { text: 'The pairing code was already used or expired. Use the new code the desktop shows.' };
   }
   if (/429/.test(message)) {
     return { text: 'Too many pairing attempts. Wait a minute, then show a new QR on the desktop.' };
