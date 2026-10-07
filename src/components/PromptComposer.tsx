@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { Keyboard, Send } from 'lucide-react-native';
-import { colors } from '../theme';
-import { Button, HeaderIcon } from './ui';
+import { ArrowUp, Keyboard } from 'lucide-react-native';
+import { colors, font, radius, space } from '../theme';
+import { Button, IconButton } from './ui';
 
 export function PromptComposer({
   canRespond,
@@ -24,15 +24,16 @@ export function PromptComposer({
     onPrompt(prompt);
     setText('');
   };
+  const ready = !!text.trim() && canRespond;
   return (
-    <View style={[styles.bar, { paddingBottom: 8 + bottomInset }]}>
+    <View style={[styles.bar, { paddingBottom: space.sm + bottomInset }]}>
       <View style={styles.chips}>
-        <Button label="Interrupt" variant="tonal" compact disabled={!canRespond} onPress={() => onInterrupt('esc')} />
-        <Button label="Stop" variant="tonal" compact disabled={!canRespond} onPress={() => onInterrupt('ctrl-c')} />
+        <Button label="Interrupt" variant="tonal" compact disabled={!canRespond} onPress={() => onInterrupt('esc')} style={styles.chip} />
+        <Button label="Stop" variant="tonal" compact disabled={!canRespond} onPress={() => onInterrupt('ctrl-c')} style={styles.chip} />
         <View style={{ flex: 1 }} />
-        <HeaderIcon icon={Keyboard} label="Raw keyboard" onPress={onKeyboard} color={colors.muted} />
+        <IconButton icon={Keyboard} label="Raw keyboard" onPress={onKeyboard} color={colors.muted} />
       </View>
-      <View style={styles.row}>
+      <View style={styles.field}>
         <TextInput
           style={styles.input}
           placeholder={canRespond ? 'Prompt the agent' : 'Turn on Respond in Settings › Remote'}
@@ -42,13 +43,15 @@ export function PromptComposer({
           multiline
           editable={canRespond}
           cursorColor={colors.brand}
+          selectionColor={colors.brandSoft}
           accessibilityLabel="Prompt"
         />
-        <HeaderIcon
-          icon={Send}
+        <IconButton
+          icon={ArrowUp}
           label="Send prompt"
           onPress={send}
-          color={text.trim() && canRespond ? colors.brand : colors.dim}
+          variant={ready ? 'filled' : 'tonal'}
+          color={ready ? colors.onBrand : colors.dim}
         />
       </View>
     </View>
@@ -57,24 +60,31 @@ export function PromptComposer({
 
 const styles = StyleSheet.create({
   bar: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
     backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.lineStrong,
-    gap: 8,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    gap: space.sm,
   },
-  chips: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  chips: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  chip: { minHeight: 32, paddingHorizontal: space.md },
+  field: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: space.sm,
+    paddingLeft: space.lg,
+    padding: space.xs,
+    borderRadius: radius.xxl,
+    backgroundColor: colors.bgSunken,
+  },
   input: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 40,
     maxHeight: 140,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.bgSunken,
+    paddingVertical: 9,
     color: colors.fg,
+    fontFamily: font.regular,
     fontSize: 16,
   },
 });

@@ -6,7 +6,7 @@ import { ScreenProps } from '../navigation';
 import { CODE_LENGTH, codeInput, codeToSubmit } from '../services/pairCode';
 import { pairWithTarget } from '../services/pairWith';
 import { usePairing } from '../services/usePairing';
-import { colors, mono, type } from '../theme';
+import { colors, font, radius, space, type } from '../theme';
 
 const HALF = CODE_LENGTH / 2;
 
@@ -47,7 +47,7 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
   return (
     <KeyboardAvoidingView style={styles.screen} behavior="padding">
       <Text style={type.title}>Enter the pairing code</Text>
-      <Text style={[type.bodyMuted, { marginTop: 8 }]}>
+      <Text style={[type.bodyMuted, { marginTop: space.sm }]}>
         Shown under the QR code on your desktop.
       </Text>
       <Pressable style={styles.boxes} onPress={() => input.current?.focus()} accessible={false}>
@@ -84,21 +84,22 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
-  boxes: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 32 },
+  screen: { flex: 1, paddingHorizontal: space.xl, paddingTop: space.xl },
+  boxes: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: space.xxl },
   box: {
     width: 34,
-    height: 48,
-    borderRadius: 10,
+    height: 52,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.line,
+    borderWidth: 2,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  boxCurrent: { borderColor: colors.brand },
-  char: { fontFamily: mono, fontSize: 22, lineHeight: 28, fontWeight: '600', color: colors.fg },
-  dash: { fontSize: 22, color: colors.dim },
+  boxCurrent: { borderColor: colors.brand, backgroundColor: colors.surfaceHigh },
+  char: { fontFamily: font.monoSemibold, fontSize: 22, lineHeight: 28, color: colors.fg },
+  dash: { fontFamily: font.mono, fontSize: 22, color: colors.dim },
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, color: 'transparent', opacity: 0.02 },
-  hint: { textAlign: 'center', marginTop: 16 },
+  hint: { textAlign: 'center', marginTop: space.lg },
 });
