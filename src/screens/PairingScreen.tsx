@@ -95,7 +95,7 @@ export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { 
         ))}
         {state.kind === 'none' ? (
           <Text style={[type.bodyMuted, styles.none]}>
-            None found. Turn on Discoverable, or scan the QR code.
+            None found. Turn on Discoverable in Settings › Remote, or scan the QR code.
           </Text>
         ) : null}
 
