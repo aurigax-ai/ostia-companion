@@ -14,7 +14,7 @@
         ],
         "NSLocalNetworkUsageDescription": "Ostia looks for your desktop on this network so you can pair by typing a code."
       },
-      "bundleIdentifier": "ai.aurigax.ostia.companion"
+      "bundleIdentifier": "ai.aurigax.ostia.remote"
     },
     "android": {
       "adaptiveIcon": {
