@@ -6,7 +6,32 @@ export interface Scenario {
   panes: Pane[];
   asks: Ask[];
   files: Record<string, Record<string, string>>;
+  artifacts: Record<string, Record<string, string>>;
 }
+
+const REPORT = `# Release plan
+
+Ship **0.4** on Friday. Open questions are in the [tracker](https://example.com/tracker).
+
+![remote chart](https://example.com/chart.png)
+
+<script>alert('raw html is shown as text')</script>
+
+- [x] changelog
+- [ ] smoke test on staging
+
+| step | owner |
+|---|---|
+| build | ci |
+| notes | marco |
+
+\`\`\`mermaid
+graph TD
+  build --> staging --> production
+\`\`\`
+`;
+
+const CHART = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><rect width="120" height="60" fill="#202020"/><polyline points="10,50 40,30 70,38 110,10" fill="none" stroke="#f2b347" stroke-width="3"/></svg>\n';
 
 const MIGRATION = 'Apply this migration to the dev database?\n\nALTER TABLE users\n  ADD COLUMN last_seen timestamptz;';
 
@@ -38,6 +63,22 @@ export function demoScenario(): Scenario {
         'logs/build.log': 'x'.repeat(300 * 1024),
         'assets/logo.bin': '\u0000\u0001\u0002binary',
       },
+    },
+    artifacts: {
+      's-ostia': {
+        'PAD.md': '# Scratch Pad\n\n- try the new palette on the phone\n',
+        'release-plan.md': REPORT,
+        'latency.svg': CHART,
+        'flow.mmd': 'sequenceDiagram\n  phone->>desktop: fs.read\n  desktop-->>phone: text\n',
+        'timings.csv': 'route,p50,p95\n/pair,12,40\n"/ws, attach",3,9\n',
+        'Counter.tsx': "import { useState } from 'react';\n\nexport default function Counter() {\n  const [n, setN] = useState(0);\n  return <button onClick={() => setN(n + 1)}>{n}</button>;\n}\n",
+        'dashboard/index.html': '<!doctype html>\n<title>Dashboard</title>\n<script>document.title = "ready";</script>\n',
+        'dashboard/data.json': '{ "ok": true }\n',
+        'dashboard/deep/more.txt': 'too deep to be an artifact\n',
+        'trace.log': 'héllo wörld €\n'.repeat(40_000),
+        'shot.png': '\u0089PNG\u0000\u0001'.repeat(60_000),
+      },
+      's-web': {},
     },
     asks: [
       {

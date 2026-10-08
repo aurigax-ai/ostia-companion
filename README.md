@@ -19,6 +19,11 @@ To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate p
    - Binary PTY frames (`0x01`) are captured by the native socket, their type byte stripped, and the Base64 payload written straight into the view. Keystrokes come back as Base64 and go out as `0x02` frames.
    - Its `postinstall` downloads checksum-pinned native libraries, so `pnpm-workspace.yaml` allows its build script (`allowBuilds`).
 
+4. **Artifacts and file viewers (`src/components/viewers`)**:
+   - Each workspace has an Artifacts screen: what its agents wrote for the human, newest first, with the Scratch Pad pinned and a dot on files that changed (`artifact.changed`). The phone only reads (`fs.list` / `fs.read` with `root: "artifacts"`, contract v1.7), and reads files over 256 KiB in slices.
+   - Files open by type: Markdown is rendered natively (raw HTML is shown as text and only `data:` images load), CSV/TSV is a table, SVG and Mermaid are drawn as pictures in a WebView that has no network and cannot navigate, PDFs go to another app. HTML, JSX and TSX are shown as source: the phone never runs artifact code.
+   - Mermaid ships inside the app. `pnpm install` runs `tools/build-mermaid.mjs`, which copies it from `node_modules` into `src/generated/` (not committed).
+
 ---
 
 ## 📂 Project Structure

@@ -47,3 +47,6 @@ yarn-error.*
 build/
 .gradle/
 
+
+# built from node_modules by tools/build-mermaid.mjs
+/src/generated/

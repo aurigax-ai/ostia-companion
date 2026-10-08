@@ -1,20 +1,21 @@
 import React, { useLayoutEffect, useState } from 'react';
 import { RefreshControl, SectionList, View } from 'react-native';
-import { FileText, FolderOpen, Globe, PanelsTopLeft } from 'lucide-react-native';
+import { FileText, FolderOpen, Globe, PanelsTopLeft, Sparkles } from 'lucide-react-native';
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
-import { Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
+import { Badge, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
 import { Ask } from '../model/asks';
 import { attentionRank, byAttention } from '../model/order';
 import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
+import { useArtifacts } from '../services/artifactStore';
 import { answerAsk, useAsks } from '../services/askStore';
 import { OstiaRpc } from '../services/rpc';
 import { refreshWorkspaces, useCaps, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
 import { colors, space } from '../theme';
 
-type Row = { kind: 'ask'; ask: Ask } | { kind: 'files' } | { kind: 'pane'; pane: Pane };
+type Row = { kind: 'ask'; ask: Ask } | { kind: 'artifacts' } | { kind: 'files' } | { kind: 'pane'; pane: Pane };
 type Section = { key: string; title: string; data: Row[] };
 
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
@@ -22,6 +23,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
   const { sessions, panes, refreshing, loadedAt } = useWorkspaces();
   const status = useConnectionStatus();
   const asks = useAsks();
+  const unreadArtifacts = useArtifacts().unread[sessionId]?.length ?? 0;
   const canRespond = useCaps().includes('respond');
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const pairing = OstiaRpc.getPairing();
@@ -37,7 +39,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
     ...(terminals.length > 0
       ? [{ key: 'terminals', title: 'Terminals', data: byAttention(terminals, attentionRank).map((pane) => ({ kind: 'pane' as const, pane })) }]
       : []),
-    { key: 'more', title: 'More', data: [{ kind: 'files' as const }, ...desktopOnly.map((pane) => ({ kind: 'pane' as const, pane }))] },
+    { key: 'more', title: 'More', data: [{ kind: 'artifacts' as const }, { kind: 'files' as const }, ...desktopOnly.map((pane) => ({ kind: 'pane' as const, pane }))] },
   ];
   const firstListKey = sections.find((section) => section.key !== 'asks')?.key;
 
@@ -51,7 +53,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
     <>
       <SectionList
         sections={sections}
-        keyExtractor={(row) => (row.kind === 'ask' ? `ask:${row.ask.askId}` : row.kind === 'files' ? 'files' : row.pane.paneId)}
+        keyExtractor={(row) => (row.kind === 'ask' ? `ask:${row.ask.askId}` : row.kind === 'pane' ? row.pane.paneId : row.kind)}
         ListHeaderComponent={
           <ConnectionBanner
             status={status}
@@ -98,7 +100,15 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
           }
           return (
             <GroupItem first={index === 0} last={index === section.data.length - 1}>
-              {row.kind === 'files' ? (
+              {row.kind === 'artifacts' ? (
+                <ListRow
+                  leading={<IconTile icon={Sparkles} />}
+                  title="Artifacts"
+                  subtitle="What the agents made for you, and the Scratch Pad"
+                  trailing={unreadArtifacts > 0 ? <Badge text={String(unreadArtifacts)} tone="brand" /> : null}
+                  onPress={() => navigation.navigate('Artifacts', { sessionId, path: '', title: name || 'Workspace' })}
+                />
+              ) : row.kind === 'files' ? (
                 <ListRow
                   leading={<IconTile icon={FolderOpen} />}
                   title="Files"
