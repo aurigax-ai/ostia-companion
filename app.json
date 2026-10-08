@@ -38,7 +38,8 @@
           "icon": "./assets/android-icon-monochrome.png",
           "color": "#f2b347"
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "backgroundColor": "#161616"
   }

@@ -49,6 +49,8 @@ export interface MockGateway {
   updatePane: (paneId: string, patch: Partial<Pane>) => void;
   setSessionState: (sessionId: string, state: SessionState) => void;
   typed: (paneId: string) => string[];
+  opened: string[];
+  writeArtifact: (sessionId: string, path: string, content: string | null) => void;
   close: () => Promise<void>;
 }
 
@@ -148,6 +150,9 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const connections = new Set<Connection>();
   const output = new Map<string, string>();
   const typed = new Map<string, string[]>();
+  const opened: string[] = [];
+  const touched = new Map<string, number>();
+  const started = Date.now();
   let selected = 0;
 
   const mintCode = () => {
@@ -302,6 +307,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         fail(id, UNAUTHENTICATED, 'unauthenticated');
         return socket.close(CLOSE_UNAUTHENTICATED, 'unauthenticated');
       }
+      if (method === 'artifact.open' && !has('command')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'command' });
       if (['ask.answer', 'agent.prompt', 'agent.interrupt'].includes(method) && !has('respond')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'respond' });
       }
@@ -310,29 +316,57 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       }
       if (method === 'session.list') return respond(id, { sessions: scenario.sessions });
       if (method === 'ask.list') return respond(id, { asks: scenario.asks });
-      if (method === 'fs.list' || method === 'fs.read') {
-        const tree = scenario.files[params.sessionId] ?? {};
-        const raw = String(params.path ?? '');
+      if (method === 'fs.list' || method === 'fs.read' || method === 'artifact.open') {
+        if (typeof params.sessionId !== 'string' || !params.sessionId) return fail(id, INVALID_PARAMS, 'missing sessionId');
+        if (typeof params.path !== 'string') return fail(id, INVALID_PARAMS, 'missing path');
+        const session = scenario.sessions.find((s) => s.sessionId === params.sessionId);
+        if (!session) return fail(id, INVALID_PARAMS, 'unknown-session');
+        const root = method === 'artifact.open' ? 'artifacts' : (params.root ?? 'workspace');
+        if (root !== 'workspace' && root !== 'artifacts') return fail(id, INVALID_PARAMS, 'invalid-root');
+        const artifacts = root === 'artifacts';
+        const tree = artifacts ? scenario.artifacts[session.sessionId] : (scenario.files[session.sessionId] ?? {});
+        if (!tree) return fail(id, INVALID_PARAMS, 'not-found');
+        const raw = params.path;
         const normal = posix.normalize(raw || '.');
         if (raw.startsWith('/') || normal === '..' || normal.startsWith('../')) return fail(id, INVALID_PARAMS, 'outside-workspace');
         const path = normal === '.' ? '' : normal.replace(/\/$/, '');
-        if (method === 'fs.read') {
+        const depth = path ? path.split('/').length : 0;
+        if (method !== 'fs.list') {
           const content = tree[path];
-          if (content === undefined) return fail(id, INVALID_PARAMS, 'not-found');
-          const size = Buffer.byteLength(content);
-          const binary = /[\u0000-\u0008]/.test(content);
-          const slice = content.slice(0, READ_LIMIT);
-          return respond(id, binary ? { base64: Buffer.from(slice).toString('base64'), size, truncated: size > READ_LIMIT } : { text: slice, size, truncated: size > READ_LIMIT });
+          if (content === undefined || (artifacts && depth > 2)) {
+            return fail(id, INVALID_PARAMS, Object.keys(tree).some((file) => file.startsWith(`${path}/`)) ? 'not-a-file' : 'not-found');
+          }
+          if (method === 'artifact.open') {
+            opened.push(`${session.sessionId}:${path}`);
+            return respond(id, { ok: true });
+          }
+          const file = Buffer.from(content, content.includes('\u0000') ? 'latin1' : 'utf8');
+          const start = Math.min(Number.isInteger(params.offset) && params.offset > 0 ? params.offset : 0, file.length);
+          const limit = Number.isInteger(params.maxBytes) && params.maxBytes >= 0 ? Math.min(params.maxBytes, READ_LIMIT) : READ_LIMIT;
+          const bytes = file.subarray(start, start + limit);
+          const truncated = start + bytes.length < file.length;
+          let text: string | null = null;
+          for (const cut of start > 0 || bytes.includes(0) ? [] : truncated ? [0, 1, 2, 3] : [0]) {
+            try {
+              text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, bytes.length - cut));
+              break;
+            } catch {}
+          }
+          return respond(id, { ...(text === null ? { base64: bytes.toString('base64') } : { text }), size: file.length, truncated });
         }
+        if (artifacts && depth > 1) return fail(id, INVALID_PARAMS, 'not-found');
+        if (tree[path] !== undefined) return fail(id, INVALID_PARAMS, 'not-a-directory');
         const prefix = path ? `${path}/` : '';
-        const names = new Map<string, { kind: 'file' | 'dir'; size: number }>();
-        for (const [file, content] of Object.entries(tree)) {
-          if (!file.startsWith(prefix)) continue;
+        const names = new Map<string, { kind: 'file' | 'dir'; size: number; mtime: number }>();
+        Object.entries(tree).forEach(([file, content], index) => {
+          if (!file.startsWith(prefix)) return;
           const [head, ...rest] = file.slice(prefix.length).split('/');
-          names.set(head, rest.length > 0 ? { kind: 'dir', size: 0 } : { kind: 'file', size: Buffer.byteLength(content) });
-        }
+          if (rest.length > 0 && artifacts && depth === 1) return;
+          const mtime = touched.get(`${session.sessionId}:${file}`) ?? started - index * 60_000;
+          names.set(head, rest.length > 0 ? { kind: 'dir', size: 0, mtime: Math.max(mtime, names.get(head)?.mtime ?? 0) } : { kind: 'file', size: Buffer.byteLength(content), mtime });
+        });
         if (path && names.size === 0) return fail(id, INVALID_PARAMS, 'not-found');
-        return respond(id, { entries: [...names].map(([name, info]) => ({ name, ...info, mtime: Date.now() })) });
+        return respond(id, { entries: [...names].map(([name, info]) => ({ name, ...info })).sort((a, b) => a.name.localeCompare(b.name)) });
       }
       if (method === 'ask.answer') {
         const ask = scenario.asks.find((a) => a.askId === params.askId);
@@ -421,6 +455,15 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     updatePane,
     setSessionState,
     typed: (paneId) => typed.get(paneId) ?? [],
+    opened,
+    writeArtifact: (sessionId, path, content) => {
+      const tree = (scenario.artifacts[sessionId] ??= {});
+      const change = content === null ? 'removed' : tree[path] === undefined ? 'added' : 'changed';
+      if (content === null) delete tree[path];
+      else tree[path] = content;
+      touched.set(`${sessionId}:${path}`, Date.now());
+      event('artifact.changed', { sessionId, path, change });
+    },
     close: () =>
       new Promise<void>((resolve) => {
         connections.forEach((c) => c.socket.terminate());
