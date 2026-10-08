@@ -1,4 +1,6 @@
-# Ostia Companion — Network Contract (v1.4, contract-first)
+# Ostia Companion — Network Contract (v1.7, contract-first)
+
+> **v1.7 (2026-10-08)** adds artifacts: `fs.list` and `fs.read` take `root: "workspace" | "artifacts"`, `fs.read` takes `offset`, and the event `artifact.changed` tells a phone with `read` that a file in a workspace's artifact folder was added, changed or removed. Read-only: the gateway still has no write. `artifact.open` (cap `command`) shows an artifact in a tab on the desktop. See §7 and §11.
 
 > **v1.4 (2026-10-06)** adds pairing without the QR: while the human turned on Discoverable and a pairing code is shown, the desktop announces `_ostia._tcp` on the local network, and the phone pairs by typing the code. Every pairing (QR, link or typed code) now takes two requests (`POST /pair`, then `POST /pair/confirm`) and waits for the human's Approve on the desktop after both screens show the same 6-digit check code. The one-step `/pair` is removed. See §3 and §11.
 
@@ -200,6 +202,9 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `pane.info` | `read` | `{ paneId }` → `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` |
 | `cwd.get` | `read` | `{ paneId }` → `{ cwd: string \| null }` |
 | `command.list` | `read` | `{}` → `{ commands: [ CommandDescriptor ] }` (id, title, argsSchema, capabilities, target) |
+| `fs.list` | `read` | `{ sessionId, path, root? }` → `{ entries: [{ name, kind: "file"\|"dir"\|"link", size, mtime }] }`, sorted by `name`. `root` is `"workspace"` (default) or `"artifacts"` (v1.7). `path` is relative to the root; `""` is the root itself |
+| `fs.read` | `read` | `{ sessionId, path, root?, maxBytes?, offset? }` → `{ text? \| base64?, size, truncated }`. At most 256 KiB (262144 bytes) per call. `offset` (v1.7) is a byte offset, default `0` |
+| `artifact.open` | `command` | `{ sessionId, path }` → `{ ok: true }`: opens that artifact on the desktop as a background tab of that workspace (v1.7) |
 | `ask.list` | `read` | `{}` → `{ asks: [Ask] }` — open asks: `{ askId, sessionId, paneId, kind: "permission"\|"question"\|"approval", agent?, title, detail?, choices: [{ id, label, tone: "approve"\|"deny"\|"neutral" }], allowText, since }` (v1.6) |
 | `ask.answer` | `respond` | `{ askId, choiceId?, text? }` → `{ ok: true }`; `-32602 unknown-ask` once resolved. The desktop routes it to the agent hook, `ostia ask` or approval card that raised it (v1.6) |
 | `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }`: types `text` then Enter into an agent pane; `-32602 not-an-agent` otherwise (v1.6) |
@@ -212,7 +217,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 ### Server→client events (JSON-RPC notifications, no `id`)
 ```json
 { "jsonrpc":"2.0", "method":"event", "params": {
-    "type": "pane.state" | "session.state" | "agent.needs-input" | "agent.done" | "caps.changed" | "notify",
+    "type": "pane.state" | "session.state" | "agent.needs-input" | "agent.done" | "caps.changed" | "notify" | "artifact.changed",
     "payload": { ... } } }
 ```
 - `agent.needs-input` / `agent.done` drive push notifications (a session in state `waiting`/`done`).
@@ -228,9 +233,50 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `notify` | `notify` | `{ title, body?, from }` — `from` is the sending pane's `externalId`, or `null` | an agent runs `ostia notify` |
 | `session.state` | `read` | `{ sessionId, state: "idle"\|"working"\|"waiting"\|"done"\|"error" }` | any session state change (also sent alongside `agent.*`) |
 | `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
+| `artifact.changed` | `read` | `{ sessionId, path, change: "added"\|"changed"\|"removed" }` — `path` as in `fs.list`/`fs.read` with `root: "artifacts"` (`report.md`, `page/index.html`, `PAD.md`) | a file in that workspace's artifact folder was added, written (newer `mtime`) or removed |
 | `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
 
 `sessionId` matches `session.list`'s ids; `paneId`/`from` match `pane.list`'s `externalId`s. Events are not replayed: after a reconnect, re-fetch `session.list`/`pane.list` for current state.
+
+`artifact.changed` (v1.7):
+
+- One event per file; several files changed together arrive as several events, at most 200 per change.
+- Events are debounced by about 150 ms and not replayed. After a reconnect, call `fs.list` again.
+- The desktop reports changes for a workspace once it watches that workspace's folder: from the workspace's first terminal pane, or from the first `fs.list`/`fs.read` with `root: "artifacts"` when the folder exists. Call `fs.list` when the Artifacts tab opens and rely on events after that.
+- Use it for unread dots: mark `path` unread on `added` or `changed`, drop it on `removed`.
+
+### Artifacts (v1.7)
+
+An artifact is a file an agent wrote for the human into the workspace's artifact folder, which is outside the project. The phone reads it with the file methods and `root: "artifacts"`.
+
+- **Paths.** `path` is relative to the workspace's artifact folder, with `/` as the separator. The folder holds regular files at the top level and one level down (`report.md`, `page/index.html`). Nothing deeper exists for the phone.
+- **`fs.list { sessionId, path: "", root: "artifacts" }`** lists the top level: `kind` is `"file"` or `"dir"` only. Symlinks and anything that is not a regular file or a folder are left out, so `"link"` never appears for this root. `fs.list` with `path: "<dir>"` lists that folder's regular files (no `dir` entries). A workspace whose folder does not exist yet answers `{ entries: [] }`.
+- **`fs.read { sessionId, path, root: "artifacts" }`** reads a regular file. The result has `text` when the bytes read are valid UTF-8 without a NUL byte and `offset` is `0`; otherwise `base64`.
+- **`mtime`** is milliseconds since the epoch; **`size`** is bytes.
+- **The scratch pad** is the file `PAD.md` at the top level. It is listed and read like any other file; show it first. It may be absent.
+- **Order.** Entries come sorted by name. Sort by `mtime` descending on the phone to match the desktop's list (newest first, pad pinned).
+- **Read-only.** There is no write, rename, delete or `pad.append` method.
+
+**Errors** (`-32602`, the `message` is the code):
+
+| message | when |
+|---|---|
+| `unknown-session` | `sessionId` is not an open workspace |
+| `invalid-root` | `root` is neither `"workspace"` nor `"artifacts"` |
+| `outside-workspace` | `path` is absolute, contains `..`, a backslash or a NUL byte |
+| `not-found` | no such file or folder; a symlink; a path more than one folder deep; the workspace has no artifact folder |
+| `not-a-directory` | `fs.list` on a file |
+| `not-a-file` | `fs.read` on a folder |
+
+`workspace-too-broad` never happens for `root: "artifacts"`.
+
+**Reading in slices (`offset`, both roots).** `fs.read` returns at most 256 KiB starting at `offset`. `truncated` is `true` while bytes remain after this slice (`offset + bytesReturned < size`). To read a whole file: call with `offset: 0`, and while `truncated` is `true` call again with `offset` advanced by the number of bytes returned (the decoded length of `base64`, or the UTF-8 byte length of `text`). A slice with `offset > 0` is always `base64`, because it may start inside a UTF-8 sequence; concatenate the bytes and decode once. An `offset` at or past `size` answers `{ base64: "", size, truncated: false }`. `size` is the file's size at the time of each call; if it changes between slices, start again.
+
+**`artifact.open { sessionId, path }`** → `{ ok: true }`, cap `command`. The desktop opens that artifact as a background tab in that workspace: it does not take focus, the same as `ostia open --background`. `path` follows the rules of `fs.read` with `root: "artifacts"`: only a regular file inside that workspace's artifact folder, with the same errors (`unknown-session`, `outside-workspace`, `not-found`, `not-a-file`; a symlink is refused). It opens the file and never runs anything else. Without `command` it answers `-32003 needs-elevation` with `data: { cap: "command" }`; the phone shows "Open on desktop" only while it holds `command`.
+
+**Older desktops.** A desktop before v1.7 ignores `root` and `offset`: it would answer `root: "artifacts"` with the workspace's files, and every slice with the start of the file. The phone therefore sends `fs.list { sessionId, path: "", root: "?" }` once per connection and shows artifacts only after `invalid-root` comes back, and it stops reading a file when a slice at `offset > 0` arrives as `text`.
+
+**What the phone renders.** By extension: Markdown rendered natively (never load a remote image), text and code as text, images as images, CSV as a table, everything else as text. `.html`, `.htm`, `.jsx` and `.tsx` are shown **as source** with "Open on desktop": the phone never runs artifact code.
 
 ### `CommandDescriptor` (for `command.list`, verbatim from the desktop contract)
 ```ts
@@ -277,6 +323,14 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.7 — 2026-10-08 (artifacts)
+- **`fs.list`, `fs.read`:** new optional `root: "workspace" | "artifacts"` (default `"workspace"`). With `"artifacts"`, `path` is relative to the workspace's artifact folder: regular files at the top level and one level down, symlinks answer `not-found`, `workspace-too-broad` never applies. New error `invalid-root`.
+- **`fs.read`:** new optional `offset` (bytes, default `0`) for both roots; a slice past the start is always `base64`.
+- **Event `artifact.changed { sessionId, path, change }`** under `read`.
+- **`artifact.open { sessionId, path }`** under `command`: a background tab on the desktop for one artifact.
+- **No write.** `pad.append` is not part of v1.7.
+- Additive: the pairing payload is still `"v": 1`; a v1.6 phone is unaffected.
 
 ### v1.6 — 2026-10-07 (agent control)
 - **Asks:** `ask.list`, `ask.answer`, and events `ask.created { ask }` / `ask.resolved { askId, outcome }` (`read`). Permission prompts from agent hooks, `ostia ask` questions and approval cards reach the phone as structured asks.
