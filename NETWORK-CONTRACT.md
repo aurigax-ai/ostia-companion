@@ -255,7 +255,7 @@ An artifact is a file an agent wrote for the human into the workspace's artifact
 - **`mtime`** is milliseconds since the epoch; **`size`** is bytes.
 - **The scratch pad** is the file `PAD.md` at the top level. It is listed and read like any other file; show it first. It may be absent.
 - **Order.** Entries come sorted by name. Sort by `mtime` descending on the phone to match the desktop's list (newest first, pad pinned).
-- **Read-only.** There is no write, rename, delete or `pad.append` method.
+- **Read-only.** There is no write, rename, delete or `pad.append` method. `artifact.open` only shows a file on the desktop.
 
 **Errors** (`-32602`, the `message` is the code):
 
@@ -264,9 +264,9 @@ An artifact is a file an agent wrote for the human into the workspace's artifact
 | `unknown-session` | `sessionId` is not an open workspace |
 | `invalid-root` | `root` is neither `"workspace"` nor `"artifacts"` |
 | `outside-workspace` | `path` is absolute, contains `..`, a backslash or a NUL byte |
-| `not-found` | no such file or folder; a symlink; a path more than one folder deep; the workspace has no artifact folder |
+| `not-found` | no such file or folder; a symlink, the artifact folder itself being one included; a path more than one folder deep; the workspace has no artifact folder |
 | `not-a-directory` | `fs.list` on a file |
-| `not-a-file` | `fs.read` on a folder |
+| `not-a-file` | `fs.read` on a folder, `path: ""` included |
 
 `workspace-too-broad` never happens for `root: "artifacts"`.
 
@@ -276,7 +276,20 @@ An artifact is a file an agent wrote for the human into the workspace's artifact
 
 **Older desktops.** A desktop before v1.7 ignores `root` and `offset`: it would answer `root: "artifacts"` with the workspace's files, and every slice with the start of the file. The phone therefore sends `fs.list { sessionId, path: "", root: "?" }` once per connection and shows artifacts only after `invalid-root` comes back, and it stops reading a file when a slice at `offset > 0` arrives as `text`.
 
-**What the phone renders.** By extension: Markdown rendered natively (never load a remote image), text and code as text, images as images, CSV as a table, everything else as text. `.html`, `.htm`, `.jsx` and `.tsx` are shown **as source** with "Open on desktop": the phone never runs artifact code.
+**What the phone renders.** By extension, for both roots, and never from the network:
+
+| files | shown as |
+|---|---|
+| `.md`, `.markdown` | Markdown rendered natively. Raw HTML is shown as text. An image loads only from a `data:` URL; a remote image is never loaded. A link opens only on a tap |
+| `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` | an image, up to 16 MiB |
+| `.svg` | a picture: the file goes into an `<img>` of a page with scripts off, so nothing in the SVG runs |
+| `.mmd`, `.mermaid`, and `mermaid` blocks in Markdown | a picture drawn by the Mermaid library bundled in the app (`securityLevel: "strict"`), then shown through an `<img>` |
+| `.csv`, `.tsv` | a table, first 1,000 rows |
+| `.pdf`, and bytes that are not text | not shown: handed to another app through the share sheet, up to 16 MiB |
+| `.html`, `.htm`, `.jsx`, `.tsx` | **source text**, with "Open on desktop" (`artifact.open`) while the phone holds `command`. The phone never runs artifact code |
+| everything else | text, read in slices as the human scrolls |
+
+The pictures (`.svg`, Mermaid) are the only place the phone uses a WebView for file content, and it is closed: the page is built in the app, its policy is `default-src 'none'; img-src data:; style-src 'unsafe-inline'` (plus `script-src data:` for Mermaid, whose only scripts are the bundled library and the app's own drawing code, both passed as `data:` URLs; there is no inline script and no `eval`), every navigation away from `about:blank` is refused, and there is no storage or file access. The file's content reaches the page only as base64 data, never as markup or script. The page sends back one message, a height or an error string, and the app reads nothing else from it.
 
 ### `CommandDescriptor` (for `command.list`, verbatim from the desktop contract)
 ```ts
