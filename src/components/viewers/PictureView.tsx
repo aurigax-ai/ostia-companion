@@ -2,15 +2,17 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { MERMAID_SOURCE } from '../../generated/mermaidSource';
-import { mermaidPage, svgPage } from '../../model/pictureHtml';
+import { mermaidPage, mermaidRuntime, svgPage } from '../../model/pictureHtml';
 import { colors, font, space, type } from '../../theme';
 
 const BLANK = 'about:blank';
 const INLINE_START = 160;
 const INLINE_MAX = 1200;
 
+let runtime: string | null = null;
+
 export function PictureView({ kind, source, inline }: { kind: 'svg' | 'mermaid'; source: string; inline?: boolean }) {
-  const html = useMemo(() => (kind === 'svg' ? svgPage(source) : mermaidPage(source, MERMAID_SOURCE)), [kind, source]);
+  const html = useMemo(() => (kind === 'svg' ? svgPage(source) : mermaidPage(source, (runtime ??= mermaidRuntime(MERMAID_SOURCE)))), [kind, source]);
   const [height, setHeight] = useState(INLINE_START);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,8 +35,8 @@ export function PictureView({ kind, source, inline }: { kind: 'svg' | 'mermaid';
       onMessage={(event) => {
         try {
           const report = JSON.parse(event.nativeEvent.data);
-          if (typeof report.error === 'string') setError(report.error.slice(0, 300));
-          else if (typeof report.height === 'number') setHeight(Math.min(INLINE_MAX, Math.max(40, Math.ceil(report.height))));
+          if (typeof report?.error === 'string') setError(report.error.slice(0, 300));
+          else if (Number.isFinite(report?.height)) setHeight(Math.min(INLINE_MAX, Math.max(40, Math.ceil(report.height))));
         } catch {}
       }}
       domStorageEnabled={false}

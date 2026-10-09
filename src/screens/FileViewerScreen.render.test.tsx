@@ -78,14 +78,32 @@ test('ART-V1 renders Markdown and never loads a remote image or raw HTML', async
   expect(screen.getByText(/<img src="http:\/\/evil\.example\/x\.png" onerror="steal\(\)">/)).toBeTruthy();
 });
 
-test('ART-V2 draws a Mermaid block as a picture in a page that cannot navigate', async () => {
+test('ART-V2 draws a Mermaid block as a picture in a page that cannot navigate or reach the network', async () => {
   mockRpc.files = { 'plan.md': MARKDOWN };
   await open('plan.md');
   const diagram = await screen.findByLabelText('Diagram');
-  expect(diagram.props.source.html).toContain("securityLevel:'strict'");
-  expect(diagram.props.source.html).toContain('graph TD;A-->B');
-  expect(diagram.props.onShouldStartLoadWithRequest({ url: 'https://example.com/' })).toBe(false);
+  const html: string = diagram.props.source.html;
+  expect(html).toContain("default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src data:");
+  expect(html).toContain(`data-source="${btoa('graph TD;A-->B')}"`);
   expect(diagram.props.originWhitelist).toEqual(['about:blank']);
+  expect(diagram.props.onShouldStartLoadWithRequest({ url: 'about:blank' })).toBe(true);
+  for (const url of ['https://example.com/', 'http://10.0.0.1/', 'file:///etc/passwd', 'intent://x', 'data:text/html,<p>x</p>']) {
+    expect(diagram.props.onShouldStartLoadWithRequest({ url })).toBe(false);
+  }
+});
+
+test('ART-V13 takes only a height or an error from the picture page', async () => {
+  mockRpc.files = { 'flow.mmd': 'graph TD;A-->B' };
+  await open('flow.mmd');
+  const diagram = await screen.findByLabelText('Diagram');
+  for (const data of ['not json', 'null', '{"height":"9999"}', '{"navigate":"https://example.com"}', '{"height":1e999}']) {
+    await act(async () => diagram.props.onMessage({ nativeEvent: { data } }));
+  }
+  expect(screen.getByLabelText('Diagram')).toBeTruthy();
+  await act(async () => diagram.props.onMessage({ nativeEvent: { data: '{"height":10,"error":"Parse error on line 1"}' } }));
+  expect(screen.queryByLabelText('Diagram')).toBeNull();
+  expect(screen.getByText(/Couldn't draw this diagram: Parse error on line 1/)).toBeTruthy();
+  expect(screen.getByText('graph TD;A-->B')).toBeTruthy();
 });
 
 test('ART-V3 shows an SVG as a picture with scripts off', async () => {
@@ -94,7 +112,7 @@ test('ART-V3 shows an SVG as a picture with scripts off', async () => {
   const picture = await screen.findByLabelText('Picture');
   expect(picture.props.javaScriptEnabled).toBe(false);
   expect(picture.props.source.html).toContain('<img alt="" src="data:image/svg+xml;base64,');
-  expect(picture.props.source.html).not.toContain('<script');
+  expect(picture.props.source.html.toLowerCase().includes('<script')).toBe(false);
 });
 
 test('ART-V4 shows a CSV as a table', async () => {

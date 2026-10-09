@@ -334,7 +334,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         if (method !== 'fs.list') {
           const content = tree[path];
           if (content === undefined || (artifacts && depth > 2)) {
-            return fail(id, INVALID_PARAMS, Object.keys(tree).some((file) => file.startsWith(`${path}/`)) ? 'not-a-file' : 'not-found');
+            const folder = path === '' || Object.keys(tree).some((file) => file.startsWith(`${path}/`));
+            return fail(id, INVALID_PARAMS, folder ? 'not-a-file' : 'not-found');
           }
           if (method === 'artifact.open') {
             opened.push(`${session.sessionId}:${path}`);

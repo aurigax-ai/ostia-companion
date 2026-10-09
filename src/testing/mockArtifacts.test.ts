@@ -67,6 +67,14 @@ describe('artifacts (contract v1.7)', () => {
     expect(session.error).toEqual(expect.objectContaining({ code: -32602, message: 'unknown-session' }));
   });
 
+  it('ART-K15 answers not-a-file when asked to read the folder itself or a folder in it', async () => {
+    const client = await phone(['read', 'notify']);
+    for (const path of ['', 'dashboard']) {
+      const reply = await client.call('fs.read', { ...artifacts, path });
+      expect(reply.error).toEqual(expect.objectContaining({ code: -32602, message: 'not-a-file' }));
+    }
+  });
+
   it('ART-K5 answers an empty list for an empty folder and not-found for a workspace without one', async () => {
     const client = await phone(['read', 'notify']);
     expect((await client.call('fs.list', { sessionId: 's-web', path: '', root: 'artifacts' })).result).toEqual({ entries: [] });
