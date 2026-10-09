@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes, X509Certificate } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -70,13 +70,19 @@ function certificate(name: string) {
   const key = join(dir, 'key.pem');
   const cert = join(dir, 'cert.pem');
   if (!existsSync(cert)) {
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(dir, '..'), { recursive: true });
+    const fresh = mkdtempSync(`${dir}-`);
     execFileSync(
       'openssl',
       ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-nodes',
-        '-keyout', key, '-out', cert, '-days', '3650', '-subj', '/CN=ostia-mock-gateway'],
+        '-keyout', join(fresh, 'key.pem'), '-out', join(fresh, 'cert.pem'), '-days', '3650', '-subj', '/CN=ostia-mock-gateway'],
       { stdio: 'ignore' },
     );
+    try {
+      renameSync(fresh, dir);
+    } catch {
+      rmSync(fresh, { recursive: true, force: true });
+    }
   }
   const pem = readFileSync(cert);
   const der = new X509Certificate(pem).raw;
