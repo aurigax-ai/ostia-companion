@@ -4,9 +4,7 @@ import { File, Folder, FolderOpen } from 'lucide-react-native';
 import { Button, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, Loading, TILE_INSET } from '../components/ui';
 import { FileEntry, formatSize, sortEntries } from '../model/files';
 import { ScreenProps } from '../navigation';
-import { OstiaRpc } from '../services/rpc';
-
-const METHOD_NOT_FOUND = -32601;
+import { METHOD_NOT_FOUND, listFiles } from '../services/files';
 
 type State =
   | { kind: 'loading' }
@@ -25,8 +23,7 @@ export function FilesScreen({ navigation, route }: ScreenProps<'Files'>) {
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const result = await OstiaRpc.call('fs.list', { sessionId, path });
-      setState({ kind: 'ready', entries: sortEntries(result.entries ?? []) });
+      setState({ kind: 'ready', entries: sortEntries(await listFiles({ sessionId, path, root: 'workspace' })) });
     } catch (err: any) {
       setState(err?.code === METHOD_NOT_FOUND ? { kind: 'unsupported' } : { kind: 'error', message: err?.message || "Couldn't list files" });
     }
