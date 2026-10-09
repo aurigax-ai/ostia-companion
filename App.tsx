@@ -19,6 +19,7 @@ import { removeDesktopAndReconnect } from './src/services/desktopSession';
 import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
 import { resetAsks } from './src/services/askStore';
+import { resetArtifacts } from './src/services/artifactStore';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
@@ -27,6 +28,7 @@ import { PairingScreen } from './src/screens/PairingScreen';
 import { PairCodeScreen } from './src/screens/PairCodeScreen';
 import { PairLinkScreen } from './src/screens/PairLinkScreen';
 import { DesktopsScreen } from './src/screens/DesktopsScreen';
+import { ArtifactsScreen } from './src/screens/ArtifactsScreen';
 import { FilesScreen } from './src/screens/FilesScreen';
 import { FileViewerScreen } from './src/screens/FileViewerScreen';
 import { RootStack } from './src/navigation';
@@ -74,6 +76,7 @@ export default function App() {
     OstiaRpc.disconnect();
     resetWorkspaces();
     resetAsks();
+    resetArtifacts();
     if (!data) return setPaired(false);
     OstiaRpc.initialize(data);
     setPaired(true);
@@ -115,6 +118,7 @@ export default function App() {
               <Stack.Screen name="Workspace" component={WorkspaceScreen} />
               <Stack.Screen name="Terminal" component={TerminalScreen} />
               <Stack.Screen name="Files" component={FilesScreen} />
+              <Stack.Screen name="Artifacts" component={ArtifactsScreen} />
               <Stack.Screen name="FileView" component={FileViewerScreen} />
               <Stack.Screen name="Settings" options={{ title: 'Settings', ...largeTitle }}>
                 {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
