@@ -114,6 +114,29 @@ describe('artifacts (contract v1.7)', () => {
     expect(end.result).toEqual({ base64: '', size: expect.any(Number), truncated: false });
   });
 
+  it('ART-K16 reads an offset that is not a positive integer as 0', async () => {
+    const client = await phone(['read', 'notify']);
+    const whole = (await client.call('fs.read', { ...artifacts, path: 'PAD.md' })).result;
+    for (const offset of [-1, 1.5, '3', null]) {
+      expect((await client.call('fs.read', { ...artifacts, path: 'PAD.md', offset })).result).toEqual(whole);
+    }
+  });
+
+  it('ART-K17 counts maxBytes from the offset', async () => {
+    const client = await phone(['read', 'notify']);
+    const { result } = await client.call('fs.read', { ...artifacts, path: 'PAD.md', offset: 2, maxBytes: 7 });
+    expect(atob(result.base64)).toBe('Scratch');
+    expect(result.truncated).toBe(true);
+  });
+
+  it('ART-K18 keeps slice 0 as text when the limit falls inside a character, and loses no byte', async () => {
+    const client = await phone(['read', 'notify']);
+    const first = (await client.call('fs.read', { ...artifacts, path: 'trace.log', maxBytes: 14 })).result;
+    expect(first).toEqual({ text: 'héllo wörld ', size: expect.any(Number), truncated: true });
+    const next = (await client.call('fs.read', { ...artifacts, path: 'trace.log', offset: Buffer.byteLength(first.text), maxBytes: 4 })).result;
+    expect(Buffer.from(next.base64, 'base64').toString()).toBe('€\n');
+  });
+
   it('ART-K9 needs read to list or read artifacts', async () => {
     const client = await phone(['notify']);
     for (const method of ['fs.list', 'fs.read']) {
