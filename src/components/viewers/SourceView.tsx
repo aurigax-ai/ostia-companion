@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { numberedLines } from '../../model/files';
 import { colors, font, space, type } from '../../theme';
+import { NO_SCROLL_BARS } from '../ui';
 
 export function SourceView({
   text,
@@ -17,7 +18,7 @@ export function SourceView({
   onEndReached?: () => void;
 }) {
   return (
-    <FlatList
+    <FlatList {...NO_SCROLL_BARS}
       testID="source"
       data={numberedLines(text)}
       keyExtractor={(line) => String(line.number)}

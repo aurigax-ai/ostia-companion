@@ -1,0 +1,39 @@
+diff --git a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
+index 9d6ad1671c843b7cd75e08639906a9065b984210..dc0a7dff361ff539b77ff1f079214b6994059663 100644
+--- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
++++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
+@@ -887,34 +887,9 @@ internal class GhosttyTerminalView(context: Context) : View(context) {
+     bitmap?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+     drawCursor(canvas)
+     drawSelectionHandles(canvas)
+-    drawScrollIndicator(canvas)
+     drawJumpToBottomChip(canvas)
+   }
+ 
+-  private fun drawScrollIndicator(canvas: Canvas) {
+-    if (scrollbarTotal <= scrollbarLen) return
+-    val elapsed = android.os.SystemClock.uptimeMillis() - lastScrollActivityAt
+-    if (elapsed > SCROLLBAR_FADE_END_MS) return
+-    val alpha = if (elapsed <= SCROLLBAR_FADE_START_MS) {
+-      255
+-    } else {
+-      (255 * (SCROLLBAR_FADE_END_MS - elapsed) / (SCROLLBAR_FADE_END_MS - SCROLLBAR_FADE_START_MS)).toInt()
+-    }
+-    val density = resources.displayMetrics.density
+-    val barWidth = 3 * density
+-    val right = width - 2 * density
+-    val trackHeight = height.toFloat()
+-    val top = trackHeight * scrollbarOffset / scrollbarTotal
+-    val thumbHeight = max(16 * density, trackHeight * scrollbarLen / scrollbarTotal)
+-    scrollbarPaint.color = SCROLLBAR_COLOR
+-    scrollbarPaint.alpha = alpha
+-    canvas.drawRoundRect(
+-      right - barWidth, top, right, (top + thumbHeight).coerceAtMost(trackHeight),
+-      barWidth / 2, barWidth / 2, scrollbarPaint
+-    )
+-    if (elapsed > SCROLLBAR_FADE_START_MS) invalidate()
+-  }
+-
+   private fun jumpChipCenter(): Pair<Float, Float> {
+     val density = resources.displayMetrics.density
+     return Pair(width - 32 * density, height - 32 * density)

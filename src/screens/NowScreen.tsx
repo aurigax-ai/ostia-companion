@@ -3,7 +3,7 @@ import { Platform, RefreshControl, SectionList, StyleSheet, View } from 'react-n
 import { MessagesSquare, SquarePen } from 'lucide-react-native';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner } from '../components/ConnectionBanner';
-import { Button, Empty, Fab, Warning, GroupItem, HeaderTitle, IconButton, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, Divider, terminalIcon } from '../components/ui';
+import { Button, Empty, Fab, Warning, GroupItem, HeaderTitle, IconButton, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, Divider, terminalIcon, NO_SCROLL_BARS } from '../components/ui';
 import { ago, NowRow, nowSections, quietLine } from '../model/now';
 import { paneTitle } from '../model/workspaces';
 import { TabProps } from '../navigation';
@@ -54,7 +54,7 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
 
   return (
     <View style={styles.fill}>
-      <SectionList
+      <SectionList {...NO_SCROLL_BARS}
         sections={sections}
         keyExtractor={(row) => (row.kind === 'ask' ? `ask:${row.ask.askId}` : row.pane.paneId)}
         stickySectionHeadersEnabled={false}

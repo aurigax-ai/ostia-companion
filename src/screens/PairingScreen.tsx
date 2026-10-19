@@ -4,7 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Monitor, ScanLine, X } from 'lucide-react-native';
 import { CheckCodeView } from '../components/CheckCodeView';
-import { Button, Group, IconButton, IconTile, ListRow, SectionHeader, TILE_INSET } from '../components/ui';
+import { Button, Group, IconButton, IconTile, ListRow, SectionHeader, TILE_INSET, NO_SCROLL_BARS } from '../components/ui';
 import { ScreenProps } from '../navigation';
 import { parsePairingPayload } from '../services/pairing';
 import { pairWith } from '../services/pairWith';
@@ -73,7 +73,7 @@ export function PairingScreen({ navigation, onPaired }: ScreenProps<'Pair'> & { 
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+      <ScrollView {...NO_SCROLL_BARS} contentContainerStyle={{ flexGrow: 1 }}>
         <View style={styles.hero}>
           <IconTile icon={Monitor} tone="brand" size="lg" />
           <Text style={[type.title, { marginTop: space.xl }]}>Connect to your desktop</Text>

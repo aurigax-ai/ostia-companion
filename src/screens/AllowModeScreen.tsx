@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Circle, CircleDot, Square, SquareCheck } from 'lucide-react-native';
-import { Group, ListRow, Meta, SectionHeader } from '../components/ui';
+import { Group, ListRow, Meta, SectionHeader, NO_SCROLL_BARS } from '../components/ui';
 import { AllowMode, PhoneControlPrefs, toggleChosen } from '../model/phoneControlPrefs';
 import { failureText } from '../model/phoneSession';
 import { ScreenProps } from '../navigation';
@@ -34,7 +34,7 @@ export function AllowModeScreen(_: ScreenProps<'AllowMode'>) {
   const { sessions } = useWorkspaces();
   const workspaces = sessions.filter((session) => session.kind !== 'scratch' && session.kind !== 'manager');
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
+    <ScrollView {...NO_SCROLL_BARS} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
       <Group>
         {MODES.map(({ mode, title, subtitle }) => {
           const Radio = prefs.mode === mode ? CircleDot : Circle;

@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useMemo, useState } from 'react';
 import { Keyboard, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import { Clock, Folder, FolderOpen, MonitorOff } from 'lucide-react-native';
 import { ConnectionBanner } from '../components/ConnectionBanner';
-import { Divider, Empty, GroupItem, IconTile, ListRow, Meta, SearchField, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, terminalIcon } from '../components/ui';
+import { Divider, Empty, GroupItem, IconTile, ListRow, Meta, SearchField, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, terminalIcon, NO_SCROLL_BARS } from '../components/ui';
 import { matchRange, search, SearchHit, workspaceSections, WorkspaceRow } from '../model/workspaceList';
 import { paneTitle, Session } from '../model/workspaces';
 import { TabProps } from '../navigation';
@@ -61,7 +61,7 @@ export function WorkspacesScreen({ navigation }: TabProps<'Workspaces'>) {
 
   return (
     <View style={styles.fill}>
-      <SectionList
+      <SectionList {...NO_SCROLL_BARS}
         sections={sections}
         keyExtractor={(row) => (row.kind === 'workspace' ? row.row.session.sessionId : row.kind === 'recent' ? `recent:${row.query}` : row.hit.kind === 'workspace' ? `w:${row.hit.session.sessionId}` : `p:${row.hit.pane.paneId}`)}
         stickySectionHeadersEnabled={false}

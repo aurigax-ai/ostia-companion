@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { TABLE_ROW_LIMIT, parseTable } from '../../model/table';
 import { colors, font, space, type } from '../../theme';
+import { NO_SCROLL_BARS } from '../ui';
 
 export function TableView({ name, text }: { name: string; text: string }) {
   const table = useMemo(() => parseTable(name, text), [name, text]);
@@ -15,8 +16,8 @@ export function TableView({ name, text }: { name: string; text: string }) {
     </View>
   );
   return (
-    <ScrollView horizontal style={styles.fill} contentContainerStyle={styles.content}>
-      <FlatList
+    <ScrollView {...NO_SCROLL_BARS} horizontal style={styles.fill} contentContainerStyle={styles.content}>
+      <FlatList {...NO_SCROLL_BARS}
         data={table.rows}
         keyExtractor={(_, index) => String(index)}
         ListHeaderComponent={row(table.header, true)}

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Bot, ChevronDown, Folder } from 'lucide-react-native';
 import { MessageField } from '../components/PromptComposer';
-import { Group, IconTile, ListRow, Sheet, Warning } from '../components/ui';
+import { Group, IconTile, ListRow, Sheet, Warning, NO_SCROLL_BARS } from '../components/ui';
 import { AGENTS, AgentName, chatTarget } from '../model/agentStart';
 import { Shortcut, shortcutsFor } from '../model/shortcuts';
 import { ScreenProps } from '../navigation';
@@ -137,7 +137,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
       </Sheet>
       <Sheet visible={picking !== null && picking !== 'agent'} onClose={() => setPicking(null)}>
         <Text style={[type.captionStrong, styles.sheetTitle]}>{picking === 'workspace' ? 'Start the chat in' : 'Review which workspace?'}</Text>
-        <ScrollView style={styles.sheetList}>
+        <ScrollView {...NO_SCROLL_BARS} style={styles.sheetList}>
           <Group>
             {workspaces.map((session) => (
               <ListRow
