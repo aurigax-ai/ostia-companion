@@ -1,4 +1,6 @@
-# Ostia Companion — Network Contract (v1.7, contract-first)
+# Ostia Companion — Network Contract (v1.8, contract-first)
+
+> **v1.8 (2026-10-19)** adds the phone screen: a phone whose human started a session opens a second socket and turns it into a **screen link** (`screen.start`); on it the desktop sends requests to the phone (`phone.capture`, `phone.stream`, `phone.tap`, …) and the phone sends screen frames (`0x10`) and `screen.state` events. The event `screen.requested` lets the desktop ask the phone's human to start one. `agent.prompt` now reads back that the agent started a turn. Additive: a v1.7 phone never opens a link. See "Phone screen (v1.8)" in §7 and §11.
 
 > **v1.7 (2026-10-08)** adds artifacts: `fs.list` and `fs.read` take `root: "workspace" | "artifacts"`, `fs.read` takes `offset`, and the event `artifact.changed` tells a phone with `read` that a file in a workspace's artifact folder was added, changed or removed. Read-only: the gateway still has no write. `artifact.open` (cap `command`) shows an artifact in a tab on the desktop. See §7 and §11.
 
@@ -207,7 +209,8 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `artifact.open` | `command` | `{ sessionId, path }` → `{ ok: true }`: opens that artifact on the desktop as a background tab of that workspace (v1.7) |
 | `ask.list` | `read` | `{}` → `{ asks: [Ask] }` — open asks: `{ askId, sessionId, paneId, kind: "permission"\|"question"\|"approval", agent?, title, detail?, choices: [{ id, label, tone: "approve"\|"deny"\|"neutral" }], allowText, since }` (v1.6) |
 | `ask.answer` | `respond` | `{ askId, choiceId?, text? }` → `{ ok: true }`; `-32602 unknown-ask` once resolved. The desktop routes it to the agent hook, `ostia ask` or approval card that raised it (v1.6) |
-| `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }`: types `text` then Enter into an agent pane; `-32602 not-an-agent` otherwise (v1.6) |
+| `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }` once the agent started a turn (or when it cannot be watched): types `text` then Enter into an agent pane; `-32602 not-an-agent`; `-32602 not-submitted` (`data: { paneId }`) when it showed the text but started no turn within 5 s (v1.8) |
+| `screen.start` | — (a paired device) | phone screen link, see "Phone screen (v1.8)" |
 | `agent.interrupt` | `respond` | `{ paneId, key: "esc"\|"ctrl-c" }` → `{ ok: true }`; `-32602 not-an-agent` otherwise (v1.6) |
 | `command.exec` | `command` (+ the command's own caps) | `{ id, args?, target? }` → `CommandResult` = `{ ok:true, result } \| { ok:false, error:{ code, message } }` |
 | `pty.attach` / `pty.detach` | `read` (owner role needs `input`, else downgraded) | §6.1 |
@@ -235,6 +238,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
 | `artifact.changed` | `read` | `{ sessionId, path, change: "added"\|"changed"\|"removed" }` — `path` as in `fs.list`/`fs.read` with `root: "artifacts"` (`report.md`, `page/index.html`, `PAD.md`) | a file in that workspace's artifact folder was added, written (newer `mtime`) or removed |
 | `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
+| `screen.requested` | `notify` | `{ sessionId, by: "desktop" }` | the human on the desktop asked this phone to share its screen with that workspace (v1.8) |
 
 `sessionId` matches `session.list`'s ids; `paneId`/`from` match `pane.list`'s `externalId`s. Events are not replayed: after a reconnect, re-fetch `session.list`/`pane.list` for current state.
 
@@ -291,6 +295,53 @@ An artifact is a file an agent wrote for the human into the workspace's artifact
 
 The pictures (`.svg`, Mermaid) are the only place the phone uses a WebView for file content, and it is closed: the page is built in the app, its policy is `default-src 'none'; img-src data:; style-src 'unsafe-inline'` (plus `script-src data:` for Mermaid, whose only scripts are the bundled library and the app's own drawing code, both passed as `data:` URLs; there is no inline script and no `eval`), every navigation away from `about:blank` is refused, and there is no storage or file access. The file's content reaches the page only as base64 data, never as markup or script. The page sends back one message, a height or an error string, and the app reads nothing else from it.
 
+### Phone screen (v1.8)
+
+An agent on the desktop sees and drives the phone's screen while a session the phone's human started runs. Android only: the phone captures its screen with Android's MediaProjection and acts through an accessibility service the human turned on. iOS phones never open a link.
+
+**Who starts it.** Only the phone's human, on the phone: a fingerprint or PIN check, then Android's own capture prompt, every session. The desktop may only ask with the event `screen.requested { sessionId, by: "desktop" }` (cap `notify`), which the phone shows as a notification that opens its start screen with that workspace picked.
+
+**The link.** The phone opens a second socket to `wss://<host>:<port>/ws` with the same pin, sends `hello`, then:
+
+| method (phone→desktop) | params → result |
+|---|---|
+| `screen.start` | `{ sessionId, width, height, density, rotation, level: "view"\|"control", limitSec, endsAt, overlayHeight, label, agent?: "claude"\|"codex" }` → `{ screenId }` |
+
+- `sessionId` is the workspace the human picked. `width`/`height` are the display in pixels in its current rotation, `rotation` is `0`, `90`, `180` or `270`, `density` the display density. `limitSec` is `300`, `900` or `1800`; `endsAt` is milliseconds since the epoch. `overlayHeight` is the height in pixels of the phone's own bar at the top of the screen, which shows in every capture (`0` when there is none). `level: "view"` refuses every input request.
+- Errors: `-32602` with `message` `unknown-session`, `busy` (this device already has a link) or `bad-params`; `-32004 no-controller` when nothing on the desktop takes phone screens; `-32601` from a desktop before v1.8 (the phone says the desktop needs an update).
+- After `{ screenId }` the socket is the link. On it the phone sends only `ask.list`, `ask.answer`, the events and frames below, and its answers to the desktop's requests; the desktop sends no `pty` frames. Events the desktop sends to every socket (`ask.created`, `session.state`, …) also arrive on the link.
+- The link and the session end together: when either side closes the socket, at revocation (`4003`) or a removed cap (`4004`). The phone ends the session at `endsAt` and sends `screen.state stopped time-limit` first; the desktop closes the link itself 5 s after `endsAt` if the phone has not.
+
+**Requests desktop→phone** (JSON-RPC requests with an `id` the desktop picks, on the link only; the phone answers each with `result` or `error`). Coordinates are display pixels, origin top left, in the rotation of the latest `screen.state`.
+
+| method | params → result |
+|---|---|
+| `phone.capture` | `{ maxSide? }` (64–1600, default 1600) → `{ width, height, screenWidth, screenHeight, mime: "image/jpeg", data, blocked, foreground: { package, label } }`; `data` is base64 |
+| `phone.stream` | `{ fps, maxSide? }` (`fps` 0–5) → `{}`; frames then arrive as binary `0x10` when the screen changed; `fps: 0` stops them |
+| `phone.tap` | `{ x, y, count?: 1\|2, holdMs?: 0–3000 }` → `{ target?: { text, package } }` |
+| `phone.swipe` | `{ from: [x, y], to: [x, y], durationMs?: 50–3000 }` → `{}` |
+| `phone.type` | `{ text }` (at most 4000 characters) → `{}`: into the focused text field |
+| `phone.key` | `{ key: "back"\|"home"\|"recents"\|"enter"\|"delete"\|"tab" }` → `{}` |
+| `phone.launch` | `{ package }` → `{}` |
+| `phone.apps` | `{}` → `{ apps: [{ package, label }] }`: launcher apps, blocked ones left out |
+| `phone.tree` | `{}` → `{ package, nodes: [Node] }` with `Node = { id, cls, text?, desc?, res?, bounds: [l, t, r, b], click?, edit?, check?, checked?, scroll?, focus?, kids?: [Node] }`; a password field never carries `text` |
+| `phone.stop` | `{}` → `{}`; the phone then ends the session and closes the link |
+
+Errors are `-32010` with the code as `message` (`data.reason` where noted): `paused` (`reason`: `human-touch` or `screen-off`; the human touched the phone, and only the human's Resume continues), `blocked-app` (a blocked app is in front, or `phone.launch` named one), `view-only`, `declined` (the human denied a tap the phone asks about first, or did not answer within 60 s), `no-field` (`phone.type` with no focused text field), `no-service` (the accessibility service is off), `no-frame` (no frame captured yet), `not-found` (`phone.launch` of an app that is not installed), `bad-params`. An unknown method is `-32601`.
+
+**Events phone→desktop** (on the link, the same shape as the desktop's events: `{ "jsonrpc": "2.0", "method": "event", "params": { "type", "payload" } }`):
+
+| type | payload | sent when |
+|---|---|---|
+| `screen.state` | `{ state: "running"\|"paused"\|"stopped", reason?, width, height, rotation, endsAt }` | the state, the size or the rotation changes. `reason` for `paused`: `human-touch`, `screen-off`, `blocked-app`, `confirm`; for `stopped`: `stop-phone`, `stop-desktop`, `time-limit`, `projection-ended`, `service-off` |
+| `screen.foreground` | `{ package, label, blocked }` | another app comes to the front |
+
+**Binary frame** `0x10` (phone→desktop, on the link only): `[0x10][u32 big-endian header length][UTF-8 JSON { seq, width, height, screenWidth, screenHeight, blocked }][JPEG bytes]`.
+
+**Blocked apps.** The phone never drives or shows the companion app itself, Android's system UI (notification shade, lock screen, the capture prompt), password managers, authenticators, payment and account apps, and the apps its human listed. While one is in front, captures are black with `blocked: true`, the tree is empty and input answers `blocked-app`. Apps that mark their screens secure appear black in every capture.
+
+**Nothing kept.** The phone keeps no frame, tree or typed text after it sent it, and logs none of them.
+
 ### `CommandDescriptor` (for `command.list`, verbatim from the desktop contract)
 ```ts
 interface CommandDescriptor {
@@ -336,6 +387,14 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.8 — 2026-10-19 (phone screen)
+- **Screen link:** a second socket, `hello`, then `screen.start { sessionId, width, height, density, rotation, level, limitSec, endsAt, overlayHeight, label, agent? }` → `{ screenId }`; errors `unknown-session`, `busy`, `bad-params`, `-32004 no-controller`.
+- **Desktop→phone requests on the link:** `phone.capture`, `phone.stream`, `phone.tap`, `phone.swipe`, `phone.type`, `phone.key`, `phone.launch`, `phone.apps`, `phone.tree`, `phone.stop`; errors are `-32010` with the code as `message`.
+- **Phone→desktop on the link:** events `screen.state` and `screen.foreground`; binary frame `0x10` (JPEG after a JSON header).
+- **Event `screen.requested`** (`notify`) on normal sockets.
+- **`agent.prompt`** answers `-32602 not-submitted` when no turn started within 5 s.
+- Additive: the pairing payload is still `"v": 1`; a v1.7 phone never opens a link and ignores `screen.requested`.
 
 ### v1.7 — 2026-10-08 (artifacts)
 - **`fs.list`, `fs.read`:** new optional `root: "workspace" | "artifacts"` (default `"workspace"`). With `"artifacts"`, `path` is relative to the workspace's artifact folder: regular files at the top level and one level down, symlinks answer `not-found`, `workspace-too-broad` never applies. New error `invalid-root`.

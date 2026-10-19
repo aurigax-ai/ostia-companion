@@ -1,21 +1,23 @@
 import React, { useLayoutEffect, useState } from 'react';
 import { RefreshControl, SectionList, View } from 'react-native';
-import { FileText, FolderOpen, Globe, PanelsTopLeft, Sparkles } from 'lucide-react-native';
+import { FileText, FolderOpen, Globe, PanelsTopLeft, Smartphone, Sparkles } from 'lucide-react-native';
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
 import { Badge, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
 import { Ask } from '../model/asks';
+import { isActive } from '../model/phoneSession';
 import { attentionRank, byAttention } from '../model/order';
 import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { useArtifacts } from '../services/artifactStore';
 import { answerAsk, useAsks } from '../services/askStore';
+import { phoneControlSupported, usePhoneSession } from '../services/phoneSession';
 import { OstiaRpc } from '../services/rpc';
 import { refreshWorkspaces, useCaps, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
 import { colors, space } from '../theme';
 
-type Row = { kind: 'ask'; ask: Ask } | { kind: 'artifacts' } | { kind: 'files' } | { kind: 'pane'; pane: Pane };
+type Row = { kind: 'ask'; ask: Ask } | { kind: 'artifacts' } | { kind: 'files' } | { kind: 'phone' } | { kind: 'pane'; pane: Pane };
 type Section = { key: string; title: string; data: Row[] };
 
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
@@ -27,6 +29,8 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
   const canRespond = useCaps().includes('respond');
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const pairing = OstiaRpc.getPairing();
+  const phone = usePhoneSession();
+  const phoneHere = isActive(phone.state) && phone.sessionId === sessionId;
   const workDir = sessions.find((session) => session.sessionId === sessionId)?.workDir;
   const groups = groupPanes(panes.filter((pane) => pane.sessionId === sessionId));
   const terminals = groups.find((group) => group.title === 'Terminals')?.panes ?? [];
@@ -39,7 +43,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
     ...(terminals.length > 0
       ? [{ key: 'terminals', title: 'Terminals', data: byAttention(terminals, attentionRank).map((pane) => ({ kind: 'pane' as const, pane })) }]
       : []),
-    { key: 'more', title: 'More', data: [{ kind: 'artifacts' as const }, { kind: 'files' as const }, ...desktopOnly.map((pane) => ({ kind: 'pane' as const, pane }))] },
+    { key: 'more', title: 'More', data: [{ kind: 'artifacts' as const }, { kind: 'files' as const }, ...(phoneControlSupported() ? [{ kind: 'phone' as const }] : []), ...desktopOnly.map((pane) => ({ kind: 'pane' as const, pane }))] },
   ];
   const firstListKey = sections.find((section) => section.key !== 'asks')?.key;
 
@@ -115,6 +119,13 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
                   subtitle={shortPath(workDir)}
                   mono
                   onPress={() => navigation.navigate('Files', { sessionId, path: '', title: name || 'Files' })}
+                />
+              ) : row.kind === 'phone' ? (
+                <ListRow
+                  leading={<IconTile icon={Smartphone} tone={phoneHere ? 'brand' : 'neutral'} />}
+                  title="Use this phone"
+                  subtitle={phoneHere ? 'Shared now' : 'Let an agent here see this screen'}
+                  onPress={() => navigation.navigate('PhoneSession', { sessionId, name: name || 'Workspace' })}
                 />
               ) : row.pane.kind === 'terminal' ? (
                 <ListRow

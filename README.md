@@ -24,6 +24,12 @@ To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate p
    - Files open by type: Markdown is rendered natively (raw HTML is shown as text and only `data:` images load), CSV/TSV is a table, SVG and Mermaid are drawn as pictures in a WebView that has no network and cannot navigate, PDFs go to another app. HTML, JSX and TSX are shown as source: the phone never runs artifact code.
    - Mermaid ships inside the app. `pnpm install` runs `tools/build-mermaid.mjs`, which copies it from `node_modules` into `src/generated/` (not committed).
 
+5. **Phone screen (`modules/phone-control`, Android 10+)**:
+   - From a workspace, "Use this phone" lets an agent on the desktop see this phone's screen for 5, 15 or 30 minutes (contract v1.8, "Phone screen"). It starts only after the phone's fingerprint or PIN and Android's own capture prompt, shows a notification with Stop, and keeps no screenshot.
+   - A Kotlin foreground service captures the screen and holds its own pinned socket to the desktop (the screen link), so frames never cross the JavaScript bridge and the session keeps running while Ostia is in the background.
+   - A store build can leave it out: add `"expo": { "autolinking": { "android": { "exclude": ["phone-control"] } } }` to `package.json`; `isSupported()` is then false and the app shows no phone entry.
+   - `pnpm mock:gateway` speaks the screen link: it asks a linked phone for a capture every 3 s and saves it under `$TMPDIR/ostia-mock-screens/`; `kill -USR2 <pid>` stops the phone's session from the "desktop", `kill -USR1 <pid>` revokes every phone.
+
 ---
 
 ## 📂 Project Structure

@@ -31,6 +31,7 @@ import { DesktopsScreen } from './src/screens/DesktopsScreen';
 import { ArtifactsScreen } from './src/screens/ArtifactsScreen';
 import { FilesScreen } from './src/screens/FilesScreen';
 import { FileViewerScreen } from './src/screens/FileViewerScreen';
+import { PhoneSessionScreen } from './src/screens/PhoneSessionScreen';
 import { RootStack } from './src/navigation';
 import { colors, font } from './src/theme';
 
@@ -120,6 +121,7 @@ export default function App() {
               <Stack.Screen name="Files" component={FilesScreen} />
               <Stack.Screen name="Artifacts" component={ArtifactsScreen} />
               <Stack.Screen name="FileView" component={FileViewerScreen} />
+              <Stack.Screen name="PhoneSession" component={PhoneSessionScreen} options={{ title: 'Use this phone' }} />
               <Stack.Screen name="Settings" options={{ title: 'Settings', ...largeTitle }}>
                 {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
               </Stack.Screen>
