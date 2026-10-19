@@ -24,7 +24,25 @@ export interface MockGatewayOptions {
   helloTimeoutMs?: number;
   scenario?: Scenario;
   devicesFile?: string;
+  screenController?: boolean;
+  onScreen?: (screen: MockScreenLink) => void;
   log?: (line: string) => void;
+}
+
+export interface MockScreenFrame {
+  header: { seq: number; width: number; height: number; screenWidth: number; screenHeight: number; blocked: boolean };
+  jpeg: Buffer;
+}
+
+export interface MockScreenLink {
+  screenId: string;
+  deviceId: string;
+  start: Record<string, any>;
+  events: { type: string; payload: any }[];
+  frames: MockScreenFrame[];
+  closed: boolean;
+  request: (method: string, params?: object) => Promise<any>;
+  close: (code?: number, reason?: string) => void;
 }
 
 export interface MockDevice {
@@ -50,6 +68,7 @@ export interface MockGateway {
   setSessionState: (sessionId: string, state: SessionState) => void;
   typed: (paneId: string) => string[];
   opened: string[];
+  screens: MockScreenLink[];
   writeArtifact: (sessionId: string, path: string, content: string | null) => void;
   close: () => Promise<void>;
 }
@@ -130,6 +149,36 @@ interface Connection {
   device: MockDevice | null;
   attached: string | null;
   role: 'observer' | 'owner';
+  screen: MockScreenLink | null;
+}
+
+const SCREEN_LIMITS = [300, 900, 1800];
+const NO_CONTROLLER = -32004;
+const SCREEN_GRACE_MS = 5000;
+const CLOSE_TIME_LIMIT = 4005;
+const LINK_ONLY = -32600;
+
+function screenStartProblem(params: any): string | null {
+  const whole = (value: unknown, min: number) => Number.isInteger(value) && (value as number) >= min;
+  if (typeof params.sessionId !== 'string' || !params.sessionId) return 'bad-params';
+  if (!whole(params.width, 1) || !whole(params.height, 1) || !whole(params.rotation, 0)) return 'bad-params';
+  if (typeof params.density !== 'number' || params.density <= 0) return 'bad-params';
+  if (params.level !== 'view' && params.level !== 'control') return 'bad-params';
+  if (!SCREEN_LIMITS.includes(params.limitSec) || !whole(params.endsAt, 1) || !whole(params.overlayHeight, 0)) return 'bad-params';
+  if (typeof params.label !== 'string') return 'bad-params';
+  if (params.agent !== undefined && params.agent !== 'claude' && params.agent !== 'codex') return 'bad-params';
+  return null;
+}
+
+function parseScreenFrame(data: Buffer): MockScreenFrame | null {
+  if (data.length < 5) return null;
+  const length = data.readUInt32BE(1);
+  if (5 + length > data.length) return null;
+  try {
+    return { header: JSON.parse(data.subarray(5, 5 + length).toString('utf8')), jpeg: data.subarray(5 + length) };
+  } catch {
+    return null;
+  }
 }
 
 export async function startMockGateway(options: MockGatewayOptions = {}): Promise<MockGateway> {
@@ -143,8 +192,11 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     helloTimeoutMs = 10_000,
     scenario = demoScenario(),
     devicesFile,
+    screenController = true,
+    onScreen = () => {},
     log = () => {},
   } = options;
+  const screens: MockScreenLink[] = [];
   const { key, cert, fingerprint } = certificate(name);
   const codes = new Map<string, number>();
   const pending = new Map<string, PendingPair>();
@@ -259,7 +311,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (socket) => {
-    const connection: Connection = { socket, device: null, attached: null, role: 'observer' };
+    const connection: Connection = { socket, device: null, attached: null, role: 'observer', screen: null };
     connections.add(connection);
     const helloTimer = setTimeout(() => socket.close(CLOSE_UNAUTHENTICATED, 'hello timeout'), helloTimeoutMs);
     const respond = (id: unknown, result: object) => socket.send(JSON.stringify({ jsonrpc: '2.0', id, result }));
@@ -284,7 +336,66 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       writePane(paneId, echoed);
     };
 
+    const pendingScreen = new Map<string, (message: any) => void>();
+    let screenRequestId = 0;
+
+    const openScreen = (id: unknown, params: any) => {
+      const device = connection.device!;
+      if (!screenController) return fail(id, NO_CONTROLLER, 'no-controller');
+      const problem = screenStartProblem(params);
+      if (problem) return fail(id, INVALID_PARAMS, problem);
+      if (!scenario.sessions.some((s) => s.sessionId === params.sessionId)) return fail(id, INVALID_PARAMS, 'unknown-session');
+      if (screens.some((s) => !s.closed && s.deviceId === device.deviceId)) return fail(id, INVALID_PARAMS, 'busy');
+      const screen: MockScreenLink = {
+        screenId: `scr_${randomBytes(6).toString('hex')}`,
+        deviceId: device.deviceId,
+        start: params,
+        events: [],
+        frames: [],
+        closed: false,
+        request: (method, requestParams = {}) =>
+          new Promise((resolve, reject) => {
+            if (screen.closed) return reject(new Error('link closed'));
+            const requestId = `d${++screenRequestId}`;
+            pendingScreen.set(requestId, resolve);
+            socket.send(JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params: requestParams }));
+          }),
+        close: (code = 1000, reason = 'closed') => socket.close(code, reason),
+      };
+      const limit = setTimeout(() => screen.close(CLOSE_TIME_LIMIT, 'time-limit'), Math.max(0, params.endsAt + SCREEN_GRACE_MS - Date.now()));
+      socket.on('close', () => clearTimeout(limit));
+      connection.screen = screen;
+      screens.push(screen);
+      log(`screen: ${screen.screenId} from ${device.name} for ${params.sessionId} (${params.level}, ${params.limitSec / 60} min)`);
+      respond(id, { screenId: screen.screenId });
+      onScreen(screen);
+    };
+
     socket.on('message', (data: Buffer, isBinary: boolean) => {
+      if (isBinary && connection.screen) {
+        if (data[0] !== 0x10) return;
+        const frame = parseScreenFrame(data);
+        if (frame) connection.screen.frames.push(frame);
+        return;
+      }
+      if (!isBinary && connection.screen) {
+        let reply: any;
+        try {
+          reply = JSON.parse(data.toString());
+        } catch {
+          return;
+        }
+        if (reply.method === 'event') {
+          connection.screen.events.push(reply.params);
+          if (reply.params?.type === 'screen.state') log(`screen: ${reply.params.payload?.state} ${reply.params.payload?.reason ?? ''}`.trim());
+          return;
+        }
+        const resolve = pendingScreen.get(reply.id);
+        if (resolve) {
+          pendingScreen.delete(reply.id);
+          return resolve(reply);
+        }
+      }
       if (isBinary) {
         const type = data[0];
         if (type !== 0x02 && type !== 0x03) return;
@@ -313,6 +424,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         fail(id, UNAUTHENTICATED, 'unauthenticated');
         return socket.close(CLOSE_UNAUTHENTICATED, 'unauthenticated');
       }
+      if (method === 'screen.start') return has('read') ? openScreen(id, params) : fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
+      if (connection.screen && !['ask.answer', 'ask.list'].includes(method)) return fail(id, LINK_ONLY, 'link-only');
       if (method === 'artifact.open' && !has('command')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'command' });
       if (['ask.answer', 'agent.prompt', 'agent.interrupt'].includes(method) && !has('respond')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'respond' });
@@ -423,6 +536,12 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     socket.on('close', () => {
       clearTimeout(helloTimer);
       connections.delete(connection);
+      if (connection.screen) {
+        connection.screen.closed = true;
+        log(`screen: ${connection.screen.screenId} closed`);
+      }
+      pendingScreen.forEach((resolve) => resolve({ error: { code: -1, message: 'link closed' } }));
+      pendingScreen.clear();
     });
   });
 
@@ -463,6 +582,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     setSessionState,
     typed: (paneId) => typed.get(paneId) ?? [],
     opened,
+    screens,
     writeArtifact: (sessionId, path, content) => {
       const tree = (scenario.artifacts[sessionId] ??= {});
       const change = content === null ? 'removed' : tree[path] === undefined ? 'added' : 'changed';
