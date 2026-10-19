@@ -53,7 +53,7 @@ class ScreenLinkTest {
   private val listener = Listener()
   private val link = ScreenLink(
     LinkTarget("desk.ts.net", 7443, "sha256/x", "tok"),
-    { StartParams("s1", "api", 1080, 2400, 2.75f, 0, "control", 300, 9, 0, null) },
+    { StartParams("s1", "api", 1080, 2400, 2.75f, 0, "control", 300, 9, 0, null, null) },
     listener,
   ) {
     WebSocket.Factory { _, listener ->

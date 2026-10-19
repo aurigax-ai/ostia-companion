@@ -16,11 +16,11 @@ import {
   stopSession,
   takePendingAsk,
 } from 'phone-control';
-import type { SessionLimit, StartFailure } from '../model/phoneSession';
-import type { Session } from '../model/workspaces';
+import type { Level } from '../model/phoneControlPrefs';
+import { endedLine, isActive, SessionLimit, StartFailure } from '../model/phoneSession';
+import { showSnackbar } from './snackbar';
 import { getBlockedApps } from './blockedAppsStore';
 import { OstiaRpc } from './rpc';
-import { onWorkspaces } from './workspaceStore';
 
 export { accessibilityEnabled, installedApps as phoneApps, isSupported as phoneControlSupported, openAccessibilitySettings };
 
@@ -46,19 +46,30 @@ function subscribe(listener: () => void) {
   };
 }
 
+export function currentPhoneSession(): PhoneSessionStatus {
+  return removeNative ? status : sessionStatus();
+}
+
 export function usePhoneSession(): PhoneSessionStatus {
   return useSyncExternalStore(subscribe, () => status);
 }
 
-export async function startPhoneSession(sessionId: string, label: string, limit: SessionLimit): Promise<StartFailure | null> {
+export async function confirmWithFingerprint(promptMessage: string): Promise<StartFailure | null> {
+  if ((await LocalAuthentication.getEnrolledLevelAsync()) === LocalAuthentication.SecurityLevel.NONE) return 'lock-needed';
+  const verified = await LocalAuthentication.authenticateAsync({ promptMessage, cancelLabel: 'Cancel' });
+  return verified.success ? null : 'not-verified';
+}
+
+export async function startPhoneSession(
+  sessionId: string,
+  label: string,
+  { level, limit, fingerprint, agent, requestId }: { level: Level; limit: SessionLimit; fingerprint: boolean; agent?: string | null; requestId?: string | null },
+): Promise<StartFailure | null> {
   const pairing = OstiaRpc.getPairing();
   if (!pairing) return 'not-paired';
   if ((await LocalAuthentication.getEnrolledLevelAsync()) === LocalAuthentication.SecurityLevel.NONE) return 'lock-needed';
-  const verified = await LocalAuthentication.authenticateAsync({
-    promptMessage: `Let ${pairing.desktopName || 'your desktop'} see this screen`,
-    cancelLabel: 'Cancel',
-  });
-  if (!verified.success) return 'not-verified';
+  const verified = fingerprint ? await confirmWithFingerprint(`Let ${pairing.desktopName || 'your desktop'} see this screen`) : null;
+  if (verified) return verified;
   const notifications = await Notifications.getPermissionsAsync();
   if (!notifications.granted && !(await Notifications.requestPermissionsAsync()).granted) return 'notifications-needed';
   if (!(await askConsent())) return 'cancelled';
@@ -71,8 +82,9 @@ export async function startPhoneSession(sessionId: string, label: string, limit:
     label,
     desktopName: pairing.desktopName || 'Your desktop',
     limitSec: limit * 60,
-    level: 'control',
-    agentName: 'The agent',
+    level,
+    agentName: agent ?? 'The agent',
+    ...(requestId ? { requestId } : {}),
     blocked: getBlockedApps(),
   });
   return started ? null : 'not-started';
@@ -86,39 +98,26 @@ export function resumePhoneSession(): void {
   resumeSession();
 }
 
-type PhoneNavigate = {
-  toAsk: (sessionId: string, name: string, askId: string) => void;
-  toSession: (sessionId: string, name: string) => void;
-};
-
 let linksStarted = false;
 
-export function startPhoneSessionLinks(navigate: PhoneNavigate): void {
+export function startPhoneSessionLinks(toAsk: (sessionId: string, name: string, askId: string) => void): void {
   if (linksStarted || Platform.OS !== 'android' || !isSupported()) return;
   linksStarted = true;
-  let sessions: Session[] = [];
-  onWorkspaces((snapshot) => (sessions = snapshot.sessions));
   const openPendingAsk = () => {
     const ask = takePendingAsk();
-    if (ask) navigate.toAsk(ask.sessionId, ask.label, ask.askId);
+    if (ask) toAsk(ask.sessionId, ask.label, ask.askId);
   };
   AppState.addEventListener('change', (state) => state === 'active' && openPendingAsk());
-  OstiaRpc.addEventListener((type, payload) => {
-    if (type !== 'screen.requested' || typeof payload?.sessionId !== 'string') return;
-    const name = sessions.find((session) => session.sessionId === payload.sessionId)?.name ?? 'a workspace';
-    const desktop = OstiaRpc.getPairing()?.desktopName || 'Your desktop';
-    void Notifications.scheduleNotificationAsync({
-      identifier: `screen-request:${payload.sessionId}`,
-      content: {
-        title: `${desktop} asks to use this phone`,
-        body: `For ${name}. Open to start a session, or ignore it.`,
-        data: { kind: 'screen-request', sessionId: payload.sessionId, name },
-      },
-      trigger: { channelId: 'agents' },
-    });
-  });
-  Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data as { kind?: string; sessionId?: string; name?: string };
-    if (data?.kind === 'screen-request' && data.sessionId) navigate.toSession(data.sessionId, data.name ?? 'Workspace');
+}
+
+let endNoticeStarted = false;
+
+export function startSessionEndNotice(onDetails: () => void): void {
+  if (endNoticeStarted || !isSupported()) return;
+  endNoticeStarted = true;
+  let wasActive = isActive(sessionStatus().state);
+  addStatusListener((next) => {
+    if (wasActive && next.state === 'stopped') showSnackbar(endedLine(next.reason), { label: 'Details', run: onDetails });
+    wasActive = isActive(next.state);
   });
 }

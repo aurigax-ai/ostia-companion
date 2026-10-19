@@ -35,3 +35,14 @@ export function startFailureText(error: { code?: number; message?: string } | un
       return 'The agent could not start.';
   }
 }
+
+export function chatTarget<T extends { sessionId: string; kind: string }>(sessions: T[], asked: string | undefined, last: string | null): T | null {
+  const startable = sessions.filter((session) => session.kind !== 'scratch' && session.kind !== 'manager');
+  return (
+    sessions.find((session) => session.sessionId === asked) ??
+    startable.find((session) => session.sessionId === last) ??
+    startable.find((session) => session.kind === 'agent') ??
+    startable[0] ??
+    null
+  );
+}

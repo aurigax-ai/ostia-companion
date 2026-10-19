@@ -4,80 +4,135 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NewChatScreen } from './NewChatScreen';
 
-const mockStart = {
+const mockChat = {
   caps: ['read', 'notify', 'respond'],
+  phone: true,
+  last: null as string | null,
   start: jest.fn(async (..._args: unknown[]) => ({ ok: true, paneId: 'p-new' }) as { ok: boolean; paneId?: string; text?: string }),
+  remember: jest.fn(),
 };
 
-jest.mock('../services/agentStart', () => ({ startAgent: (...args: unknown[]) => mockStart.start(...args) }));
-jest.mock('../services/workspaceStore', () => ({ useCaps: () => mockStart.caps }));
+jest.mock('../services/agentStart', () => ({ startAgent: (...args: unknown[]) => mockChat.start(...args) }));
+jest.mock('../services/workspaceStore', () => ({
+  useCaps: () => mockChat.caps,
+  useWorkspaces: () => ({
+    sessions: [
+      { sessionId: 's-scratch', name: 'scratch', kind: 'scratch', workDir: '/s', state: 'idle' },
+      { sessionId: 's-api', name: 'api-server', kind: 'agent', workDir: '/a', state: 'idle' },
+      { sessionId: 's-ledger', name: 'ledger-api', kind: 'agent', workDir: '/l', state: 'idle' },
+    ],
+  }),
+}));
+jest.mock('../services/listPrefsStore', () => ({
+  useListPrefs: () => ({ unfolded: [], recent: [], lastChat: mockChat.last }),
+  rememberChatWorkspace: (id: string) => mockChat.remember(id),
+}));
+jest.mock('../services/phoneSession', () => ({ phoneControlSupported: () => mockChat.phone }));
 
 const navigation = { replace: jest.fn(), setOptions: jest.fn() };
 
-function WithHeader() {
+function WithHeader({ sessionId }: { sessionId?: string }) {
   const [options, setOptions] = useState<{ headerTitle?: () => React.ReactElement }>({});
   const withHeader = useMemo(() => ({ ...navigation, setOptions: (next: typeof options) => (navigation.setOptions(next), setOptions(next)) }), []);
   return (
     <>
       {options.headerTitle?.()}
-      <NewChatScreen navigation={withHeader as any} route={{ params: { sessionId: 's-api', name: 'api-server' } } as any} />
+      <NewChatScreen navigation={withHeader as any} route={{ params: sessionId ? { sessionId } : undefined } as any} />
     </>
   );
 }
 
-async function renderScreen() {
+async function renderScreen(sessionId?: string) {
   await render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 412, height: 915 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-      <WithHeader />
+      <WithHeader sessionId={sessionId} />
     </SafeAreaProvider>,
   );
 }
 
+async function send(text: string) {
+  await fireEvent.changeText(screen.getByLabelText('Message'), text);
+  await fireEvent.press(screen.getByLabelText('Send'));
+}
+
 beforeEach(() => {
-  mockStart.caps = ['read', 'notify', 'respond'];
-  mockStart.start.mockClear();
+  mockChat.caps = ['read', 'notify', 'respond'];
+  mockChat.phone = true;
+  mockChat.last = null;
+  mockChat.start.mockClear();
+  mockChat.remember.mockClear();
   navigation.replace.mockClear();
-  navigation.setOptions.mockClear();
 });
 
-test('PHC-C20 the first message starts claude in this workspace once and opens its pane', async () => {
+test('PHC-C20 PHA-C8 the first message starts claude in the first agent workspace once and opens its pane', async () => {
   await renderScreen();
-  expect(screen.getByText('Your message starts claude in a new tab of api-server.')).toBeTruthy();
-  await fireEvent.changeText(screen.getByLabelText('Message'), '  fix the failing build  ');
-  await fireEvent.press(screen.getByLabelText('Send'));
-  expect(mockStart.start).toHaveBeenCalledTimes(1);
-  expect(mockStart.start).toHaveBeenCalledWith('s-api', 'claude', 'fix the failing build');
+  expect(screen.getByLabelText('In api-server. Choose the workspace')).toBeTruthy();
+  await send('  fix the failing build  ');
+  expect(mockChat.start).toHaveBeenCalledTimes(1);
+  expect(mockChat.start).toHaveBeenCalledWith('s-api', 'claude', 'fix the failing build');
+  expect(mockChat.remember).toHaveBeenCalledWith('s-api');
   expect(navigation.replace).toHaveBeenCalledWith('Terminal', { paneId: 'p-new', title: 'claude' });
 });
 
-test('PHC-C20 the header switches the message to codex', async () => {
+test('PHA-C8 the header switches the agent and the workspace', async () => {
+  await renderScreen('s-api');
+  await fireEvent.press(screen.getByLabelText('To claude. Choose the agent'));
+  await fireEvent.press(screen.getByText('codex'));
+  await fireEvent.press(screen.getByLabelText('In api-server. Choose the workspace'));
+  expect(screen.queryByText('scratch')).toBeNull();
+  await fireEvent.press(screen.getByText('ledger-api'));
+  await send('tidy the export module');
+  expect(mockChat.start).toHaveBeenCalledWith('s-ledger', 'codex', 'tidy the export module');
+});
+
+test('PHA-C8 starts in the workspace used last when none is asked for', async () => {
+  mockChat.last = 's-ledger';
   await renderScreen();
-  await fireEvent.press(screen.getByLabelText('To claude in api-server. Switch to codex'));
-  expect(screen.getByText('Your message starts codex in a new tab of api-server.')).toBeTruthy();
+  expect(screen.getByLabelText('In ledger-api. Choose the workspace')).toBeTruthy();
+});
+
+test('PHA-C9 a slash shows the shortcuts, and a pick fills the message without sending', async () => {
+  await renderScreen();
+  await fireEvent.changeText(screen.getByLabelText('Message'), '/');
+  expect(screen.getByLabelText('/storage')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('/review'));
+  await fireEvent.press(screen.getByText('ledger-api'));
+  expect(screen.getByLabelText('Message').props.value).toBe('Review the last changes in ledger-api');
+  expect(mockChat.start).not.toHaveBeenCalled();
+  expect(navigation.replace).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Message'), '/su');
+  await fireEvent.press(screen.getByLabelText('/summary'));
+  expect(screen.getByLabelText('Message').props.value).toBe('What changed today across my workspaces?');
+  expect(mockChat.start).not.toHaveBeenCalled();
+  expect(navigation.replace).not.toHaveBeenCalled();
+});
+
+test('PHA-C10 no /storage without phone control', async () => {
+  mockChat.phone = false;
+  await renderScreen();
+  await fireEvent.changeText(screen.getByLabelText('Message'), '/');
+  expect(screen.queryByLabelText('/storage')).toBeNull();
 });
 
 test('PHC-C21 a refusal is shown, the message stays and nothing opens', async () => {
-  mockStart.start.mockResolvedValueOnce({ ok: false, text: 'That workspace is closed on the desktop.' });
+  mockChat.start.mockResolvedValueOnce({ ok: false, text: 'That workspace is closed on the desktop.' });
   await renderScreen();
-  await fireEvent.changeText(screen.getByLabelText('Message'), 'fix the failing build');
-  await fireEvent.press(screen.getByLabelText('Send'));
+  await send('fix the failing build');
   expect(await screen.findByText('That workspace is closed on the desktop.')).toBeTruthy();
   expect(screen.getByLabelText('Message').props.value).toBe('fix the failing build');
   expect(navigation.replace).not.toHaveBeenCalled();
 });
 
 test('PHC-C22 without respond the composer is off and nothing is sent', async () => {
-  mockStart.caps = ['read', 'notify'];
+  mockChat.caps = ['read', 'notify'];
   await renderScreen();
   expect(screen.getByPlaceholderText('Turn on Respond in Settings › Remote')).toBeTruthy();
-  await fireEvent.changeText(screen.getByLabelText('Message'), 'fix the failing build');
-  await fireEvent.press(screen.getByLabelText('Send'));
-  expect(mockStart.start).not.toHaveBeenCalled();
+  await send('fix the failing build');
+  expect(mockChat.start).not.toHaveBeenCalled();
 });
 
 test('an empty message sends nothing', async () => {
   await renderScreen();
-  await fireEvent.changeText(screen.getByLabelText('Message'), '   ');
-  await fireEvent.press(screen.getByLabelText('Send'));
-  expect(mockStart.start).not.toHaveBeenCalled();
+  await send('   ');
+  expect(mockChat.start).not.toHaveBeenCalled();
 });

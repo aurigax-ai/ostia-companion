@@ -1,28 +1,29 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
-import { RefreshControl, SectionList, View } from 'react-native';
-import { FileText, FolderOpen, Globe, PanelsTopLeft, Smartphone, Sparkles, SquarePen } from 'lucide-react-native';
+import { Platform, RefreshControl, SectionList, View } from 'react-native';
+import { FileText, FolderOpen, Globe, PanelsTopLeft, Plus, Sparkles } from 'lucide-react-native';
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
-import { Badge, Divider, Empty, GroupItem, HeaderTitle, IconButton, IconTile, ListRow, SectionHeader, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
+import { Badge, Divider, Empty, Fab, GroupItem, HeaderTitle, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
 import { Ask } from '../model/asks';
-import { isActive } from '../model/phoneSession';
 import { attentionRank, byAttention } from '../model/order';
+import { paneSections } from '../model/workspaceList';
 import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { useArtifacts } from '../services/artifactStore';
 import { answerAsk, useAsks } from '../services/askStore';
-import { phoneControlSupported, usePhoneSession } from '../services/phoneSession';
+import { toggleSection, useListPrefs } from '../services/listPrefsStore';
 import { OstiaRpc } from '../services/rpc';
 import { refreshWorkspaces, useCaps, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
 import { colors, space } from '../theme';
 
-type Row = { kind: 'ask'; ask: Ask } | { kind: 'artifacts' } | { kind: 'files' } | { kind: 'phone' } | { kind: 'pane'; pane: Pane };
-type Section = { key: string; title: string; data: Row[] };
+type Row = { kind: 'ask'; ask: Ask } | { kind: 'artifacts' } | { kind: 'files' } | { kind: 'new' } | { kind: 'pane'; pane: Pane } | { kind: 'sleeping'; pane: Pane };
+type Section = { key: string; title: string; count?: number; folds?: boolean; open?: boolean; data: Row[] };
 
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
   const { sessionId, name, askId } = route.params;
-  const { sessions, panes, refreshing, loadedAt } = useWorkspaces();
+  const { sessions, panes, seen, refreshing, loadedAt } = useWorkspaces();
+  const folds = useListPrefs().unfolded;
   const status = useConnectionStatus();
   const asks = useAsks();
   const unreadArtifacts = useArtifacts().unread[sessionId]?.length ?? 0;
@@ -32,38 +33,40 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
     if (askId) setReplyTo(askId);
   }, [askId]);
   const pairing = OstiaRpc.getPairing();
-  const phone = usePhoneSession();
-  const phoneHere = isActive(phone.state) && phone.sessionId === sessionId;
   const workDir = sessions.find((session) => session.sessionId === sessionId)?.workDir;
-  const groups = groupPanes(panes.filter((pane) => pane.sessionId === sessionId));
-  const terminals = groups.find((group) => group.title === 'Terminals')?.panes ?? [];
+  const own = panes.filter((pane) => pane.sessionId === sessionId);
+  const groups = groupPanes(own);
+  const split = paneSections(own, seen);
+  const sleepKey = `hibernated:${sessionId}`;
+  const sleepOpen = folds.includes(sleepKey);
   const desktopOnly = groups.find((group) => group.title === 'Desktop only')?.panes ?? [];
   const ownAsks = [...asks.asks].filter((ask) => ask.sessionId === sessionId).sort((a, b) => a.since - b.since);
   const sheetAsk = ownAsks.find((ask) => ask.askId === replyTo) ?? null;
 
   const sections: Section[] = [
     ...(ownAsks.length > 0 ? [{ key: 'asks', title: 'Needs you', data: ownAsks.map((ask) => ({ kind: 'ask' as const, ask })) }] : []),
-    ...(terminals.length > 0
-      ? [{ key: 'terminals', title: 'Terminals', data: byAttention(terminals, attentionRank).map((pane) => ({ kind: 'pane' as const, pane })) }]
+    ...(split.active.length > 0 ? [{ key: 'active', title: 'Active', count: split.active.length, data: byAttention(split.active, attentionRank).map((pane) => ({ kind: 'pane' as const, pane })) }] : []),
+    ...(split.idle.length > 0 ? [{ key: 'idle', title: 'Idle', count: split.idle.length, data: split.idle.map((pane) => ({ kind: 'pane' as const, pane })) }] : []),
+    ...(split.hibernated.length > 0
+      ? [{ key: 'hibernated', title: 'Hibernated', count: split.hibernated.length, folds: true, open: sleepOpen, data: sleepOpen ? split.hibernated.map((pane) => ({ kind: 'sleeping' as const, pane })) : [] }]
       : []),
-    { key: 'more', title: 'More', data: [{ kind: 'artifacts' as const }, { kind: 'files' as const }, ...(phoneControlSupported() ? [{ kind: 'phone' as const }] : []), ...desktopOnly.map((pane) => ({ kind: 'pane' as const, pane }))] },
+    ...(Platform.OS === 'ios' ? [{ key: 'new', title: '', data: [{ kind: 'new' as const }] }] : []),
+    { key: 'more', title: 'More', data: [{ kind: 'artifacts' as const }, { kind: 'files' as const }, ...desktopOnly.map((pane) => ({ kind: 'pane' as const, pane }))] },
   ];
+  const newSession = () => navigation.navigate('NewChat', { sessionId });
   const firstListKey = sections.find((section) => section.key !== 'asks')?.key;
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerTitle: () => <HeaderTitle title={name || 'Workspace'} subtitle={shortPath(workDir)} mono />,
-      headerRight: () => (
-        <IconButton icon={SquarePen} label="New chat" onPress={() => navigation.navigate('NewChat', { sessionId, name: name || 'Workspace' })} />
-      ),
     });
-  }, [navigation, name, workDir, sessionId]);
+  }, [navigation, name, workDir]);
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <SectionList
         sections={sections}
-        keyExtractor={(row) => (row.kind === 'ask' ? `ask:${row.ask.askId}` : row.kind === 'pane' ? row.pane.paneId : row.kind)}
+        keyExtractor={(row) => (row.kind === 'ask' ? `ask:${row.ask.askId}` : row.kind === 'pane' || row.kind === 'sleeping' ? row.pane.paneId : row.kind)}
         ListHeaderComponent={
           <ConnectionBanner
             status={status}
@@ -73,11 +76,12 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
           />
         }
         stickySectionHeadersEnabled={false}
+        initialNumToRender={30}
         ItemSeparatorComponent={({ leadingItem }) =>
           leadingItem?.kind === 'ask' ? <View style={{ height: space.sm }} /> : <Divider inset={TILE_INSET} />
         }
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingBottom: space.xxl, flexGrow: 1 }}
+        contentContainerStyle={{ paddingBottom: space.xxxl + space.xxl, flexGrow: 1 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -87,12 +91,26 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
             tintColor={colors.brand}
           />
         }
-        renderSectionHeader={({ section }) => (
-          <SectionHeader
-            title={section.title}
-            trailing={section.key === firstListKey && status !== 'connected' ? <LoadedAt at={loadedAt} /> : null}
-          />
-        )}
+        renderSectionHeader={({ section }) =>
+          section.title ? (
+            <SectionHeader
+              title={section.title}
+              open={section.open}
+              onToggle={section.folds ? () => toggleSection(sleepKey) : undefined}
+              trailing={
+                section.key === firstListKey && status !== 'connected' ? (
+                  <LoadedAt at={loadedAt} />
+                ) : section.key === 'hibernated' ? (
+                  <Meta text="wake from the desktop" />
+                ) : section.count ? (
+                  <Meta text={String(section.count)} />
+                ) : null
+              }
+            />
+          ) : (
+            <View style={{ height: space.xl }} />
+          )
+        }
         renderItem={({ item: row, index, section }) => {
           if (row.kind === 'ask') {
             return (
@@ -126,12 +144,15 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
                   mono
                   onPress={() => navigation.navigate('Files', { sessionId, path: '', title: name || 'Files' })}
                 />
-              ) : row.kind === 'phone' ? (
+              ) : row.kind === 'new' ? (
+                <ListRow leading={<IconTile icon={Plus} tone="brand" />} title="New agent session" onPress={newSession} />
+              ) : row.kind === 'sleeping' ? (
                 <ListRow
-                  leading={<IconTile icon={Smartphone} tone={phoneHere ? 'brand' : 'neutral'} />}
-                  title="Use this phone"
-                  subtitle={phoneHere ? 'Shared now' : 'Let an agent here see this screen'}
-                  onPress={() => navigation.navigate('PhoneSession', { sessionId, name: name || 'Workspace' })}
+                  leading={<IconTile icon={terminalIcon(row.pane)} tone="ghost" />}
+                  title={paneTitle(row.pane)}
+                  subtitle={paneSubtitle(row.pane, workDir)}
+                  mono
+                  disabled
                 />
               ) : row.pane.kind === 'terminal' ? (
                 <ListRow
@@ -155,11 +176,13 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
           );
         }}
         ListFooterComponent={
-          terminals.length === 0 && desktopOnly.length === 0 ? (
+          own.length === 0 ? (
             <Empty icon={PanelsTopLeft} title="No panes" body="Nothing open in this workspace." />
           ) : null
         }
       />
+      {Platform.OS === 'android' ? <Fab label="New session" icon={Plus} onPress={newSession} /> : null}
+      <SnackbarHost />
       <AskSheet
         ask={sheetAsk}
         workspace={name}
@@ -173,7 +196,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
         }}
         onClose={() => setReplyTo(null)}
       />
-    </>
+    </View>
   );
 }
 

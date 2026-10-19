@@ -4,72 +4,29 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { PhoneSessionScreen } from './PhoneSessionScreen';
 
 const mockSession = {
-  supported: true,
   status: { state: 'idle', reason: null, endsAt: 0, screenId: null, sessionId: null } as Record<string, unknown>,
-  taps: true,
-  start: jest.fn(async (..._args: unknown[]) => null as string | null),
   stop: jest.fn(),
   resume: jest.fn(),
-  openSettings: jest.fn(),
 };
 
 jest.mock('../services/phoneSession', () => ({
-  phoneControlSupported: () => mockSession.supported,
   usePhoneSession: () => mockSession.status,
-  startPhoneSession: (...args: unknown[]) => mockSession.start(...args),
   stopPhoneSession: () => mockSession.stop(),
   resumePhoneSession: () => mockSession.resume(),
-  accessibilityEnabled: () => mockSession.taps,
-  openAccessibilitySettings: () => mockSession.openSettings(),
 }));
-jest.mock('../services/blockedAppsStore', () => ({ useBlockedApps: () => ['com.bank.app'] }));
 jest.mock('../services/rpc', () => ({ OstiaRpc: { getPairing: () => ({ desktopName: 'studio' }) } }));
-jest.mock('../services/workspaceStore', () => ({ useConnectionStatus: () => 'connected' }));
-
-const mockNavigate = jest.fn();
+jest.mock('../services/workspaceStore', () => ({
+  useWorkspaces: () => ({ sessions: [{ sessionId: 's-phone', name: 'phone', kind: 'agent', workDir: '/p', state: 'idle' }] }),
+}));
 
 async function renderScreen() {
-  await render(<PhoneSessionScreen navigation={{ navigate: mockNavigate } as any} route={{ params: { sessionId: 's-phone', name: 'phone' } } as any} />);
+  await render(<PhoneSessionScreen navigation={{} as any} route={{} as any} />);
 }
 
 beforeEach(() => {
-  mockSession.supported = true;
   mockSession.status = { state: 'idle', reason: null, endsAt: 0, screenId: null, sessionId: null };
-  mockSession.start.mockClear();
   mockSession.stop.mockClear();
   mockSession.resume.mockClear();
-  mockSession.openSettings.mockClear();
-  mockSession.taps = true;
-});
-
-test('PHC-C1 starts a session for this workspace with the chosen limit', async () => {
-  await renderScreen();
-  expect(screen.getByText('An agent on studio will see this screen and tap and type on it while the session runs.')).toBeTruthy();
-  await fireEvent.press(screen.getByText('30 min'));
-  await fireEvent.press(screen.getByText('Start'));
-  expect(mockSession.start).toHaveBeenCalledWith('s-phone', 'phone', 30);
-});
-
-test('PHC-C2 says nothing was sent when the capture prompt is cancelled', async () => {
-  mockSession.start.mockResolvedValueOnce('cancelled');
-  await renderScreen();
-  await fireEvent.press(screen.getByText('Start'));
-  expect(await screen.findByText('Not started. Nothing was sent to the desktop.')).toBeTruthy();
-});
-
-test('PHC-C3 asks for a screen lock before anything starts', async () => {
-  mockSession.start.mockResolvedValueOnce('lock-needed');
-  await renderScreen();
-  await fireEvent.press(screen.getByText('Start'));
-  expect(await screen.findByText('Set a screen lock on this phone first. Sharing needs your fingerprint or PIN.')).toBeTruthy();
-});
-
-test('PHC-C15 offers nothing on a phone that cannot be shared', async () => {
-  mockSession.supported = false;
-  await renderScreen();
-  expect(screen.getByText(/This phone cannot be shared/)).toBeTruthy();
-  await fireEvent.press(screen.getByText('Start'));
-  expect(mockSession.start).not.toHaveBeenCalled();
 });
 
 test('PHC-C7 shows the running session with the time left and stops it', async () => {
@@ -84,16 +41,7 @@ test('PHC-C7 shows the running session with the time left and stops it', async (
 test('PHC-C5 says why the last session ended', async () => {
   mockSession.status = { state: 'stopped', reason: 'time-limit', endsAt: 1, screenId: 'scr_1', sessionId: 's-phone' };
   await renderScreen();
-  expect(screen.getByText('The time limit ended the session.')).toBeTruthy();
-});
-
-test('asks to turn on phone control before a session can start', async () => {
-  mockSession.taps = false;
-  await renderScreen();
-  await fireEvent.press(screen.getByText('Start'));
-  expect(mockSession.start).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByText('Turn on'));
-  expect(mockSession.openSettings).toHaveBeenCalled();
+  expect(screen.getByText(/The time limit ended the session\./)).toBeTruthy();
 });
 
 test('PHC-C9 shows a paused session with Resume', async () => {
@@ -104,8 +52,8 @@ test('PHC-C9 shows a paused session with Resume', async () => {
   expect(mockSession.resume).toHaveBeenCalled();
 });
 
-test('lists what the agent never opens and edits it', async () => {
+test('PHA-C19 offers no start: an agent asks when a job needs the phone', async () => {
   await renderScreen();
-  await fireEvent.press(screen.getByText('Password managers, authenticators, payments and 1 more'));
-  expect(mockNavigate).toHaveBeenCalledWith('BlockedApps');
+  expect(screen.getByText(/An agent asks when a job needs this phone\./)).toBeTruthy();
+  expect(screen.queryByText('Start')).toBeNull();
 });

@@ -1,5 +1,3 @@
-import { needsYou, InboxItem, Pane, Session } from './workspaces';
-
 export type AskKind = 'permission' | 'question' | 'approval';
 
 export interface AskChoice {
@@ -21,20 +19,7 @@ export interface Ask {
   since: number;
 }
 
-export type NeedsYouItem = { kind: 'ask'; ask: Ask } | { kind: 'agent'; item: InboxItem };
-
 const PREVIEW_LINES = 6;
-
-export function needsYouItems(asks: Ask[], sessions: Session[], panes: Pane[]): NeedsYouItem[] {
-  const asked = new Set(asks.map((ask) => ask.paneId));
-  const sorted = [...asks].sort((a, b) => a.since - b.since);
-  return [
-    ...sorted.map((ask) => ({ kind: 'ask' as const, ask })),
-    ...needsYou(sessions, panes)
-      .filter((item) => !asked.has(item.pane.paneId))
-      .map((item) => ({ kind: 'agent' as const, item })),
-  ];
-}
 
 export function detailPreview(detail: string): { text: string; more: boolean } {
   const lines = detail.split('\n');
