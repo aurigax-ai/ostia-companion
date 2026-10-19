@@ -23,8 +23,11 @@ class ScreenLink(
   private val listener: LinkListener,
   private val sockets: () -> WebSocket.Factory = { pinnedClient(target.fingerprint) },
 ) : Link {
+  @Volatile
   private var socket: WebSocket? = null
+  @Volatile
   private var linked = false
+  @Volatile
   private var closed = false
 
   override fun open() {
