@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Image, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { type Token, type Tokens, marked } from 'marked';
-import { Button } from '../ui';
+import { Button, NO_SCROLL_BARS } from '../ui';
 import { colors, font, radius, space, type } from '../../theme';
 import { PictureView } from './PictureView';
 
@@ -13,7 +13,7 @@ export function MarkdownView({ text }: { text: string }) {
   const tokens = useMemo(() => marked.lexer(text), [text]);
   let diagrams = 0;
   return (
-    <ScrollView style={styles.fill} contentContainerStyle={styles.content}>
+    <ScrollView {...NO_SCROLL_BARS} style={styles.fill} contentContainerStyle={styles.content}>
       <Blocks tokens={tokens} diagram={() => diagrams++ < DIAGRAMS_DRAWN} />
     </ScrollView>
   );
@@ -67,7 +67,7 @@ function Block({ token, diagram }: { token: Token; diagram: () => boolean }) {
       );
     case 'table':
       return (
-        <ScrollView horizontal style={styles.table}>
+        <ScrollView {...NO_SCROLL_BARS} horizontal style={styles.table}>
           <View>
             {[(token as Tokens.Table).header, ...(token as Tokens.Table).rows].map((row, index) => (
               <View key={index} style={[styles.tableRow, index === 0 && styles.tableHeader]}>

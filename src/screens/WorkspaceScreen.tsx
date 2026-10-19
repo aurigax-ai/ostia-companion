@@ -4,11 +4,11 @@ import { FileText, FolderOpen, Globe, PanelsTopLeft, Plus, Sparkles } from 'luci
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
-import { Badge, Divider, Empty, Fab, GroupItem, HeaderTitle, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
+import { Badge, Divider, Empty, Fab, GroupItem, HeaderTitle, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, StatusPill, TILE_INSET, terminalIcon, NO_SCROLL_BARS } from '../components/ui';
 import { Ask } from '../model/asks';
 import { attentionRank, byAttention } from '../model/order';
 import { paneSections } from '../model/workspaceList';
-import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
+import { Pane, groupPanes, paneScreen, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { useArtifacts } from '../services/artifactStore';
 import { answerAsk, useAsks } from '../services/askStore';
@@ -64,7 +64,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
 
   return (
     <View style={{ flex: 1 }}>
-      <SectionList
+      <SectionList {...NO_SCROLL_BARS}
         sections={sections}
         keyExtractor={(row) => (row.kind === 'ask' ? `ask:${row.ask.askId}` : row.kind === 'pane' || row.kind === 'sleeping' ? row.pane.paneId : row.kind)}
         ListHeaderComponent={
@@ -161,7 +161,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
                   subtitle={paneSubtitle(row.pane, workDir)}
                   mono
                   trailing={<StatusPill status={paneStatus(row.pane)} />}
-                  onPress={() => navigation.navigate('Terminal', { paneId: row.pane.paneId, title: paneTitle(row.pane) })}
+                  onPress={() => navigation.navigate(paneScreen(row.pane), { paneId: row.pane.paneId, title: paneTitle(row.pane) })}
                 />
               ) : (
                 <ListRow

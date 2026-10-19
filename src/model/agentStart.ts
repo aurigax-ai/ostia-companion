@@ -13,6 +13,7 @@ const INVALID_PARAMS = -32602;
 const INVALID: Record<string, string> = {
   'unknown-session': 'That workspace is closed on the desktop.',
   refused: 'Agents cannot be started in this workspace.',
+  'phone-workspace-unavailable': 'The Phone workspace is not set up on the desktop. Set it in Settings › Remote › Phone, or pick a workspace.',
   'bad-params':
     'The desktop does not start an agent from that message. Write a sentence that does not begin with - or +, or with one of the agent’s own commands.',
 };
@@ -36,13 +37,32 @@ export function startFailureText(error: { code?: number; message?: string } | un
   }
 }
 
-export function chatTarget<T extends { sessionId: string; kind: string }>(sessions: T[], asked: string | undefined, last: string | null): T | null {
-  const startable = sessions.filter((session) => session.kind !== 'scratch' && session.kind !== 'manager');
-  return (
-    sessions.find((session) => session.sessionId === asked) ??
-    startable.find((session) => session.sessionId === last) ??
-    startable.find((session) => session.kind === 'agent') ??
-    startable[0] ??
-    null
-  );
+export interface PhoneWorkspace {
+  set: boolean;
+  agent: AgentName | null;
+}
+
+export function parsePhoneWorkspace(value: unknown): PhoneWorkspace | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  return { set: raw.set === true, agent: AGENTS.includes(raw.agent as AgentName) ? (raw.agent as AgentName) : null };
+}
+
+export type ChatTarget<T> = { kind: 'phone' } | { kind: 'workspace'; session: T };
+
+export type ChatChoice = { kind: 'phone' } | { kind: 'workspace'; sessionId: string };
+
+export function chatTarget<T extends { sessionId: string; kind: string; phone?: boolean }>(
+  sessions: T[],
+  asked: ChatChoice | undefined,
+  last: string | null,
+  phone: PhoneWorkspace | null,
+): ChatTarget<T> | null {
+  const startable = sessions.filter((session) => session.kind !== 'scratch' && session.kind !== 'manager' && !session.phone);
+  if (asked?.kind === 'phone' && phone?.set) return { kind: 'phone' };
+  const named = asked?.kind === 'workspace' ? sessions.find((session) => session.sessionId === asked.sessionId) : undefined;
+  if (named) return named.phone && phone?.set ? { kind: 'phone' } : { kind: 'workspace', session: named };
+  if (phone?.set) return { kind: 'phone' };
+  const session = startable.find((s) => s.sessionId === last) ?? startable.find((s) => s.kind === 'agent') ?? startable[0];
+  return session ? { kind: 'workspace', session } : null;
 }

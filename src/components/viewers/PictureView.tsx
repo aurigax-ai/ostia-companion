@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { MERMAID_SOURCE } from '../../generated/mermaidSource';
 import { mermaidPage, mermaidRuntime, svgPage } from '../../model/pictureHtml';
 import { colors, font, space, type } from '../../theme';
+import { NO_SCROLL_BARS } from '../ui';
 
 const BLANK = 'about:blank';
 const INLINE_START = 160;
@@ -26,7 +27,7 @@ export function PictureView({ kind, source, inline }: { kind: 'svg' | 'mermaid';
   }
 
   return (
-    <WebView
+    <WebView {...NO_SCROLL_BARS}
       accessibilityLabel={kind === 'svg' ? 'Picture' : 'Diagram'}
       source={{ html, baseUrl: BLANK }}
       originWhitelist={[BLANK]}

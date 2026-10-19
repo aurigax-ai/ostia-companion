@@ -28,6 +28,7 @@ jest.mock('../services/listPrefsStore', () => ({
   rememberChatWorkspace: (id: string) => mockChat.remember(id),
 }));
 jest.mock('../services/phoneSession', () => ({ phoneControlSupported: () => mockChat.phone }));
+jest.mock('../services/snippets', () => ({ useSnippets: () => [] }));
 
 const navigation = { replace: jest.fn(), setOptions: jest.fn() };
 
@@ -55,7 +56,10 @@ async function send(text: string) {
   await fireEvent.press(screen.getByLabelText('Send'));
 }
 
+const phoneWorkspace = jest.requireMock<{ usePhoneWorkspace: jest.Mock }>('../services/phoneWorkspace').usePhoneWorkspace;
+
 beforeEach(() => {
+  phoneWorkspace.mockReturnValue(null);
   mockChat.caps = ['read', 'notify', 'respond'];
   mockChat.phone = true;
   mockChat.last = null;
@@ -71,7 +75,7 @@ test('PHC-C20 PHA-C8 the first message starts claude in the first agent workspac
   expect(mockChat.start).toHaveBeenCalledTimes(1);
   expect(mockChat.start).toHaveBeenCalledWith('s-api', 'claude', 'fix the failing build');
   expect(mockChat.remember).toHaveBeenCalledWith('s-api');
-  expect(navigation.replace).toHaveBeenCalledWith('Terminal', { paneId: 'p-new', title: 'claude' });
+  expect(navigation.replace).toHaveBeenCalledWith('Conversation', { paneId: 'p-new', title: 'claude' });
 });
 
 test('PHA-C8 the header switches the agent and the workspace', async () => {
@@ -135,4 +139,24 @@ test('an empty message sends nothing', async () => {
   await renderScreen();
   await send('   ');
   expect(mockChat.start).not.toHaveBeenCalled();
+});
+
+test('PHA-C27 with a Phone workspace, New chat talks to the Phone agent and sends no workspace or agent', async () => {
+  phoneWorkspace.mockReturnValue({ set: true, agent: 'codex' });
+  await renderScreen();
+  expect(screen.getByLabelText('To Phone agent. Choose the agent')).toBeTruthy();
+  expect(screen.getByLabelText('In codex · Phone. Choose the workspace')).toBeTruthy();
+  await send('free up space on this phone');
+  expect(mockChat.start).toHaveBeenCalledWith(null, null, 'free up space on this phone');
+  expect(mockChat.remember).not.toHaveBeenCalled();
+});
+
+test('PHA-C27 a workspace picked instead of the Phone workspace gets the chat', async () => {
+  phoneWorkspace.mockReturnValue({ set: true, agent: 'claude' });
+  await renderScreen();
+  await fireEvent.press(screen.getByLabelText('In claude · Phone. Choose the workspace'));
+  expect(screen.getByText('Phone')).toBeTruthy();
+  await fireEvent.press(screen.getByText('ledger-api'));
+  await send('tidy the export module');
+  expect(mockChat.start).toHaveBeenCalledWith('s-ledger', 'claude', 'tidy the export module');
 });

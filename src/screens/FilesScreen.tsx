@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { FlatList } from 'react-native';
 import { File, Folder, FolderOpen } from 'lucide-react-native';
-import { Button, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, Loading, TILE_INSET } from '../components/ui';
+import { Button, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, Loading, TILE_INSET, NO_SCROLL_BARS } from '../components/ui';
 import { FileEntry, formatSize, sortEntries } from '../model/files';
 import { ScreenProps } from '../navigation';
 import { METHOD_NOT_FOUND, listFiles } from '../services/files';
@@ -42,7 +42,7 @@ export function FilesScreen({ navigation, route }: ScreenProps<'Files'>) {
   const join = (name: string) => (path ? `${path}/${name}` : name);
 
   return (
-    <FlatList
+    <FlatList {...NO_SCROLL_BARS}
       data={state.entries}
       keyExtractor={(entry) => entry.name}
       ItemSeparatorComponent={() => <Divider inset={TILE_INSET} />}

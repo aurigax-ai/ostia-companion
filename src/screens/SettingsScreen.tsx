@@ -3,7 +3,7 @@ import { Alert, AppState, Platform, ScrollView, Share, StyleSheet, Switch, Text,
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Check, Minus, Plus } from 'lucide-react-native';
-import { Button, Group, IconButton, ListRow, SectionHeader, Sheet, SnackbarHost, useTabBarInset } from '../components/ui';
+import { Button, Group, IconButton, ListRow, SectionHeader, Sheet, SnackbarHost, useTabBarInset, NO_SCROLL_BARS } from '../components/ui';
 import { Level } from '../model/phoneControlPrefs';
 import { SESSION_LIMITS, SessionLimit } from '../model/phoneSession';
 import { connectionRows, routeLabel } from '../model/connectionInfo';
@@ -21,9 +21,10 @@ import { setAlertPrefs, useAlertPrefs } from '../services/alertPrefsStore';
 import type { AlertPrefs } from '../model/alertPrefs';
 import { Cap, OstiaRpc } from '../services/rpc';
 import { useCaps, useConnectionStatus } from '../services/workspaceStore';
+import { usePhoneWorkspace } from '../services/phoneWorkspace';
 import { colors, space, type } from '../theme';
 
-const CONTRACT_VERSION = '1.8';
+const CONTRACT_VERSION = '1.9';
 
 const ACCESS: { cap: Cap; title: string }[] = [
   { cap: 'read', title: 'See workspaces and terminals' },
@@ -145,6 +146,7 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
   const pairing = OstiaRpc.getPairing();
   const caps = useCaps();
   const status = useConnectionStatus();
+  const phoneWorkspace = usePhoneWorkspace();
   const prefs = usePrefs();
   const alerts = useAlertPrefs();
   const tabBar = useTabBarInset();
@@ -163,7 +165,7 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
 
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: space.xxxl + tabBar }}>
+    <ScrollView {...NO_SCROLL_BARS} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: space.xxxl + tabBar }}>
       <SectionHeader title="Desktop" />
       <Group>
         <ListRow title={name} trailing={<Value text={STATE[status]} />} />
@@ -175,6 +177,8 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
         {pairing && routeLabel(pairing.gatewayHost) === 'Tailscale' ? (
           <ListRow title="Open Tailscale" onPress={() => void openTailscaleApp()} />
         ) : null}
+        {phoneWorkspace ? <ListRow title="Phone workspace" trailing={<Value text={phoneWorkspace.set ? 'Set on the desktop' : 'Not set'} />} /> : null}
+        {phoneWorkspace?.set && phoneWorkspace.agent ? <ListRow title="Default agent" trailing={<Value text={phoneWorkspace.agent} />} /> : null}
         <ListRow title="Desktops" onPress={() => navigation.navigate('Desktops')} />
       </Group>
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { File, FileCode, FileText, Folder, Image as ImageIcon, LucideIcon, NotebookPen, Table, Workflow } from 'lucide-react-native';
-import { Button, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, Loading, TILE_INSET } from '../components/ui';
+import { Button, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, Loading, TILE_INSET, NO_SCROLL_BARS } from '../components/ui';
 import { PAD_FILE, PAD_TITLE, formatAge, isArtifactUnread, sortArtifacts } from '../model/artifacts';
 import { FileEntry, ViewerKind, formatSize, viewerKind } from '../model/files';
 import { ScreenProps } from '../navigation';
@@ -63,7 +63,7 @@ export function ArtifactsScreen({ navigation, route }: ScreenProps<'Artifacts'>)
   const now = Date.now();
 
   return (
-    <FlatList
+    <FlatList {...NO_SCROLL_BARS}
       data={state.rows}
       keyExtractor={(row) => (row.pad ? ':pad' : row.entry.name)}
       ItemSeparatorComponent={() => <Divider inset={TILE_INSET} />}

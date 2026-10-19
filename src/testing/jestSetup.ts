@@ -5,6 +5,7 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
 }));
 
+jest.mock('../services/phoneWorkspace', () => ({ usePhoneWorkspace: jest.fn(() => null) }));
 jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
 jest.mock('react-native-webview', () => ({ WebView: 'WebView' }));
 jest.mock('../generated/mermaidSource', () => ({ MERMAID_SOURCE: '' }));

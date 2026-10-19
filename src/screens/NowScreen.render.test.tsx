@@ -5,7 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NowScreen } from './NowScreen';
 
 const mockNow = Date.now();
-const mockData: { asks: object[]; unsupported: boolean } = { asks: [], unsupported: false };
+const mockData: { asks: object[]; unsupported: boolean; sessions: object[]; panes: object[] } = { asks: [], unsupported: false, sessions: [], panes: [] };
 
 jest.mock('../services/rpc', () => ({
   OstiaRpc: {
@@ -18,6 +18,7 @@ jest.mock('../services/workspaceStore', () => ({
     sessions: [
       { sessionId: 's', name: 'api-server', kind: 'agent', workDir: '/w', state: 'waiting' },
       { sessionId: 't', name: 'atlas-web', kind: 'agent', workDir: '/t', state: 'working' },
+      ...mockData.sessions,
     ],
     panes: [
       { paneId: 'p', sessionId: 's', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: 'waiting', agentMessage: 'Apply the migration?', since: mockNow - 6 * 60_000 },
@@ -25,6 +26,7 @@ jest.mock('../services/workspaceStore', () => ({
       { paneId: 'd', sessionId: 't', kind: 'terminal', title: 'claude', running: false, blockCount: 1, agent: 'claude', agentState: 'done', agentMessage: 'changelog for 2.3', since: mockNow - 3 * 60 * 60_000 },
       { paneId: 'i', sessionId: 't', kind: 'terminal', title: 'claude', running: false, blockCount: 1, agent: 'claude', agentState: 'done', agentMessage: 'old work' },
       { paneId: 'h', sessionId: 't', kind: 'terminal', title: 'claude', running: false, blockCount: 1, agent: 'claude', hibernated: true },
+      ...mockData.panes,
     ],
     seen: {},
     loading: false,
@@ -59,7 +61,12 @@ function textsInOrder(node: unknown, out: string[] = []): string[] {
   return out;
 }
 
+const phoneWorkspace = jest.requireMock<{ usePhoneWorkspace: jest.Mock }>('../services/phoneWorkspace').usePhoneWorkspace;
+
 beforeEach(() => {
+  phoneWorkspace.mockReturnValue(null);
+  mockData.sessions = [];
+  mockData.panes = [];
   mockData.asks = [];
   mockData.unsupported = false;
   navigation.setOptions.mockClear();
@@ -93,5 +100,29 @@ test('PHA-C2 shows Needs you, Working and Done today in order and folds the rest
 test('a row opens its agent', async () => {
   await renderNow();
   await fireEvent.press(screen.getByText('codex · editing settingsSchema.ts'));
-  expect(navigation.navigate).toHaveBeenCalledWith('Terminal', { paneId: 'w', title: 'codex' });
+  expect(navigation.navigate).toHaveBeenCalledWith('Conversation', { paneId: 'w', title: 'codex' });
 });
+
+test('PHA-C27 with a Phone workspace and no agent there yet, a pinned Phone row opens New chat', async () => {
+  phoneWorkspace.mockReturnValue({ set: true, agent: 'claude' });
+  await renderNow();
+  const all = textsInOrder(screen.toJSON());
+  expect(all.indexOf('Phone')).toBeLessThan(all.indexOf('Needs you'));
+  await fireEvent.press(screen.getByText('Phone'));
+  expect(navigation.navigate).toHaveBeenCalledWith('NewChat');
+});
+
+test('no Phone row without a Phone workspace', async () => {
+  await renderNow();
+  expect(screen.queryByText('Phone')).toBeNull();
+});
+
+test('PHA-C27 the pinned Phone row opens a pane run by another agent in its terminal', async () => {
+  phoneWorkspace.mockReturnValue({ set: true, agent: 'claude' });
+  mockData.sessions = [{ sessionId: 'ph', name: 'phone', kind: 'agent', workDir: '/p', state: 'done', phone: true }];
+  mockData.panes = [{ paneId: 'aider', sessionId: 'ph', kind: 'terminal', title: 'aider', running: true, blockCount: 1, agent: 'other', agentState: 'done' }];
+  await renderNow();
+  await fireEvent.press(screen.getByText('Phone'));
+  expect(navigation.navigate).toHaveBeenCalledWith('Terminal', { paneId: 'aider', title: 'aider' });
+});
+
