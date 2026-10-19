@@ -1,10 +1,10 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { RefreshControl, SectionList, View } from 'react-native';
-import { FileText, FolderOpen, Globe, PanelsTopLeft, Smartphone, Sparkles } from 'lucide-react-native';
+import { FileText, FolderOpen, Globe, PanelsTopLeft, Smartphone, Sparkles, SquarePen } from 'lucide-react-native';
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
-import { Badge, Divider, Empty, GroupItem, HeaderTitle, IconTile, ListRow, SectionHeader, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
+import { Badge, Divider, Empty, GroupItem, HeaderTitle, IconButton, IconTile, ListRow, SectionHeader, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
 import { Ask } from '../model/asks';
 import { isActive } from '../model/phoneSession';
 import { attentionRank, byAttention } from '../model/order';
@@ -53,8 +53,11 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
   useLayoutEffect(() => {
     navigation.setOptions({
       headerTitle: () => <HeaderTitle title={name || 'Workspace'} subtitle={shortPath(workDir)} mono />,
+      headerRight: () => (
+        <IconButton icon={SquarePen} label="New chat" onPress={() => navigation.navigate('NewChat', { sessionId, name: name || 'Workspace' })} />
+      ),
     });
-  }, [navigation, name, workDir]);
+  }, [navigation, name, workDir, sessionId]);
 
   return (
     <>

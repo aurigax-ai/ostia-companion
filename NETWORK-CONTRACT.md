@@ -1,6 +1,6 @@
 # Ostia Companion — Network Contract (v1.8, contract-first)
 
-> **v1.8 (2026-10-19)** adds the phone screen: a phone whose human started a session opens a second socket and turns it into a **screen link** (`screen.start`); on it the desktop sends requests to the phone (`phone.capture`, `phone.stream`, `phone.tap`, …) and the phone sends screen frames (`0x10`) and `screen.state` events. The event `screen.requested` lets the desktop ask the phone's human to start one. `agent.prompt` now reads back that the agent started a turn. Additive: a v1.7 phone never opens a link. See "Phone screen (v1.8)" in §7 and §11.
+> **v1.8 (2026-10-19)** adds the phone screen: a phone whose human started a session opens a second socket and turns it into a **screen link** (`screen.start`); on it the desktop sends requests to the phone (`phone.capture`, `phone.stream`, `phone.tap`, …) and the phone sends screen frames (`0x10`) and `screen.state` events. The event `screen.requested` lets the desktop ask the phone's human to start one. `agent.prompt` now reads back that the agent started a turn. `agent.start` lets the phone start claude or codex with its text in a new tab of a workspace. Additive: a v1.7 phone never opens a link. See "Phone screen (v1.8)" in §7 and §11.
 
 > **v1.7 (2026-10-08)** adds artifacts: `fs.list` and `fs.read` take `root: "workspace" | "artifacts"`, `fs.read` takes `offset`, and the event `artifact.changed` tells a phone with `read` that a file in a workspace's artifact folder was added, changed or removed. Read-only: the gateway still has no write. `artifact.open` (cap `command`) shows an artifact in a tab on the desktop. See §7 and §11.
 
@@ -213,6 +213,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `ask.answer` | `respond` | `{ askId, choiceId?, text? }` → `{ ok: true }`; `-32602 unknown-ask` once resolved. The desktop routes it to the agent hook, `ostia ask` or approval card that raised it (v1.6) |
 | `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }` once the agent started a turn (or when it cannot be watched): types `text` then Enter into an agent pane; `-32602 not-an-agent`; `-32005 not-submitted` (`data: { paneId }`) when it showed the text but started no turn, or the agent stopped before the Enter (v1.8) |
 | `screen.start` | `read` | phone screen link, see "Phone screen (v1.8)" |
+| `agent.start` | `respond` | `{ sessionId, agent: "claude"\|"codex", prompt }` → `{ paneId, confirmed }`: starts that agent with `prompt` as its one argument in a new background tab of that workspace, through the desktop's `ostia agent run` path. It never types into an existing pane and takes no flag, model, folder or command line from the phone. `confirmed` is `false` when the agent's hooks are off, so no start hook could confirm the start. Errors: `-32602` `unknown-session`; `refused` (a workspace that is not an agent or terminal workspace); `bad-params` (another agent, or a prompt that is empty, longer than 4000 characters, starts with `-` or `+`, is a single word, starts with a subcommand or alias of claude or codex, or makes a command over 8 KiB once quoted); `-32006 not-started` when no tab opened, or a tab opened but no start hook came (`data: { paneId }` only then); `-32007 rate-limited` after 3 starts in a minute from one phone (v1.8) |
 | `agent.interrupt` | `respond` | `{ paneId, key: "esc"\|"ctrl-c" }` → `{ ok: true }`; `-32602 not-an-agent` otherwise (v1.6) |
 | `command.exec` | `command` (+ the command's own caps) | `{ id, args?, target? }` → `CommandResult` = `{ ok:true, result } \| { ok:false, error:{ code, message } }` |
 | `pty.attach` / `pty.detach` | `read` (owner role needs `input`, else downgraded) | §6.1 |
@@ -401,6 +402,7 @@ interface CommandDescriptor {
 - **Phone→desktop on the link:** events `screen.state` and `screen.foreground`; binary frame `0x10` (JPEG after a JSON header).
 - **Event `screen.requested`** (`notify`) on normal sockets.
 - **`agent.prompt`** answers `-32005 not-submitted` when it showed the text but no turn started.
+- **`agent.start`** (`respond`) starts claude or codex with the phone's text in a new tab of a workspace: `{ paneId, confirmed }`; errors `unknown-session`, `refused`, `bad-params`, `-32006 not-started`, `-32007 rate-limited`.
 - **Close codes** `4005 time-limit` and `4006 no-controller` end a screen link; any other method on a link answers `-32600 link-only`.
 - Additive: the pairing payload is still `"v": 1`; a v1.7 phone never opens a link and ignores `screen.requested`.
 

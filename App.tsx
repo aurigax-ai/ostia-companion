@@ -31,6 +31,7 @@ import { DesktopsScreen } from './src/screens/DesktopsScreen';
 import { ArtifactsScreen } from './src/screens/ArtifactsScreen';
 import { FilesScreen } from './src/screens/FilesScreen';
 import { FileViewerScreen } from './src/screens/FileViewerScreen';
+import { NewChatScreen } from './src/screens/NewChatScreen';
 import { PhoneSessionScreen } from './src/screens/PhoneSessionScreen';
 import { BlockedAppsScreen } from './src/screens/BlockedAppsScreen';
 import { startPhoneSessionLinks } from './src/services/phoneSession';
@@ -126,6 +127,7 @@ export default function App() {
               <Stack.Screen name="Home">{(props) => <HomeScreen {...props} onUnpair={unpair} />}</Stack.Screen>
               <Stack.Screen name="Workspace" component={WorkspaceScreen} />
               <Stack.Screen name="Terminal" component={TerminalScreen} />
+              <Stack.Screen name="NewChat" component={NewChatScreen} />
               <Stack.Screen name="Files" component={FilesScreen} />
               <Stack.Screen name="Artifacts" component={ArtifactsScreen} />
               <Stack.Screen name="FileView" component={FileViewerScreen} />
