@@ -11,3 +11,7 @@ jest.mock('react-native-webview', () => ({ WebView: 'WebView' }));
 jest.mock('../generated/mermaidSource', () => ({ MERMAID_SOURCE: '' }));
 jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: 'cache' } }));
 jest.mock('expo-sharing', () => ({ shareAsync: jest.fn(async () => {}) }));
+jest.mock('../services/dictation', () => ({
+  useDictation: () => ({ listening: false, problem: null, toggle: () => {} }),
+}));
+jest.mock('../services/images', () => ({ pickImage: jest.fn(async () => null) }));

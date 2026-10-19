@@ -34,6 +34,7 @@ export function ChatComposer({
   snippetsFrom,
   workspaces,
   bottomInset,
+  tools,
 }: {
   value: string;
   onChangeText: (text: string) => void;
@@ -45,6 +46,7 @@ export function ChatComposer({
   snippetsFrom: string | null;
   workspaces: Session[];
   bottomInset: number;
+  tools?: React.ReactNode;
 }) {
   const [reviewing, setReviewing] = useState<Shortcut | null>(null);
   const [holes, setHoles] = useState<string[]>([]);
@@ -88,6 +90,7 @@ export function ChatComposer({
       ) : null}
       {blocked.length > 0 ? <Warning text={`Fill in ${blocked.join(', ')} first.`} /> : null}
       <View style={[styles.bar, { paddingBottom: space.sm + bottomInset }]}>
+        {tools}
         <MessageField value={value} onChangeText={edit} onSend={send} placeholder={placeholder} editable={editable} sending={sending} autoFocus={autoFocus} />
       </View>
       <Sheet visible={reviewing !== null} onClose={() => setReviewing(null)}>

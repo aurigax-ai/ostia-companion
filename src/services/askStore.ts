@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Ask } from '../model/asks';
+import { PromptImage } from '../model/attachment';
 import { OstiaRpc } from './rpc';
 
 const METHOD_NOT_FOUND = -32601;
@@ -69,8 +70,8 @@ export async function answerAsk(askId: string, answer: { choiceId?: string; text
   }
 }
 
-export function promptAgent(paneId: string, text: string): Promise<unknown> {
-  return OstiaRpc.call('agent.prompt', { paneId, text });
+export function promptAgent(paneId: string, text: string, image?: PromptImage): Promise<unknown> {
+  return OstiaRpc.call('agent.prompt', image ? { paneId, text, image } : { paneId, text });
 }
 
 export function interruptAgent(paneId: string, key: 'esc' | 'ctrl-c'): Promise<unknown> {
