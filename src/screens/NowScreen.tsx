@@ -1,15 +1,16 @@
 import React, { useLayoutEffect, useMemo, useState } from 'react';
 import { Platform, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
-import { MessagesSquare, SquarePen } from 'lucide-react-native';
+import { MessagesSquare, Smartphone, SquarePen } from 'lucide-react-native';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner } from '../components/ConnectionBanner';
-import { Button, Empty, Fab, Warning, GroupItem, HeaderTitle, IconButton, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, Divider, terminalIcon, NO_SCROLL_BARS } from '../components/ui';
-import { ago, NowRow, nowSections, quietLine } from '../model/now';
-import { paneTitle } from '../model/workspaces';
+import { Button, Empty, Fab, Group, Warning, GroupItem, HeaderTitle, IconButton, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, Divider, terminalIcon, NO_SCROLL_BARS } from '../components/ui';
+import { ago, changedAt, NowRow, nowSections, phoneAgent, quietLine } from '../model/now';
+import { paneScreen, paneTitle } from '../model/workspaces';
 import { TabProps } from '../navigation';
 import { answerAsk, useAsks } from '../services/askStore';
 import { OstiaRpc } from '../services/rpc';
 import { refreshWorkspaces, useCaps, useConnectionStatus, useWorkspaces } from '../services/workspaceStore';
+import { usePhoneWorkspace } from '../services/phoneWorkspace';
 import { useNow } from '../services/useNow';
 import { colors, space } from '../theme';
 
@@ -32,7 +33,9 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
   const [unfolded, setUnfolded] = useState(false);
   const [askId, setAskId] = useState<string | null>(null);
   const pairing = OstiaRpc.getPairing();
-  const lists = useMemo(() => nowSections(asks.asks, sessions, panes, seen, now), [asks.asks, sessions, panes, seen, now]);
+  const phone = usePhoneWorkspace();
+  const pinned = phone?.set ? phoneAgent(sessions, panes, seen) : null;
+  const lists = useMemo(() => nowSections(asks.asks, sessions, panes, seen, now, pinned?.paneId ?? null), [asks.asks, sessions, panes, seen, now, pinned?.paneId]);
   const sheetAsk = asks.asks.find((ask) => ask.askId === askId) ?? null;
   const newChat = () => navigation.navigate('NewChat');
 
@@ -65,6 +68,18 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
           <>
             <ConnectionBanner status={status} host={pairing?.gatewayHost ?? ''} desktop={pairing?.desktopName || 'the desktop'} onPairAgain={() => navigation.navigate('Desktops')} />
             {asks.unsupported ? <Warning text="Update Ostia on the desktop to answer from here." /> : null}
+            {phone?.set ? (
+              <Group inset={TILE_INSET} style={styles.pinned}>
+                <ListRow
+                  leading={<IconTile icon={Smartphone} />}
+                  title="Phone"
+                  subtitle={pinned ? `${pinned.agent} · ${pinned.agentMessage || (pinned.agentState === 'working' ? 'Working' : 'Your Phone agent')}` : `${phone.agent ?? 'claude'} · Your Phone agent`}
+                  trailing={pinned ? <Meta text={ago(changedAt(pinned, seen), now)} /> : null}
+                  chevron={false}
+                  onPress={() => (pinned ? navigation.navigate('Conversation', { paneId: pinned.paneId, title: paneTitle(pinned) }) : newChat())}
+                />
+              </Group>
+            ) : null}
           </>
         }
         refreshControl={
@@ -95,7 +110,7 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
                 trailing={<Meta text={ago(row.at, now)} />}
                 chevron={false}
                 onPress={() =>
-                  row.kind === 'ask' ? setAskId(row.ask.askId) : navigation.navigate('Terminal', { paneId: row.pane.paneId, title: paneTitle(row.pane) })
+                  row.kind === 'ask' ? setAskId(row.ask.askId) : navigation.navigate(paneScreen(row.pane), { paneId: row.pane.paneId, title: paneTitle(row.pane) })
                 }
               />
             </GroupItem>
@@ -124,5 +139,6 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  pinned: { marginTop: space.lg },
   content: { paddingBottom: space.xxxl + space.xxl, flexGrow: 1 },
 });

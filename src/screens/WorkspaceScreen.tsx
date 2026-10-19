@@ -8,7 +8,7 @@ import { Badge, Divider, Empty, Fab, GroupItem, HeaderTitle, IconTile, ListRow, 
 import { Ask } from '../model/asks';
 import { attentionRank, byAttention } from '../model/order';
 import { paneSections } from '../model/workspaceList';
-import { Pane, groupPanes, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
+import { Pane, groupPanes, paneScreen, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { useArtifacts } from '../services/artifactStore';
 import { answerAsk, useAsks } from '../services/askStore';
@@ -161,7 +161,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
                   subtitle={paneSubtitle(row.pane, workDir)}
                   mono
                   trailing={<StatusPill status={paneStatus(row.pane)} />}
-                  onPress={() => navigation.navigate('Terminal', { paneId: row.pane.paneId, title: paneTitle(row.pane) })}
+                  onPress={() => navigation.navigate(paneScreen(row.pane), { paneId: row.pane.paneId, title: paneTitle(row.pane) })}
                 />
               ) : (
                 <ListRow

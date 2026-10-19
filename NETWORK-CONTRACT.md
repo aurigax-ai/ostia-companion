@@ -1,6 +1,6 @@
 # Ostia Companion — Network Contract (v1.8, contract-first)
 
-> **v1.9 (2026-10-19, draft: the desktop worker confirms the shapes)** lets an agent ask for the phone screen: `screen.requested` carries the request's id, the asking agent and its reason, the phone answers `screen.decline` when it will not share, and `screen.start` names the request it answers. See "Phone screen (v1.8)" in §7 and §11.
+> **v1.9 (2026-10-19)** lets an agent ask for the phone screen (`screen.requested` carries the request's id, the asking agent and its reason; the phone answers `screen.decline` when it will not share; `screen.start` names the request it answers), lets the phone read an agent's conversation as turns (`turn.list`, `turn.output`) and the human's own snippets (`snippet.list`), and adds the Phone workspace (`hello`'s `phoneWorkspace`, `session.list`'s `phone`, `agent.start` without a workspace). Additive. See §7 and §11.
 
 > **v1.8 (2026-10-19)** adds the phone screen: a phone whose human started a session opens a second socket and turns it into a **screen link** (`screen.start`); on it the desktop sends requests to the phone (`phone.capture`, `phone.stream`, `phone.tap`, …) and the phone sends screen frames (`0x10`) and `screen.state` events. The event `screen.requested` lets the desktop ask the phone's human to start one. `agent.prompt` now reads back that the agent started a turn. `agent.start` lets the phone start claude or codex with its text in a new tab of a workspace. Additive: a v1.7 phone never opens a link. See "Phone screen (v1.8)" in §7 and §11.
 
@@ -116,7 +116,7 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
   { "jsonrpc": "2.0", "id": 1, "method": "hello",
     "params": { "deviceToken": "OPAQUE-BEARER", "client": "ostia-companion/1.0" } }
   ```
-  - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","notify"], "desktop": { "name": "...", "version": "..." } } }`.
+  - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","notify"], "desktop": { "name": "...", "version": "..." } } }`. From v1.9 the result also carries `phoneWorkspace: { set, agent }` when the desktop has a Phone workspace setting: `set` is true while its folder is set, opening new phone sessions there is on, and the folder passes the desktop's check; `agent` is the default agent (`"claude"`\|`"codex"`).
   - Any method before a successful `hello` → error `-32001 unauthenticated`, connection closed.
 - The connection's capability set is derived from the device's grants (server-side). The client must treat `caps` as authoritative and hide/disable UI it lacks caps for.
 
@@ -203,7 +203,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | method | cap | params → result |
 |---|---|---|
 | `hello` | — | see §4 |
-| `session.list` | `read` | `{}` → `{ sessions: [{ sessionId, name, kind, workDir, state, group? }] }` — `group: { id, name }` when the workspace sits in a sidebar group (v1.5) |
+| `session.list` | `read` | `{}` → `{ sessions: [{ sessionId, name, kind, workDir, state, group? }] }` — `group: { id, name }` when the workspace sits in a sidebar group (v1.5); `phone: true` marks the Phone workspace (v1.9) |
 | `pane.list` | `read` | `{ sessionId? }` → `{ panes: [{ paneId, sessionId, kind, title, cwd?, running, blockCount, lastExitCode? }] }` |
 | `pane.info` | `read` | `{ paneId }` → `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` |
 | `cwd.get` | `read` | `{ paneId }` → `{ cwd: string \| null }` |
@@ -216,6 +216,10 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }` once the agent started a turn (or when it cannot be watched): types `text` then Enter into an agent pane; `-32602 not-an-agent`; `-32005 not-submitted` (`data: { paneId }`) when it showed the text but started no turn, or the agent stopped before the Enter (v1.8) |
 | `screen.start` | `read` | phone screen link, see "Phone screen (v1.8)" |
 | `agent.start` | `respond` | `{ sessionId, agent: "claude"\|"codex", prompt }` → `{ paneId, confirmed }`: starts that agent with `prompt` as its one argument in a new background tab of that workspace, through the desktop's `ostia agent run` path. It never types into an existing pane and takes no flag, model, folder or command line from the phone. `confirmed` is `false` when the agent's hooks are off, so no start hook could confirm the start. Errors: `-32602` `unknown-session`; `refused` (a workspace that is not an agent or terminal workspace); `bad-params` (another agent, or a prompt that is empty, longer than 4000 characters, starts with `-` or `+`, is a single word, starts with a subcommand or alias of claude or codex, or makes a command over 8 KiB once quoted); `-32006 not-started` when no tab opened, or a tab opened but no start hook came (`data: { paneId }` only then); `-32007 rate-limited` after 3 starts in a minute from one phone (v1.8) |
+| `agent.start` (v1.9) | `respond` | `sessionId` and `agent` become optional: with no `sessionId` the desktop uses the Phone workspace (reusing the open workspace on its folder or opening one), with no `agent` its default agent; `-32602 phone-workspace-unavailable` when no Phone workspace is set, turned on or usable, and nothing opens |
+| `turn.list` | `read` | `{ paneId }` → `{ turns: [Turn], truncated }`, the newest 20 turns of an agent pane from the desktop's memory-only record, at most 256 KiB (`truncated` when older ones were left out). `Turn = { id, startedAt, prompt?, steps: [{ id, kind: "edit"\|"command"\|"search"\|"read"\|"subagent"\|"web"\|"other", target?, exitCode?, output }], final?, commands, filesEdited, ended }`; `target` is a step's first-line target (edit and read paths relative to the workspace folder, `…/name` outside it), `output` says the desktop still keeps that command's output, `final` is the agent's last message. Every text is redacted when the desktop's redaction is on. `-32602 not-an-agent` or `unknown-pane` (manager, scratch, sandboxed or remote panes), `-32603 redaction-failed` (nothing sent) (v1.9) |
+| `turn.output` | `read` | `{ paneId, stepId }` → `{ output }`, the kept tail of one command step's output, redacted; `-32602 unknown-step` when the desktop no longer keeps it (v1.9) |
+| `snippet.list` | `read` | `{ sessionId? }` → `{ snippets: [{ name, description?, command, arguments: [{ name, description?, defaultValue? }], source: "user"\|"workspace" }] }`, the human's own snippets (user ones first, then that workspace's), never an extension's, each text redacted; a pick only fills the phone's composer. `{{name}}` in `command` is an argument, `{{{x}}}` a literal `{{x}}`. `-32602 unknown-session` for a scratch, manager, sandboxed or unknown workspace (v1.9) |
 | `agent.interrupt` | `respond` | `{ paneId, key: "esc"\|"ctrl-c" }` → `{ ok: true }`; `-32602 not-an-agent` otherwise (v1.6) |
 | `command.exec` | `command` (+ the command's own caps) | `{ id, args?, target? }` → `CommandResult` = `{ ok:true, result } \| { ok:false, error:{ code, message } }` |
 | `pty.attach` / `pty.detach` | `read` (owner role needs `input`, else downgraded) | §6.1 |
@@ -400,9 +404,11 @@ interface CommandDescriptor {
 
 ## 11. Changelog
 
-### v1.9 — 2026-10-19 (an agent asks; draft)
+### v1.9 — 2026-10-19 (an agent asks, turns, snippets, the Phone workspace)
 - **`screen.requested`** gains `by: "agent"`, `requestId`, `agent`, `reason` and `pane`.
 - **`screen.decline { requestId, reason: "off"|"unsupported"|"denied"|"busy" }`** (`notify`), the phone's answer when it will not share; `screen.start` gains `requestId?`.
+- **`turn.list`, `turn.output`** (`read`): an agent's conversation as short turns; **`snippet.list`** (`read`): the human's own snippets.
+- **Phone workspace:** `hello` gains `phoneWorkspace { set, agent }`, `session.list` marks it `phone: true`, `agent.start` takes no `sessionId` or `agent` and answers `phone-workspace-unavailable`.
 - Additive: a v1.8 phone ignores the new fields and never declines.
 
 ### v1.8 — 2026-10-19 (phone screen)

@@ -4,7 +4,7 @@ import { Clock, Folder, FolderOpen, MonitorOff } from 'lucide-react-native';
 import { ConnectionBanner } from '../components/ConnectionBanner';
 import { Divider, Empty, GroupItem, IconTile, ListRow, Meta, SearchField, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, terminalIcon, NO_SCROLL_BARS } from '../components/ui';
 import { matchRange, search, SearchHit, workspaceSections, WorkspaceRow } from '../model/workspaceList';
-import { paneTitle, Session } from '../model/workspaces';
+import { paneScreen, paneTitle, Session } from '../model/workspaces';
 import { TabProps } from '../navigation';
 import { useAsks } from '../services/askStore';
 import { addRecentSearch, toggleSection, useListPrefs } from '../services/listPrefsStore';
@@ -128,7 +128,7 @@ export function WorkspacesScreen({ navigation }: TabProps<'Workspaces'>) {
                 onPress={() => {
                   const hit = item.hit as Extract<SearchHit, { kind: 'pane' }>;
                   addRecentSearch(query);
-                  if (names.has(hit.pane.sessionId)) navigation.navigate('Terminal', { paneId: hit.pane.paneId, title: paneTitle(hit.pane) });
+                  if (names.has(hit.pane.sessionId)) navigation.navigate(paneScreen(hit.pane), { paneId: hit.pane.paneId, title: paneTitle(hit.pane) });
                 }}
               />
             )}

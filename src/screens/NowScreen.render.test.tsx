@@ -59,7 +59,10 @@ function textsInOrder(node: unknown, out: string[] = []): string[] {
   return out;
 }
 
+const phoneWorkspace = jest.requireMock<{ usePhoneWorkspace: jest.Mock }>('../services/phoneWorkspace').usePhoneWorkspace;
+
 beforeEach(() => {
+  phoneWorkspace.mockReturnValue(null);
   mockData.asks = [];
   mockData.unsupported = false;
   navigation.setOptions.mockClear();
@@ -93,5 +96,19 @@ test('PHA-C2 shows Needs you, Working and Done today in order and folds the rest
 test('a row opens its agent', async () => {
   await renderNow();
   await fireEvent.press(screen.getByText('codex · editing settingsSchema.ts'));
-  expect(navigation.navigate).toHaveBeenCalledWith('Terminal', { paneId: 'w', title: 'codex' });
+  expect(navigation.navigate).toHaveBeenCalledWith('Conversation', { paneId: 'w', title: 'codex' });
+});
+
+test('PHA-C27 with a Phone workspace and no agent there yet, a pinned Phone row opens New chat', async () => {
+  phoneWorkspace.mockReturnValue({ set: true, agent: 'claude' });
+  await renderNow();
+  const all = textsInOrder(screen.toJSON());
+  expect(all.indexOf('Phone')).toBeLessThan(all.indexOf('Needs you'));
+  await fireEvent.press(screen.getByText('Phone'));
+  expect(navigation.navigate).toHaveBeenCalledWith('NewChat');
+});
+
+test('no Phone row without a Phone workspace', async () => {
+  await renderNow();
+  expect(screen.queryByText('Phone')).toBeNull();
 });

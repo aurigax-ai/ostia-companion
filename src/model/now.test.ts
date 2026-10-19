@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Ask } from './asks';
-import { ago, DAY_MS, nowSections } from './now';
+import { ago, DAY_MS, nowSections, phoneAgent } from './now';
 import type { Pane, Session } from './workspaces';
 
 const NOW = 10 * DAY_MS;
@@ -52,5 +52,18 @@ describe('Now', () => {
 
   it('says how long ago in calm short units', () => {
     expect([null, NOW - 10_000, NOW - 6 * 60_000, NOW - 3 * 60 * 60_000, NOW - 2 * DAY_MS].map((at) => ago(at, NOW))).toEqual(['', 'now', '6 m', '3 h', '2 d']);
+  });
+
+  it('PHA-C2 pins the Phone workspace\'s newest agent first and lists it only there', () => {
+    const phone: Session[] = [...sessions, { sessionId: 's-phone', name: 'phone', kind: 'agent', workDir: '/p', state: 'done', phone: true }];
+    const panes = [
+      agent('p-old', { sessionId: 's-phone', agentState: 'done', since: NOW - DAY_MS }),
+      agent('p-new', { sessionId: 's-phone', agentState: 'done', since: NOW - 60_000 }),
+      agent('p-other', { agentState: 'done', since: NOW - 60_000 }),
+    ];
+    const pinned = phoneAgent(phone, panes, {});
+    expect(pinned?.paneId).toBe('p-new');
+    expect(ids(nowSections([], phone, panes, {}, NOW, pinned!.paneId).doneToday)).toEqual(['p-other']);
+    expect(phoneAgent(sessions, panes, {})).toBeNull();
   });
 });

@@ -4,9 +4,9 @@ import { refreshWorkspaces } from './workspaceStore';
 
 export type StartResult = { ok: true; paneId: string } | { ok: false; text: string };
 
-export async function startAgent(sessionId: string, agent: AgentName, prompt: string): Promise<StartResult> {
+export async function startAgent(sessionId: string | null, agent: AgentName | null, prompt: string): Promise<StartResult> {
   try {
-    const result = await OstiaRpc.call('agent.start', { sessionId, agent, prompt });
+    const result = await OstiaRpc.call('agent.start', { ...(sessionId ? { sessionId } : {}), ...(agent ? { agent } : {}), prompt });
     if (typeof result?.paneId !== 'string') return { ok: false, text: startFailureText(undefined) };
     await refreshWorkspaces();
     return { ok: true, paneId: result.paneId };
