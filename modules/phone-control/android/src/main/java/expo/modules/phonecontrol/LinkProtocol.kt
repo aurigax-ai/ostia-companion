@@ -11,6 +11,8 @@ const val METHOD_NOT_FOUND = -32601
 const val INVALID_PARAMS = -32602
 const val UNAUTHENTICATED = -32001
 const val CLOSE_REVOKED = 4003
+const val CLOSE_TIME_LIMIT = 4005
+const val CLOSE_NO_CONTROLLER = 4006
 const val MAX_CAPTURE_SIDE = 1600
 const val MIN_CAPTURE_SIDE = 64
 const val MAX_STREAM_FPS = 5
@@ -171,6 +173,13 @@ data class StartParams(
   val overlayHeight: Int,
   val agent: String?,
 )
+
+fun closeReason(code: Int): String = when (code) {
+  CLOSE_REVOKED -> "revoked"
+  CLOSE_TIME_LIMIT -> "time-limit"
+  CLOSE_NO_CONTROLLER -> "no-controller"
+  else -> "link-closed"
+}
 
 fun scaledSize(width: Int, height: Int, maxSide: Int): Pair<Int, Int> {
   val longest = maxOf(width, height)

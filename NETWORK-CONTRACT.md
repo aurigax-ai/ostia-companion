@@ -152,6 +152,8 @@ Mirrors the desktop's pane-scoped-trust broker, but a **phone gets a strict subs
 | `4001` | `unauthenticated` / `hello timeout` (no valid `hello` within 10 s) | re-pair if the token is rejected; otherwise send `hello` first |
 | `4003` | `revoked` — the device was removed on the desktop | wipe the token, go back to pairing |
 | `4004` | `caps-changed` — a cap was removed | reconnect; `hello` returns the new caps |
+| `4005` | `time-limit` — a screen link outlived its `endsAt` by 5 s (v1.8) | end the phone session |
+| `4006` | `no-controller` — nothing on the desktop takes the phone screen any more (v1.8) | end the phone session |
 
 ## 6. PTY streaming (the terminal mirror)
 
@@ -209,8 +211,8 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `artifact.open` | `command` | `{ sessionId, path }` → `{ ok: true }`: opens that artifact on the desktop as a background tab of that workspace (v1.7) |
 | `ask.list` | `read` | `{}` → `{ asks: [Ask] }` — open asks: `{ askId, sessionId, paneId, kind: "permission"\|"question"\|"approval", agent?, title, detail?, choices: [{ id, label, tone: "approve"\|"deny"\|"neutral" }], allowText, since }` (v1.6) |
 | `ask.answer` | `respond` | `{ askId, choiceId?, text? }` → `{ ok: true }`; `-32602 unknown-ask` once resolved. The desktop routes it to the agent hook, `ostia ask` or approval card that raised it (v1.6) |
-| `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }` once the agent started a turn (or when it cannot be watched): types `text` then Enter into an agent pane; `-32602 not-an-agent`; `-32602 not-submitted` (`data: { paneId }`) when it showed the text but started no turn within 5 s (v1.8) |
-| `screen.start` | — (a paired device) | phone screen link, see "Phone screen (v1.8)" |
+| `agent.prompt` | `respond` | `{ paneId, text }` → `{ ok: true }` once the agent started a turn (or when it cannot be watched): types `text` then Enter into an agent pane; `-32602 not-an-agent`; `-32005 not-submitted` (`data: { paneId }`) when it showed the text but started no turn, or the agent stopped before the Enter (v1.8) |
+| `screen.start` | `read` | phone screen link, see "Phone screen (v1.8)" |
 | `agent.interrupt` | `respond` | `{ paneId, key: "esc"\|"ctrl-c" }` → `{ ok: true }`; `-32602 not-an-agent` otherwise (v1.6) |
 | `command.exec` | `command` (+ the command's own caps) | `{ id, args?, target? }` → `CommandResult` = `{ ok:true, result } \| { ok:false, error:{ code, message } }` |
 | `pty.attach` / `pty.detach` | `read` (owner role needs `input`, else downgraded) | §6.1 |
@@ -305,12 +307,13 @@ An agent on the desktop sees and drives the phone's screen while a session the p
 
 | method (phone→desktop) | params → result |
 |---|---|
-| `screen.start` | `{ sessionId, width, height, density, rotation, level: "view"\|"control", limitSec, endsAt, overlayHeight, label, agent?: "claude"\|"codex" }` → `{ screenId }` |
+| `screen.start` (cap `read`) | `{ sessionId, width, height, density, rotation, level: "view"\|"control", limitSec, endsAt, overlayHeight, label, agent?: "claude"\|"codex" }` → `{ screenId }` |
 
 - `sessionId` is the workspace the human picked. `width`/`height` are the display in pixels in its current rotation, `rotation` is `0`, `90`, `180` or `270`, `density` the display density. `limitSec` is `300`, `900` or `1800`; `endsAt` is milliseconds since the epoch. `overlayHeight` is the height in pixels of the phone's own bar at the top of the screen, which shows in every capture (`0` when there is none). `level: "view"` refuses every input request.
 - Errors: `-32602` with `message` `unknown-session`, `busy` (this device already has a link) or `bad-params`; `-32004 no-controller` when nothing on the desktop takes phone screens; `-32601` from a desktop before v1.8 (the phone says the desktop needs an update).
-- After `{ screenId }` the socket is the link. On it the phone sends only `ask.list`, `ask.answer`, the events and frames below, and its answers to the desktop's requests; the desktop sends no `pty` frames. Events the desktop sends to every socket (`ask.created`, `session.state`, …) also arrive on the link.
-- The link and the session end together: when either side closes the socket, at revocation (`4003`) or a removed cap (`4004`). The phone ends the session at `endsAt` and sends `screen.state stopped time-limit` first; the desktop closes the link itself 5 s after `endsAt` if the phone has not.
+- After `{ screenId }` the socket is the link. On it the phone sends only `ask.list`, `ask.answer`, the events and frames below, and its answers to the desktop's requests; any other method answers `-32600 link-only`. The desktop sends it no `pty` frames. Events the desktop sends to every socket (`ask.created`, `session.state`, …) also arrive on the link.
+- The link and the session end together: when either side closes the socket, at revocation (`4003`) or a removed cap (`4004`). The phone ends the session at `endsAt` and sends `screen.state stopped time-limit` first; the desktop closes the link itself with `4005 time-limit` 5 s after `endsAt` if the phone has not, and with `4006 no-controller` when what took the phone screen on the desktop goes away.
+- A request the phone does not answer within 75 s is answered to its caller on the desktop as `-32010 timeout`; the phone may still answer it late, and the desktop drops that answer.
 
 **Requests desktop→phone** (JSON-RPC requests with an `id` the desktop picks, on the link only; the phone answers each with `result` or `error`). Coordinates are display pixels, origin top left, in the rotation of the latest `screen.state`.
 
@@ -393,7 +396,8 @@ interface CommandDescriptor {
 - **Desktop→phone requests on the link:** `phone.capture`, `phone.stream`, `phone.tap`, `phone.swipe`, `phone.type`, `phone.key`, `phone.launch`, `phone.apps`, `phone.tree`, `phone.stop`; errors are `-32010` with the code as `message`.
 - **Phone→desktop on the link:** events `screen.state` and `screen.foreground`; binary frame `0x10` (JPEG after a JSON header).
 - **Event `screen.requested`** (`notify`) on normal sockets.
-- **`agent.prompt`** answers `-32602 not-submitted` when no turn started within 5 s.
+- **`agent.prompt`** answers `-32005 not-submitted` when it showed the text but no turn started.
+- **Close codes** `4005 time-limit` and `4006 no-controller` end a screen link; any other method on a link answers `-32600 link-only`.
 - Additive: the pairing payload is still `"v": 1`; a v1.7 phone never opens a link and ignores `screen.requested`.
 
 ### v1.7 — 2026-10-08 (artifacts)
