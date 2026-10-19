@@ -47,6 +47,7 @@ class PhoneControlService : Service(), SessionHost, AccessibilityClient {
   private lateinit var handler: Handler
   private var projection: MediaProjection? = null
   private var session: PhoneSession? = null
+  private var shown: Notification? = null
   private var receiving = false
   private val screenOff = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -71,17 +72,22 @@ class PhoneControlService : Service(), SessionHost, AccessibilityClient {
     return START_NOT_STICKY
   }
 
-  private fun begin(intent: Intent) {
-    if (session != null) return
-    val config = SessionConfig.from(intent)
-    val consent = consentOf(intent)
-    val endsAt = System.currentTimeMillis() + (config?.limitSec ?: 0) * 1000L
+  private fun foreground(notice: Notification) {
     ServiceCompat.startForeground(
       this,
       NOTIFICATION_ID,
-      notification(config?.desktopName ?: "Your desktop", endsAt),
+      notice,
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0,
     )
+  }
+
+  private fun begin(intent: Intent) {
+    val notice = shown
+    if (notice != null && session?.ended == false) return foreground(notice)
+    val config = SessionConfig.from(intent)
+    val consent = consentOf(intent)
+    val endsAt = System.currentTimeMillis() + (config?.limitSec ?: 0) * 1000L
+    foreground(notification(config?.desktopName ?: "Your desktop", endsAt).also { shown = it })
     if (config == null || consent == null) {
       finished()
       return
@@ -133,6 +139,13 @@ class PhoneControlService : Service(), SessionHost, AccessibilityClient {
   }
 
   override fun publish(status: SessionStatus) = SessionStatusHub.publish(status)
+
+  override fun openAsk(ask: AskLine) {
+    val started = session ?: return
+    val launch = packageManager.getLaunchIntentForPackage(packageName)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) ?: return
+    SessionStatusHub.pendingAsk = mapOf("sessionId" to started.sessionId, "askId" to ask.askId, "label" to started.label)
+    (OstiaAccessibilityService.instance ?: this).startActivity(launch)
+  }
 
   override fun finished() {
     if (OstiaAccessibilityService.client === this) OstiaAccessibilityService.client = null

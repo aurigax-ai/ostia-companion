@@ -25,6 +25,18 @@ export interface PhoneSessionOptions {
   blocked: string[];
 }
 
+export interface PendingAsk {
+  sessionId: string;
+  askId: string;
+  label: string;
+}
+
+export interface InstalledApp {
+  package: string;
+  label: string;
+  alwaysBlocked: boolean;
+}
+
 interface PhoneControlNative {
   isAvailable(): boolean;
   status(): PhoneSessionStatus;
@@ -34,6 +46,8 @@ interface PhoneControlNative {
   resume(): void;
   accessibilityEnabled(): boolean;
   openAccessibilitySettings(): void;
+  takePendingAsk(): PendingAsk | null;
+  installedApps(): InstalledApp[];
   addListener(event: 'onStatus', listener: (status: PhoneSessionStatus) => void): { remove(): void };
 }
 
@@ -76,4 +90,12 @@ export function accessibilityEnabled(): boolean {
 
 export function openAccessibilitySettings(): void {
   native?.openAccessibilitySettings();
+}
+
+export function takePendingAsk(): PendingAsk | null {
+  return native?.takePendingAsk() ?? null;
+}
+
+export function installedApps(): InstalledApp[] {
+  return native?.installedApps() ?? [];
 }

@@ -29,6 +29,8 @@ class ScreenLink(
   private var linked = false
   @Volatile
   private var closed = false
+  private var nextId = FIRST_CALL_ID
+  private val calls = java.util.concurrent.ConcurrentHashMap<Int, (Incoming.Response) -> Unit>()
 
   override fun open() {
     val request = Request.Builder().url("wss://${target.host}:${target.port}/ws").build()
@@ -58,7 +60,7 @@ class ScreenLink(
 
   private fun handle(message: Incoming) {
     when (message) {
-      is Incoming.Response -> when (message.id) {
+      is Incoming.Response -> if (message.id >= FIRST_CALL_ID) calls.remove(message.id)?.invoke(message) else when (message.id) {
         HELLO_ID ->
           if (message.error != null) refuse(if (message.error.code == UNAUTHENTICATED) "unauthenticated" else message.error.message)
           else socket?.send(LinkProtocol.start(START_ID, start()))
@@ -78,6 +80,12 @@ class ScreenLink(
       is Incoming.Event -> listener.onEvent(message)
       Incoming.Invalid -> Unit
     }
+  }
+
+  override fun call(method: String, params: JSONObject, answer: (Incoming.Response) -> Unit) {
+    val id = synchronized(this) { nextId++ }
+    calls[id] = answer
+    socket?.send(LinkProtocol.request(id, method, params))
   }
 
   override fun reply(id: Any, result: JSONObject) {
@@ -119,6 +127,7 @@ class ScreenLink(
   companion object {
     const val HELLO_ID = 1
     const val START_ID = 2
+    const val FIRST_CALL_ID = 10
     const val NORMAL_CLOSE = 1000
     const val LINK_LOST = 1006
     const val MAX_QUEUED_BYTES = 2L * 1024 * 1024
