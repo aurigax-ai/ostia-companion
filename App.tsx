@@ -20,6 +20,7 @@ import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
 import { resetAsks } from './src/services/askStore';
 import { resetArtifacts } from './src/services/artifactStore';
+import { resetSnippets } from './src/services/snippets';
 import { MainTabs } from './src/screens/MainTabs';
 import { AllowModeScreen } from './src/screens/AllowModeScreen';
 import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
@@ -32,6 +33,7 @@ import { ArtifactsScreen } from './src/screens/ArtifactsScreen';
 import { FilesScreen } from './src/screens/FilesScreen';
 import { FileViewerScreen } from './src/screens/FileViewerScreen';
 import { NewChatScreen } from './src/screens/NewChatScreen';
+import { ConversationScreen } from './src/screens/ConversationScreen';
 import { PhoneSessionScreen } from './src/screens/PhoneSessionScreen';
 import { BlockedAppsScreen } from './src/screens/BlockedAppsScreen';
 import { startPhoneSessionLinks, startSessionEndNotice } from './src/services/phoneSession';
@@ -86,6 +88,7 @@ export default function App() {
     resetWorkspaces();
     resetAsks();
     resetArtifacts();
+    resetSnippets();
     if (!data) return setPaired(false);
     OstiaRpc.initialize(data);
     setPaired(true);
@@ -134,6 +137,7 @@ export default function App() {
               </Stack.Screen>
               <Stack.Screen name="Workspace" component={WorkspaceScreen} />
               <Stack.Screen name="Terminal" component={TerminalScreen} />
+              <Stack.Screen name="Conversation" component={ConversationScreen} />
               <Stack.Screen name="NewChat" component={NewChatScreen} />
               <Stack.Screen name="Files" component={FilesScreen} />
               <Stack.Screen name="Artifacts" component={ArtifactsScreen} />

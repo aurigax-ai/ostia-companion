@@ -13,6 +13,7 @@ export type RootStack = {
   Main: NavigatorScreenParams<TabList> | undefined;
   Workspace: { sessionId: string; name: string; askId?: string };
   Terminal: { paneId: string; title: string };
+  Conversation: { paneId: string; title: string };
   NewChat: { sessionId?: string } | undefined;
   Desktops: undefined;
   Files: { sessionId: string; path: string; title: string };

@@ -7,6 +7,8 @@ import { haptic, pillFade, prefersReducedMotion } from '../services/motion';
 import { hideSnackbar, useSnackbar } from '../services/snackbar';
 import { colors, font, radius, space, type } from '../theme';
 
+export const NO_SCROLL_BARS = { showsVerticalScrollIndicator: false, showsHorizontalScrollIndicator: false } as const;
+
 export const ROW_INSET = space.lg;
 export const TILE_INSET = space.lg + 36 + space.md;
 

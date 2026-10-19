@@ -13,6 +13,7 @@ const gateway = await startMockGateway({
   approveAfterMs: Number(process.env.MOCK_APPROVE_MS ?? 4000),
   reusableCode: true,
   devicesFile: join(tmpdir(), `ostia-mock-devices-${process.env.MOCK_PORT ?? 8723}.json`),
+  ...(process.env.MOCK_PHONE_WORKSPACE ? { phoneWorkspace: { sessionId: process.env.MOCK_PHONE_WORKSPACE, agent: 'claude' as const } } : {}),
   log: (line) => console.log(line),
   onScreen: (screen) => {
     const folder = process.env.MOCK_SAVE_SCREENS ? join(tmpdir(), 'ostia-mock-screens') : null;

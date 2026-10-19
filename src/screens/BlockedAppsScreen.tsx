@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { FlatList, StyleSheet, Switch, Text } from 'react-native';
-import { Divider, ListRow } from '../components/ui';
+import { Divider, ListRow, NO_SCROLL_BARS } from '../components/ui';
 import { phoneApps } from '../services/phoneSession';
 import { setBlocked, useBlockedApps } from '../services/blockedAppsStore';
 import { colors, space, type } from '../theme';
@@ -10,7 +10,7 @@ export function BlockedAppsScreen() {
   const blocked = useBlockedApps();
 
   return (
-    <FlatList
+    <FlatList {...NO_SCROLL_BARS}
       data={apps}
       keyExtractor={(app) => app.package}
       contentInsetAdjustmentBehavior="automatic"

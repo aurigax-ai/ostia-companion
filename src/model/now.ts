@@ -28,13 +28,21 @@ function newestFirst(a: { at: number | null }, b: { at: number | null }): number
   return (b.at ?? -Infinity) - (a.at ?? -Infinity);
 }
 
-export function nowSections(asks: Ask[], sessions: Session[], panes: Pane[], seen: Seen, now: number): Now {
+export function phoneAgent(sessions: Session[], panes: Pane[], seen: Seen): Pane | null {
+  const phone = sessions.find((session) => session.phone);
+  if (!phone) return null;
+  const agents = panes.filter((pane) => pane.sessionId === phone.sessionId && isAgent(pane) && !pane.hibernated);
+  return [...agents].sort((a, b) => (changedAt(b, seen) ?? -Infinity) - (changedAt(a, seen) ?? -Infinity))[0] ?? null;
+}
+
+export function nowSections(asks: Ask[], sessions: Session[], panes: Pane[], seen: Seen, now: number, pinned: string | null = null): Now {
   const names = new Map(sessions.map((session) => [session.sessionId, session.name]));
   const asked = new Set(asks.map((ask) => ask.paneId));
   const row = (pane: Pane) => ({ kind: 'pane' as const, pane, workspace: names.get(pane.sessionId) ?? '', at: changedAt(pane, seen) });
-  const agents = panes.filter(isAgent);
+  const all = panes.filter(isAgent);
+  const needs = all.filter((pane) => !pane.hibernated && (pane.agentState === 'waiting' || pane.agentState === 'error') && !asked.has(pane.paneId));
+  const agents = all.filter((pane) => pane.paneId !== pinned);
   const awake = agents.filter((pane) => !pane.hibernated);
-  const needs = awake.filter((pane) => (pane.agentState === 'waiting' || pane.agentState === 'error') && !asked.has(pane.paneId));
   const working = awake.filter((pane) => pane.agentState === 'working');
   const done = awake.filter((pane) => {
     const at = changedAt(pane, seen);

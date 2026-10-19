@@ -1,4 +1,5 @@
 import { PinnedWebSocket } from 'websocket-pinning';
+import { parsePhoneWorkspace, PhoneWorkspace } from '../model/agentStart';
 import { PairingData } from './storage';
 
 export type Cap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
@@ -42,6 +43,7 @@ class OstiaRpcClient {
   private pairingData: PairingData | null = null;
   private status: ConnectionStatus = 'disconnected';
   private caps: Cap[] = [];
+  private phoneWorkspace: PhoneWorkspace | null = null;
 
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = MIN_RECONNECT_DELAY;
@@ -69,6 +71,10 @@ class OstiaRpcClient {
 
   public getCaps() {
     return this.caps;
+  }
+
+  public getPhoneWorkspace() {
+    return this.phoneWorkspace;
   }
 
   public hasCap(cap: Cap) {
@@ -168,6 +174,7 @@ class OstiaRpcClient {
   private revoke(reason: string) {
     this.closeSocket();
     this.pairingData = null;
+    this.phoneWorkspace = null;
     this.activePaneId = null;
     this.setCaps([]);
     this.setStatus('revoked', reason);
@@ -182,6 +189,7 @@ class OstiaRpcClient {
       });
       this.reconnectDelay = MIN_RECONNECT_DELAY;
       this.setCaps(result.caps ?? []);
+      this.phoneWorkspace = parsePhoneWorkspace(result.phoneWorkspace);
       this.setStatus('connected');
       if (this.activePaneId) {
         this.attachPty(this.activePaneId, this.requestedRole).catch((err) =>

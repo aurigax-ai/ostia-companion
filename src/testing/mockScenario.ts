@@ -7,6 +7,29 @@ export interface Scenario {
   asks: Ask[];
   files: Record<string, Record<string, string>>;
   artifacts: Record<string, Record<string, string>>;
+  turns: Record<string, MockTurn[]>;
+  outputs: Record<string, string>;
+  snippets: MockSnippet[];
+}
+
+export interface MockTurn {
+  id: string;
+  startedAt: number;
+  prompt?: string;
+  steps: { id: string; kind: string; target?: string; exitCode?: number; output: boolean }[];
+  final?: string;
+  commands: number;
+  filesEdited: number;
+  ended: boolean;
+}
+
+export interface MockSnippet {
+  name: string;
+  description?: string;
+  command: string;
+  arguments: { name: string; description?: string; defaultValue?: string }[];
+  source: 'user' | 'workspace';
+  sessionId?: string;
 }
 
 const REPORT = `# Release plan
@@ -80,6 +103,42 @@ export function demoScenario(): Scenario {
       },
       's-web': {},
     },
+    turns: {
+      'p-agent': [
+        {
+          id: 't-1',
+          startedAt: Date.now() - 40 * 60_000,
+          prompt: 'Split the ledger export into monthly files and keep the CSV header in each.',
+          steps: [
+            { id: 'st-1', kind: 'read', target: 'src/export/ledger.ts', output: false },
+            { id: 'st-2', kind: 'edit', target: 'src/export/month.ts', output: false },
+            { id: 'st-3', kind: 'command', target: 'pnpm test export', exitCode: 1, output: true },
+            { id: 'st-4', kind: 'command', target: 'pnpm test export', exitCode: 0, output: true },
+          ],
+          final: 'Export now writes one file per month through writeMonth(); each keeps the header. 61 tests pass.',
+          commands: 14,
+          filesEdited: 4,
+          ended: true,
+        },
+        {
+          id: 't-2',
+          startedAt: Date.now() - 2 * 60_000,
+          prompt: 'Run the export tests too, and skip the slow fixtures.',
+          steps: [{ id: 'st-5', kind: 'search', target: 'slow fixtures', output: false }],
+          commands: 0,
+          filesEdited: 0,
+          ended: false,
+        },
+      ],
+    },
+    outputs: {
+      'st-3': ' FAIL  src/export/month.test.ts\n  × keeps the header in each month (12 ms)\n    expected 10.01, got 10.00\nTests  1 failed | 60 passed\n',
+      'st-4': ' ✓ src/export/month.test.ts (14 tests)\nTests  61 passed\n',
+    },
+    snippets: [
+      { name: 'standup', description: "Draft my standup from yesterday's work", command: 'Draft my standup for {{day}}', arguments: [{ name: 'day', defaultValue: 'yesterday' }], source: 'user' },
+      { name: 'release-notes', description: 'Write release notes for the last tag', command: 'Write release notes since {{tag}}', arguments: [{ name: 'tag' }], source: 'workspace', sessionId: 's-ostia' },
+    ],
     asks: [
       {
         askId: 'ask-migration',

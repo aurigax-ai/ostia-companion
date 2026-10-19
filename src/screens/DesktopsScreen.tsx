@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Check, Monitor, Plus, X } from 'lucide-react-native';
-import { Group, IconTile, ListRow, TILE_INSET, tap } from '../components/ui';
+import { Group, IconTile, ListRow, TILE_INSET, tap, NO_SCROLL_BARS } from '../components/ui';
 import { DesktopList, EMPTY_DESKTOPS } from '../model/desktops';
 import { routeLabel } from '../model/connectionInfo';
 import { ScreenProps } from '../navigation';
@@ -38,7 +38,7 @@ export function DesktopsScreen({ navigation, onEmpty }: ScreenProps<'Desktops'> 
     ]);
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
+    <ScrollView {...NO_SCROLL_BARS} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
       <Group inset={TILE_INSET}>
         {list.desktops.map((desktop) => (
           <ListRow
