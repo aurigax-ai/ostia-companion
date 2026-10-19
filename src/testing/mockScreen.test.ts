@@ -87,6 +87,12 @@ describe('mock gateway: phone screen link (contract v1.8)', () => {
 
   it('closes the link 5 s after endsAt', async () => {
     const { client } = await linked({}, { endsAt: Date.now() - 4950 });
-    expect(await client.closed).toBe(1000);
+    expect(await client.closed).toBe(4005);
+  });
+
+  it('answers any other method on a link as link-only, but still takes asks', async () => {
+    const { client } = await linked();
+    expect((await client.call('pane.list')).error).toEqual({ code: -32600, message: 'link-only' });
+    expect((await client.call('ask.list')).result.asks).toEqual(expect.any(Array));
   });
 });

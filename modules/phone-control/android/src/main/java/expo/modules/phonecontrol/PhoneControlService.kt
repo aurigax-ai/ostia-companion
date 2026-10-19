@@ -130,7 +130,7 @@ class PhoneControlService : Service(), LinkListener, PhoneScreen {
   override fun onEvent(event: Incoming.Event) = Unit
 
   override fun onClosed(code: Int) {
-    handler.post { end(if (code == CLOSE_REVOKED) "revoked" else "link-closed", notifyDesktop = false) }
+    handler.post { end(closeReason(code), notifyDesktop = false) }
   }
 
   override fun capture(maxSide: Int): Frame? = capture?.capture(maxSide, false)

@@ -60,6 +60,14 @@ class LinkProtocolTest {
   }
 
   @Test
+  fun namesWhyTheDesktopClosedTheLink() {
+    assertEquals("revoked", closeReason(4003))
+    assertEquals("time-limit", closeReason(4005))
+    assertEquals("no-controller", closeReason(4006))
+    assertEquals("link-closed", closeReason(1006))
+  }
+
+  @Test
   fun readsPointsOnlyAsTwoNumbers() {
     assertArrayEquals(intArrayOf(3, 4), LinkProtocol.point(JSONArray("[3,4]")))
     assertNull(LinkProtocol.point(JSONArray("[3]")))

@@ -155,6 +155,8 @@ interface Connection {
 const SCREEN_LIMITS = [300, 900, 1800];
 const NO_CONTROLLER = -32004;
 const SCREEN_GRACE_MS = 5000;
+const CLOSE_TIME_LIMIT = 4005;
+const LINK_ONLY = -32600;
 
 function screenStartProblem(params: any): string | null {
   const whole = (value: unknown, min: number) => Number.isInteger(value) && (value as number) >= min;
@@ -360,7 +362,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
           }),
         close: (code = 1000, reason = 'closed') => socket.close(code, reason),
       };
-      const limit = setTimeout(() => screen.close(1000, 'time-limit'), Math.max(0, params.endsAt + SCREEN_GRACE_MS - Date.now()));
+      const limit = setTimeout(() => screen.close(CLOSE_TIME_LIMIT, 'time-limit'), Math.max(0, params.endsAt + SCREEN_GRACE_MS - Date.now()));
       socket.on('close', () => clearTimeout(limit));
       connection.screen = screen;
       screens.push(screen);
@@ -422,8 +424,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         fail(id, UNAUTHENTICATED, 'unauthenticated');
         return socket.close(CLOSE_UNAUTHENTICATED, 'unauthenticated');
       }
-      if (method === 'screen.start') return openScreen(id, params);
-      if (connection.screen && !['ask.answer', 'ask.list'].includes(method)) return fail(id, INVALID_PARAMS, 'bad-params');
+      if (method === 'screen.start') return has('read') ? openScreen(id, params) : fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
+      if (connection.screen && !['ask.answer', 'ask.list'].includes(method)) return fail(id, LINK_ONLY, 'link-only');
       if (method === 'artifact.open' && !has('command')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'command' });
       if (['ask.answer', 'agent.prompt', 'agent.interrupt'].includes(method) && !has('respond')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'respond' });
