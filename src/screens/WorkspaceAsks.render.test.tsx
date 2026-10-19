@@ -20,7 +20,9 @@ jest.mock('../services/workspaceStore', () => ({
     panes: [
       { paneId: 'p-agent', sessionId: 's', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: 'waiting' },
       { paneId: 'p-web', sessionId: 's', kind: 'browser', title: 'localhost:5173', running: false, blockCount: 0 },
+      { paneId: 'p-old', sessionId: 's', kind: 'terminal', title: 'codex', running: false, blockCount: 1, agent: 'codex', hibernated: true },
     ],
+    seen: {},
     refreshing: false,
     loadedAt: 1,
   }),
@@ -55,10 +57,10 @@ function order(texts: string[]) {
   return texts.map((text) => all.indexOf(text));
 }
 
-test('AGT-C19 the workspace lists its ask first, then Terminals, then More with Files and desktop-only panes', async () => {
+test('AGT-C19 the workspace lists its ask first, then Active, then More with Files and desktop-only panes', async () => {
   mockAsks.asks = [ASK];
   await renderWorkspace();
-  const positions = order(['Which environment?', 'Terminals', 'More', 'Files', 'localhost:5173']);
+  const positions = order(['Which environment?', 'Active', 'Hibernated', 'More', 'Files', 'localhost:5173']);
   expect(positions.every((p) => p >= 0)).toBe(true);
   expect([...positions].sort((a, b) => a - b)).toEqual(positions);
 });
@@ -67,5 +69,13 @@ test('AGT-C20 a workspace with no open ask has no Needs you section', async () =
   mockAsks.asks = [];
   await renderWorkspace();
   expect(screen.queryByText('Needs you')).toBeNull();
-  expect(screen.getByText('Terminals')).toBeTruthy();
+  expect(screen.getByText('Active')).toBeTruthy();
+});
+
+test('PHA-C7 hibernated sessions stay folded and are woken only from the desktop', async () => {
+  mockAsks.asks = [];
+  await renderWorkspace();
+  expect(screen.getByText('wake from the desktop')).toBeTruthy();
+  expect(screen.queryByText('codex')).toBeNull();
+  expect(screen.queryByText('Use this phone')).toBeNull();
 });

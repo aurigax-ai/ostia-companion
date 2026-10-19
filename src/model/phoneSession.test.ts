@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { failureText, isActive, pausedText, startBlock, stoppedText, timeLeft } from './phoneSession';
+import { failureText, isActive, pausedText, stoppedText, timeLeft } from './phoneSession';
 
 describe('phone session model', () => {
-  it('blocks a start on an unsupported phone, while one runs, when offline, and with the service off, in that order', () => {
-    expect(startBlock({ supported: false, connected: true, active: false, serviceOn: true })).toBe('unsupported');
-    expect(startBlock({ supported: true, connected: false, active: true, serviceOn: false })).toBe('running');
-    expect(startBlock({ supported: true, connected: false, active: false, serviceOn: false })).toBe('offline');
-    expect(startBlock({ supported: true, connected: true, active: false, serviceOn: false })).toBe('service-off');
-    expect(startBlock({ supported: true, connected: true, active: false, serviceOn: true })).toBeNull();
-  });
-
   it('counts starting, running and paused as active', () => {
     expect(['idle', 'starting', 'running', 'paused', 'stopped'].map(isActive)).toEqual([false, true, true, true, false]);
   });

@@ -20,10 +20,10 @@ import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
 import { resetAsks } from './src/services/askStore';
 import { resetArtifacts } from './src/services/artifactStore';
-import { HomeScreen } from './src/screens/HomeScreen';
+import { MainTabs } from './src/screens/MainTabs';
+import { AllowModeScreen } from './src/screens/AllowModeScreen';
 import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
-import { SettingsScreen } from './src/screens/SettingsScreen';
 import { PairingScreen } from './src/screens/PairingScreen';
 import { PairCodeScreen } from './src/screens/PairCodeScreen';
 import { PairLinkScreen } from './src/screens/PairLinkScreen';
@@ -35,6 +35,10 @@ import { NewChatScreen } from './src/screens/NewChatScreen';
 import { PhoneSessionScreen } from './src/screens/PhoneSessionScreen';
 import { BlockedAppsScreen } from './src/screens/BlockedAppsScreen';
 import { startPhoneSessionLinks } from './src/services/phoneSession';
+import { startScreenRequests } from './src/services/screenRequests';
+import { loadPhoneControl } from './src/services/phoneControlStore';
+import { loadListPrefs } from './src/services/listPrefsStore';
+import { RequestSheet } from './src/components/RequestSheet';
 import { loadBlockedApps } from './src/services/blockedAppsStore';
 import { RootStack } from './src/navigation';
 import { colors, font } from './src/theme';
@@ -98,10 +102,10 @@ export default function App() {
     void loadAlertPrefs();
     startAgentAlerts((target) => navigationRef.isReady() && navigationRef.navigate(target.screen, target.params));
     void loadBlockedApps();
-    startPhoneSessionLinks({
-      toAsk: (sessionId, name, askId) => navigationRef.isReady() && navigationRef.navigate('Workspace', { sessionId, name, askId }),
-      toSession: (sessionId, name) => navigationRef.isReady() && navigationRef.navigate('PhoneSession', { sessionId, name }),
-    });
+    void loadPhoneControl();
+    void loadListPrefs();
+    startScreenRequests();
+    startPhoneSessionLinks((sessionId, name, askId) => navigationRef.isReady() && navigationRef.navigate('Workspace', { sessionId, name, askId }));
     connect().catch(() => setPaired(false));
   }, [connect]);
 
@@ -124,18 +128,18 @@ export default function App() {
         >
           {paired ? (
             <Stack.Group navigationKey="paired">
-              <Stack.Screen name="Home">{(props) => <HomeScreen {...props} onUnpair={unpair} />}</Stack.Screen>
+              <Stack.Screen name="Main" options={{ headerShown: false }}>
+                {() => <MainTabs onUnpair={unpair} />}
+              </Stack.Screen>
               <Stack.Screen name="Workspace" component={WorkspaceScreen} />
               <Stack.Screen name="Terminal" component={TerminalScreen} />
               <Stack.Screen name="NewChat" component={NewChatScreen} />
               <Stack.Screen name="Files" component={FilesScreen} />
               <Stack.Screen name="Artifacts" component={ArtifactsScreen} />
               <Stack.Screen name="FileView" component={FileViewerScreen} />
-              <Stack.Screen name="PhoneSession" component={PhoneSessionScreen} options={{ title: 'Use this phone' }} />
+              <Stack.Screen name="PhoneSession" component={PhoneSessionScreen} options={{ title: 'Phone control' }} />
+              <Stack.Screen name="AllowMode" component={AllowModeScreen} options={{ title: 'Allow agents' }} />
               <Stack.Screen name="BlockedApps" component={BlockedAppsScreen} options={{ title: 'Never opened by the agent' }} />
-              <Stack.Screen name="Settings" options={{ title: 'Settings', ...largeTitle }}>
-                {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
-              </Stack.Screen>
               <Stack.Screen name="Desktops" options={{ title: 'Desktops', ...largeTitle }}>
                 {(props) => <DesktopsScreen {...props} onEmpty={() => setPaired(false)} />}
               </Stack.Screen>
@@ -163,6 +167,7 @@ export default function App() {
             </Stack.Group>
           )}
         </Stack.Navigator>
+        {paired ? <RequestSheet /> : null}
       </NavigationContainer>
       <StatusBar style="light" />
     </SafeAreaProvider>

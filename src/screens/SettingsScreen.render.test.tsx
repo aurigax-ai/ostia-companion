@@ -1,6 +1,7 @@
 import { expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SettingsScreen } from './SettingsScreen';
 
 const mockState = { status: 'connected' as string };
@@ -32,7 +33,11 @@ jest.mock('../services/openTailscaleApp', () => ({ openTailscaleApp: jest.fn() }
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '1.0.0' } } }));
 
 async function renderSettings() {
-  await render(<SettingsScreen navigation={{ navigate: jest.fn() } as any} route={{} as any} onUnpair={jest.fn(async () => {})} />);
+  await render(
+    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 412, height: 915 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
+      <SettingsScreen navigation={{ navigate: jest.fn() } as any} route={{} as any} onUnpair={jest.fn(async () => {})} />
+    </SafeAreaProvider>,
+  );
 }
 
 test('SET-C11 shows the desktop, its connection, access, terminal options and the version', async () => {

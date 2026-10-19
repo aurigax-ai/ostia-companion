@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { attentionRank, byAttention, homeSections } from './order';
+import { attentionRank, byAttention } from './order';
 import { acceptsSwipe, afterClose, step } from './terminalPager';
-import type { Pane, Session } from './workspaces';
+import type { Pane } from './workspaces';
 
 function pane(paneId: string, extra: Partial<Pane> = {}): Pane {
   return { paneId, sessionId: 's', kind: 'terminal', title: paneId, running: false, blockCount: 0, ...extra };
-}
-
-function session(sessionId: string, group?: string): Session {
-  return { sessionId, name: sessionId, kind: 'project', workDir: '/w', state: 'idle', ...(group ? { group: { id: group, name: group } } : {}) };
 }
 
 describe('ordering', () => {
@@ -53,21 +49,5 @@ describe('terminal pager', () => {
     expect(afterClose(['a', 'b'], ['a'], 'b')).toBe('a');
     expect(afterClose(['a'], [], 'a')).toBeNull();
     expect(afterClose(['a', 'b'], ['a', 'b'], 'b')).toBe('b');
-  });
-});
-
-describe('home groups', () => {
-  it('NAV-C8 shows group headings and Other when workspaces span more than one group', () => {
-    const sections = homeSections([session('w1', 'Clients'), session('w2'), session('w3', 'Personal'), session('w4', 'Clients')]);
-    expect(sections.map((s) => [s.title, s.sessions.map((x) => x.sessionId)])).toEqual([
-      ['Clients', ['w1', 'w4']],
-      ['Personal', ['w3']],
-      ['Other', ['w2']],
-    ]);
-  });
-
-  it('NAV-C9 shows one Workspaces heading with one group or none', () => {
-    expect(homeSections([session('w1', 'Clients'), session('w2', 'Clients')]).map((s) => s.title)).toEqual(['Workspaces']);
-    expect(homeSections([session('w1'), session('w2')]).map((s) => s.title)).toEqual(['Workspaces']);
   });
 });
