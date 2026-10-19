@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { startFailureText } from './agentStart';
+import { chatTarget, startFailureText } from './agentStart';
 
 describe('agent start model', () => {
   it('names each refusal of agent.start the desktop sends', () => {
@@ -19,5 +19,21 @@ describe('agent start model', () => {
     expect(startFailureText({ code: -1, message: 'Not connected to the desktop' })).toBe('Not connected to the desktop.');
     expect(startFailureText({ code: -32602, message: 'something new' })).toMatch(/^The desktop does not start an agent/);
     expect(startFailureText(undefined)).toBe('The agent could not start.');
+  });
+});
+
+describe('new chat target', () => {
+  const sessions = [
+    { sessionId: 's-scratch', kind: 'scratch' },
+    { sessionId: 's-term', kind: 'terminal' },
+    { sessionId: 's-agent', kind: 'agent' },
+  ];
+
+  it('PHA-C8 aims at the workspace asked for, else the last one used, else the first agent workspace', () => {
+    expect(chatTarget(sessions, 's-term', 's-agent')?.sessionId).toBe('s-term');
+    expect(chatTarget(sessions, undefined, 's-term')?.sessionId).toBe('s-term');
+    expect(chatTarget(sessions, undefined, 's-scratch')?.sessionId).toBe('s-agent');
+    expect(chatTarget(sessions, undefined, null)?.sessionId).toBe('s-agent');
+    expect(chatTarget([], undefined, null)).toBeNull();
   });
 });

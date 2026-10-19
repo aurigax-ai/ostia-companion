@@ -96,7 +96,8 @@ object LinkProtocol {
         .put("endsAt", start.endsAt)
         .put("overlayHeight", start.overlayHeight)
         .put("label", start.label)
-        .apply { start.agent?.let { put("agent", it) } },
+        .apply { start.agent?.let { put("agent", it) } }
+        .apply { start.requestId?.let { put("requestId", it) } },
     )
 
   fun captureResult(frame: Frame, foreground: Foreground): JSONObject =
@@ -172,6 +173,7 @@ data class StartParams(
   val endsAt: Long,
   val overlayHeight: Int,
   val agent: String?,
+  val requestId: String?,
 )
 
 fun closeReason(code: Int): String = when (code) {

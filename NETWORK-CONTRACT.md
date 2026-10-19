@@ -1,5 +1,7 @@
 # Ostia Companion — Network Contract (v1.8, contract-first)
 
+> **v1.9 (2026-10-19, draft: the desktop worker confirms the shapes)** lets an agent ask for the phone screen: `screen.requested` carries the request's id, the asking agent and its reason, the phone answers `screen.decline` when it will not share, and `screen.start` names the request it answers. See "Phone screen (v1.8)" in §7 and §11.
+
 > **v1.8 (2026-10-19)** adds the phone screen: a phone whose human started a session opens a second socket and turns it into a **screen link** (`screen.start`); on it the desktop sends requests to the phone (`phone.capture`, `phone.stream`, `phone.tap`, …) and the phone sends screen frames (`0x10`) and `screen.state` events. The event `screen.requested` lets the desktop ask the phone's human to start one. `agent.prompt` now reads back that the agent started a turn. `agent.start` lets the phone start claude or codex with its text in a new tab of a workspace. Additive: a v1.7 phone never opens a link. See "Phone screen (v1.8)" in §7 and §11.
 
 > **v1.7 (2026-10-08)** adds artifacts: `fs.list` and `fs.read` take `root: "workspace" | "artifacts"`, `fs.read` takes `offset`, and the event `artifact.changed` tells a phone with `read` that a file in a workspace's artifact folder was added, changed or removed. Read-only: the gateway still has no write. `artifact.open` (cap `command`) shows an artifact in a tab on the desktop. See §7 and §11.
@@ -241,7 +243,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
 | `artifact.changed` | `read` | `{ sessionId, path, change: "added"\|"changed"\|"removed" }` — `path` as in `fs.list`/`fs.read` with `root: "artifacts"` (`report.md`, `page/index.html`, `PAD.md`) | a file in that workspace's artifact folder was added, written (newer `mtime`) or removed |
 | `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
-| `screen.requested` | `notify` | `{ sessionId, by: "desktop" }` | the human on the desktop asked this phone to share its screen with that workspace (v1.8) |
+| `screen.requested` | `notify` | `{ sessionId, by: "desktop"\|"agent", requestId?, agent?, reason?, pane? }` | the human on the desktop (`by: "desktop"`) or an agent in that workspace (`by: "agent"`, with its name, its reason as plain text of at most 300 characters and its pane) asks this phone to share its screen (v1.8; `by: "agent"`, `requestId`, `agent`, `reason`, `pane` v1.9) |
 
 `sessionId` matches `session.list`'s ids; `paneId`/`from` match `pane.list`'s `externalId`s. Events are not replayed: after a reconnect, re-fetch `session.list`/`pane.list` for current state.
 
@@ -302,13 +304,15 @@ The pictures (`.svg`, Mermaid) are the only place the phone uses a WebView for f
 
 An agent on the desktop sees and drives the phone's screen while a session the phone's human started runs. Android only: the phone captures its screen with Android's MediaProjection and acts through an accessibility service the human turned on. iOS phones never open a link.
 
-**Who starts it.** Only the phone's human, on the phone: a fingerprint or PIN check, then Android's own capture prompt, every session. The desktop may only ask with the event `screen.requested { sessionId, by: "desktop" }` (cap `notify`), which the phone shows as a notification that opens its start screen with that workspace picked.
+**Who starts it.** Only the phone's human, on the phone: the fingerprint or PIN check when the phone's settings ask for it, then Android's own capture prompt, every session. The desktop may only ask, with the event `screen.requested` (cap `notify`). The phone shows the request with who asks and why, unless its own allow mode (changed only on the phone, never sent) skips that question for a workspace the human ticked or declines every request.
+
+**The phone's answer (v1.9).** When it shares, `screen.start` carries `requestId?`, the request it answers. When it will not, it sends on the normal socket `screen.decline { requestId, reason }` (cap `notify`) → `{}`, once per request; `reason` is `off` (the allow mode is Off), `unsupported` (an iPhone or a build without phone control), `denied` (the human denied, dismissed the request, cancelled the fingerprint check or Android's prompt, or did not answer within 60 s) or `busy` (a session already runs, or a newer request replaced this one); `-32602 unknown-request` when the request is gone. A request without `requestId` (a v1.8 desktop) is never declined.
 
 **The link.** The phone opens a second socket to `wss://<host>:<port>/ws` with the same pin, sends `hello`, then:
 
 | method (phone→desktop) | params → result |
 |---|---|
-| `screen.start` (cap `read`) | `{ sessionId, width, height, density, rotation, level: "view"\|"control", limitSec, endsAt, overlayHeight, label, agent?: "claude"\|"codex" }` → `{ screenId }` |
+| `screen.start` (cap `read`) | `{ sessionId, width, height, density, rotation, level: "view"\|"control", limitSec, endsAt, overlayHeight, label, agent?: "claude"\|"codex", requestId? }` → `{ screenId }`; `requestId` (v1.9) is the `screen.requested` this session answers |
 
 - `sessionId` is the workspace the human picked. `width`/`height` are the display in pixels in its current rotation, `rotation` is `0`, `90`, `180` or `270`, `density` the display density. `limitSec` is `300`, `900` or `1800`; `endsAt` is milliseconds since the epoch. `overlayHeight` is the height in pixels of the phone's own bar at the top of the screen, which shows in every capture (`0` when there is none). `level: "view"` refuses every input request.
 - Errors: `-32602` with `message` `unknown-session`, `busy` (this device already has a link) or `bad-params`; `-32004 no-controller` when nothing on the desktop takes phone screens; `-32601` from a desktop before v1.8 (the phone says the desktop needs an update).
@@ -395,6 +399,11 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.9 — 2026-10-19 (an agent asks; draft)
+- **`screen.requested`** gains `by: "agent"`, `requestId`, `agent`, `reason` and `pane`.
+- **`screen.decline { requestId, reason: "off"|"unsupported"|"denied"|"busy" }`** (`notify`), the phone's answer when it will not share; `screen.start` gains `requestId?`.
+- Additive: a v1.8 phone ignores the new fields and never declines.
 
 ### v1.8 — 2026-10-19 (phone screen)
 - **Screen link:** a second socket, `hello`, then `screen.start { sessionId, width, height, density, rotation, level, limitSec, endsAt, overlayHeight, label, agent? }` → `{ screenId }`; errors `unknown-session`, `busy`, `bad-params`, `-32004 no-controller`.

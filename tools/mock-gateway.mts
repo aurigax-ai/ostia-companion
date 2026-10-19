@@ -50,7 +50,8 @@ createServer((req, res) => {
   req.on('data', (chunk) => (body += chunk));
   req.on('end', async () => {
     if (req.method === 'POST' && req.url === '/requested') {
-      gateway.requestScreen(JSON.parse(body || '{}').sessionId ?? 's-api');
+      const asked = JSON.parse(body || '{}');
+      gateway.requestScreen(asked.sessionId ?? 's-api', asked.reason ? { agent: asked.agent ?? 'claude', reason: asked.reason } : undefined);
       return res.writeHead(200).end('{}');
     }
     const screen = gateway.screens.findLast((s) => !s.closed);

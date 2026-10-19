@@ -6,7 +6,6 @@ import {
   applySessionState,
   failedExit,
   groupPanes,
-  needsYou,
   paneStatus,
   paneSubtitle,
   paneTitle,
@@ -21,28 +20,6 @@ function session(sessionId: string, name: string): Session {
 function pane(paneId: string, sessionId: string, extra: Partial<Pane> = {}): Pane {
   return { paneId, sessionId, kind: 'terminal', title: paneId, running: false, blockCount: 0, ...extra };
 }
-
-describe('needsYou', () => {
-  it('lists panes whose agent waits or failed, named by their workspace', () => {
-    const items = needsYou(
-      [session('s1', 'api'), session('s2', 'web')],
-      [
-        pane('p1', 's1', { agentState: 'waiting', agentMessage: 'Allow Bash?' }),
-        pane('p2', 's1', { agentState: 'working' }),
-        pane('p3', 's2', { agentState: 'error' }),
-        pane('p4', 's2'),
-      ],
-    );
-    expect(items.map((item) => [item.pane.paneId, item.workspace, item.reason])).toEqual([
-      ['p1', 'api', 'Allow Bash?'],
-      ['p3', 'web', 'Failed'],
-    ]);
-  });
-
-  it('says the agent is waiting when it sent no message', () => {
-    expect(needsYou([], [pane('p1', 's1', { agentState: 'waiting' })])[0].reason).toBe('Waiting for you');
-  });
-});
 
 describe('shortPath', () => {
   it('replaces a Linux or macOS home folder with ~', () => {
@@ -81,20 +58,6 @@ describe('status', () => {
     expect(paneStatus(pane('a', 's', { agentState: 'done' })).kind).toBe('done');
     expect(workspaceStatus(session('s', 'api'), [pane('a', 's'), pane('b', 's')]).text).toBe('2 panes');
     expect(workspaceStatus(session('s', 'api'), [pane('a', 's', { lastExitCode: 1 })]).text).toBe('Exit 1');
-  });
-});
-
-describe('inbox', () => {
-  it('CRD-C5 keeps a multi-line agent message whole', () => {
-    const message = 'Apply this migration?\n\nALTER TABLE users\n  ADD COLUMN last_seen timestamptz;';
-    const [item] = needsYou([session('s1', 'api')], [pane('p1', 's1', { agentState: 'waiting', agentMessage: message })]);
-    expect(item.reason).toBe(message);
-  });
-
-  it('CRD-C6 a waiting agent with no message reads "Waiting for you"', () => {
-    expect(needsYou([], [pane('p1', 's1', { agentState: 'waiting', agentMessage: '' })])[0].reason).toBe(
-      'Waiting for you',
-    );
   });
 });
 
