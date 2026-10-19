@@ -126,7 +126,8 @@ export function PhoneSessionScreen({ navigation, route }: ScreenProps<'PhoneSess
       {taps ? null : (
         <Text style={[type.caption, styles.note]}>
           Turn on Ostia phone control in Android's accessibility settings, once. The phone needs it to tap and type, and to keep
-          the apps you never share out of every picture. It acts only during a session you start here.
+          the apps you never share out of every picture: without it the desktop sees only black, even to watch. It acts only
+          during a session you start here.
         </Text>
       )}
       <SectionHeader title="Session ends after" />
