@@ -2,10 +2,13 @@ import { useSyncExternalStore } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Notifications from 'expo-notifications';
 import {
+  accessibilityEnabled,
   addStatusListener,
   askConsent,
   isSupported,
   PhoneSessionStatus,
+  openAccessibilitySettings,
+  resumeSession,
   sessionStatus,
   startSession,
   stopSession,
@@ -13,7 +16,7 @@ import {
 import type { SessionLimit, StartFailure } from '../model/phoneSession';
 import { OstiaRpc } from './rpc';
 
-export { isSupported as phoneControlSupported };
+export { accessibilityEnabled, isSupported as phoneControlSupported, openAccessibilitySettings };
 
 let status: PhoneSessionStatus = sessionStatus();
 const listeners = new Set<() => void>();
@@ -62,11 +65,17 @@ export async function startPhoneSession(sessionId: string, label: string, limit:
     label,
     desktopName: pairing.desktopName || 'Your desktop',
     limitSec: limit * 60,
-    level: 'view',
+    level: 'control',
+    agentName: 'The agent',
+    blocked: [],
   });
   return started ? null : 'not-started';
 }
 
 export function stopPhoneSession(): void {
   stopSession();
+}
+
+export function resumePhoneSession(): void {
+  resumeSession();
 }

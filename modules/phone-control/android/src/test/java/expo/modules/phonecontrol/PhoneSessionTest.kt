@@ -12,9 +12,10 @@ class PhoneSessionTest {
   private val host = FakeHost()
   private val frames = FakeFrames()
   private val link = FakeLink()
-  private val session = PhoneSession(TEST_CONFIG, clock.now + 300_000, clock, scheduler, host)
+  private val session = PhoneSession(TEST_CONFIG, clock.now + 300_000, clock, scheduler, host, TEST_BLOCKLIST, OWN)
 
   private fun linked() {
+    session.attach(FakeDevice(), FakeOverlays())
     session.start(frames) { link }
     session.onLinked("scr-1")
     scheduler.runDue()
@@ -72,7 +73,7 @@ class PhoneSessionTest {
     session.onClosed(CLOSE_REVOKED)
     scheduler.runDue()
     assertEquals("revoked", host.statuses.last().reason)
-    assertTrue(link.events("screen.state").isEmpty())
+    assertTrue(link.events("screen.state").none { it.getString("state") == "stopped" })
     assertTrue(frames.stopped)
   }
 

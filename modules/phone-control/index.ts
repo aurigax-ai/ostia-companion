@@ -21,6 +21,8 @@ export interface PhoneSessionOptions {
   desktopName: string;
   limitSec: number;
   level: 'view' | 'control';
+  agentName: string;
+  blocked: string[];
 }
 
 interface PhoneControlNative {
@@ -29,6 +31,9 @@ interface PhoneControlNative {
   askConsent(): Promise<boolean>;
   start(options: PhoneSessionOptions): boolean;
   stop(): void;
+  resume(): void;
+  accessibilityEnabled(): boolean;
+  openAccessibilitySettings(): void;
   addListener(event: 'onStatus', listener: (status: PhoneSessionStatus) => void): { remove(): void };
 }
 
@@ -59,4 +64,16 @@ export function stopSession(): void {
 export function addStatusListener(listener: (status: PhoneSessionStatus) => void): () => void {
   const subscription = native?.addListener('onStatus', listener);
   return () => subscription?.remove();
+}
+
+export function resumeSession(): void {
+  native?.resume();
+}
+
+export function accessibilityEnabled(): boolean {
+  return native?.accessibilityEnabled() ?? false;
+}
+
+export function openAccessibilitySettings(): void {
+  native?.openAccessibilitySettings();
 }

@@ -6,8 +6,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.media.projection.MediaProjection
@@ -18,6 +20,8 @@ import android.os.HandlerThread
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.DateFormat
 import java.util.Date
@@ -38,11 +42,17 @@ class HandlerScheduler(private val handler: Handler) : Scheduler {
   }
 }
 
-class PhoneControlService : Service(), SessionHost {
+class PhoneControlService : Service(), SessionHost, AccessibilityClient {
   private lateinit var thread: HandlerThread
   private lateinit var handler: Handler
   private var projection: MediaProjection? = null
   private var session: PhoneSession? = null
+  private var receiving = false
+  private val screenOff = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      handler.post { session?.screenOff() }
+    }
+  }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -55,6 +65,7 @@ class PhoneControlService : Service(), SessionHost {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_STOP -> handler.post { session?.stop("stop-phone") ?: stopSelf() }
+      ACTION_RESUME -> handler.post { session?.resume() }
       ACTION_START -> begin(intent)
     }
     return START_NOT_STICKY
@@ -75,8 +86,11 @@ class PhoneControlService : Service(), SessionHost {
       finished()
       return
     }
-    val started = PhoneSession(config, endsAt, System::currentTimeMillis, HandlerScheduler(handler), this)
+    val blocklist = Blocklist(packageName, autofillPackages(), config.blocked)
+    val started = PhoneSession(config, endsAt, System::currentTimeMillis, HandlerScheduler(handler), this, blocklist, packageName)
     session = started
+    ContextCompat.registerReceiver(this, screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED)
+    receiving = true
     handler.post {
       val granted = getSystemService(MediaProjectionManager::class.java).getMediaProjection(Activity.RESULT_OK, consent)
       if (granted == null) {
@@ -89,13 +103,41 @@ class PhoneControlService : Service(), SessionHost {
           handler.post { started.stop("projection-ended") }
         }
       }, handler)
+      OstiaAccessibilityService.client = this
+      attach(started)
       started.start(ScreenCapture(this, granted, handler).also { it.start() }) { listener -> ScreenLink(config.target, started::startParams, listener) }
     }
+  }
+
+  private fun attach(started: PhoneSession) {
+    val service = OstiaAccessibilityService.instance ?: return
+    if (started.attached) return
+    started.attach(PhoneInput(service, handler), ServiceOverlays(service))
+  }
+
+  private fun autofillPackages(): Set<String> =
+    packageManager.queryIntentServices(Intent("android.service.autofill.AutofillService"), 0)
+      .map { it.serviceInfo.packageName }
+      .toSet()
+
+  override fun onWindowsChanged() {
+    handler.post {
+      val started = session ?: return@post
+      attach(started)
+      started.windowsChanged()
+    }
+  }
+
+  override fun onServiceOff() {
+    handler.post { session?.serviceOff() }
   }
 
   override fun publish(status: SessionStatus) = SessionStatusHub.publish(status)
 
   override fun finished() {
+    if (OstiaAccessibilityService.client === this) OstiaAccessibilityService.client = null
+    if (receiving) unregisterReceiver(screenOff)
+    receiving = false
     projection?.stop()
     projection = null
     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -120,28 +162,27 @@ class PhoneControlService : Service(), SessionHost {
     }
     val launch = packageManager.getLaunchIntentForPackage(packageName)
     val open = PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-    val stop = PendingIntent.getService(
-      this,
-      1,
-      Intent(this, PhoneControlService::class.java).setAction(ACTION_STOP),
-      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-    )
     val until = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(endsAt))
-    return NotificationCompat.Builder(this, CHANNEL_ID)
+    val builder = NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("$desktopName can see this screen")
-      .setContentText("Ends at $until. Tap to stop.")
+      .setContentText("Ends at $until. Tap to stop or resume.")
       .setSmallIcon(smallIcon(this))
       .setOngoing(true)
       .setSilent(true)
+      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+      .setGroup(CHANNEL_ID)
       .setContentIntent(open)
-      .addAction(0, "Stop", stop)
       .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-      .build()
+    return builder.addAction(0, "Stop", serviceIntent(ACTION_STOP, 1)).build()
   }
+
+  private fun serviceIntent(action: String, code: Int): PendingIntent =
+    PendingIntent.getService(this, code, Intent(this, PhoneControlService::class.java).setAction(action), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
   companion object {
     const val ACTION_START = "expo.modules.phonecontrol.START"
     const val ACTION_STOP = "expo.modules.phonecontrol.STOP"
+    const val ACTION_RESUME = "expo.modules.phonecontrol.RESUME"
     const val EXTRA_CONSENT = "consent"
     private const val CHANNEL_ID = "phone-control"
     private const val NOTIFICATION_ID = 4712
@@ -162,8 +203,10 @@ data class SessionConfig(
   val sessionId: String,
   val label: String,
   val desktopName: String,
+  val agentName: String,
   val limitSec: Int,
   val level: String,
+  val blocked: Set<String>,
 ) {
   fun into(intent: Intent): Intent =
     intent
@@ -174,32 +217,24 @@ data class SessionConfig(
       .putExtra("sessionId", sessionId)
       .putExtra("label", label)
       .putExtra("desktopName", desktopName)
+      .putExtra("agentName", agentName)
       .putExtra("limitSec", limitSec)
       .putExtra("level", level)
+      .putStringArrayListExtra("blocked", ArrayList(blocked))
 
   companion object {
     val LIMITS = setOf(300, 900, 1800)
     val LEVELS = setOf("view", "control")
+    private const val MAX_BLOCKED = 500
 
     fun from(intent: Intent): SessionConfig? {
-      val host = intent.getStringExtra("host") ?: return null
-      val fingerprint = intent.getStringExtra("fingerprint") ?: return null
-      val token = intent.getStringExtra("deviceToken") ?: return null
-      val sessionId = intent.getStringExtra("sessionId") ?: return null
-      val limit = intent.getIntExtra("limitSec", 0)
-      val level = intent.getStringExtra("level") ?: return null
-      return parse(
-        JSONObject()
-          .put("host", host)
-          .put("port", intent.getIntExtra("port", 0))
-          .put("fingerprint", fingerprint)
-          .put("deviceToken", token)
-          .put("sessionId", sessionId)
-          .put("label", intent.getStringExtra("label") ?: "")
-          .put("desktopName", intent.getStringExtra("desktopName") ?: "")
-          .put("limitSec", limit)
-          .put("level", level),
-      )
+      val json = JSONObject()
+      listOf("host", "fingerprint", "deviceToken", "sessionId", "label", "desktopName", "agentName", "level").forEach { key ->
+        intent.getStringExtra(key)?.let { json.put(key, it) }
+      }
+      json.put("port", intent.getIntExtra("port", 0)).put("limitSec", intent.getIntExtra("limitSec", 0))
+      json.put("blocked", JSONArray(intent.getStringArrayListExtra("blocked") ?: arrayListOf<String>()))
+      return parse(json)
     }
 
     fun parse(json: JSONObject): SessionConfig? {
@@ -212,13 +247,18 @@ data class SessionConfig(
       val level = json.optString("level", "")
       if (host.isEmpty() || port !in 1..65535 || !fingerprint.startsWith("sha256/") || token.isEmpty() || sessionId.isEmpty()) return null
       if (limit !in LIMITS || level !in LEVELS) return null
+      val list = json.optJSONArray("blocked") ?: JSONArray()
+      if (list.length() > MAX_BLOCKED) return null
+      val blocked = (0 until list.length()).mapNotNull { list.opt(it) as? String }.filter { RequestHandler.PACKAGE.matches(it) }.toSet()
       return SessionConfig(
         LinkTarget(host, port, fingerprint, token),
         sessionId,
         json.optString("label", "").take(80),
         json.optString("desktopName", "").ifEmpty { "Your desktop" }.take(80),
+        json.optString("agentName", "").ifEmpty { "The agent" }.take(40),
         limit,
         level,
+        blocked,
       )
     }
   }

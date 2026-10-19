@@ -6,8 +6,11 @@ import { PhoneSessionScreen } from './PhoneSessionScreen';
 const mockSession = {
   supported: true,
   status: { state: 'idle', reason: null, endsAt: 0, screenId: null, sessionId: null } as Record<string, unknown>,
+  taps: true,
   start: jest.fn(async (..._args: unknown[]) => null as string | null),
   stop: jest.fn(),
+  resume: jest.fn(),
+  openSettings: jest.fn(),
 };
 
 jest.mock('../services/phoneSession', () => ({
@@ -15,6 +18,9 @@ jest.mock('../services/phoneSession', () => ({
   usePhoneSession: () => mockSession.status,
   startPhoneSession: (...args: unknown[]) => mockSession.start(...args),
   stopPhoneSession: () => mockSession.stop(),
+  resumePhoneSession: () => mockSession.resume(),
+  accessibilityEnabled: () => mockSession.taps,
+  openAccessibilitySettings: () => mockSession.openSettings(),
 }));
 jest.mock('../services/rpc', () => ({ OstiaRpc: { getPairing: () => ({ desktopName: 'studio' }) } }));
 jest.mock('../services/workspaceStore', () => ({ useConnectionStatus: () => 'connected' }));
@@ -28,11 +34,14 @@ beforeEach(() => {
   mockSession.status = { state: 'idle', reason: null, endsAt: 0, screenId: null, sessionId: null };
   mockSession.start.mockClear();
   mockSession.stop.mockClear();
+  mockSession.resume.mockClear();
+  mockSession.openSettings.mockClear();
+  mockSession.taps = true;
 });
 
 test('PHC-C1 starts a session for this workspace with the chosen limit', async () => {
   await renderScreen();
-  expect(screen.getByText('An agent on studio will see this screen while the session runs.')).toBeTruthy();
+  expect(screen.getByText('An agent on studio will see this screen and tap and type on it while the session runs.')).toBeTruthy();
   await fireEvent.press(screen.getByText('30 min'));
   await fireEvent.press(screen.getByText('Start'));
   expect(mockSession.start).toHaveBeenCalledWith('s-phone', 'phone', 30);
@@ -73,4 +82,21 @@ test('PHC-C5 says why the last session ended', async () => {
   mockSession.status = { state: 'stopped', reason: 'time-limit', endsAt: 1, screenId: 'scr_1', sessionId: 's-phone' };
   await renderScreen();
   expect(screen.getByText('The time limit ended the session.')).toBeTruthy();
+});
+
+test('asks to turn on phone control before a session can start', async () => {
+  mockSession.taps = false;
+  await renderScreen();
+  await fireEvent.press(screen.getByText('Start'));
+  expect(mockSession.start).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByText('Turn on'));
+  expect(mockSession.openSettings).toHaveBeenCalled();
+});
+
+test('PHC-C9 shows a paused session with Resume', async () => {
+  mockSession.status = { state: 'paused', reason: 'human-touch', endsAt: Date.now() + 61_000, screenId: 'scr_1', sessionId: 's-phone' };
+  await renderScreen();
+  expect(screen.getByText('Paused because you touched the screen')).toBeTruthy();
+  await fireEvent.press(screen.getByText('Resume'));
+  expect(mockSession.resume).toHaveBeenCalled();
 });

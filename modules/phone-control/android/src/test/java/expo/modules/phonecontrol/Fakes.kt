@@ -123,4 +123,117 @@ class FakeHost : SessionHost {
 
 fun request(id: Any, method: String, params: JSONObject = JSONObject()) = Incoming.Request(id, method, params)
 
-val TEST_CONFIG = SessionConfig(LinkTarget("desk.ts.net", 7443, "sha256/x", "tok"), "s1", "api", "Desk", 300, "control")
+fun testConfig(level: String = "control") =
+  SessionConfig(LinkTarget("desk.ts.net", 7443, "sha256/x", "tok"), "s1", "api", "Desk", "claude", 300, level, emptySet())
+
+val TEST_CONFIG = testConfig()
+
+const val OWN = "ai.aurigax.ostia"
+
+val TEST_BLOCKLIST = Blocklist(OWN, emptySet(), setOf("com.bank.app"))
+
+class TestNode(
+  override val bounds: IntArray,
+  override val text: String? = null,
+  override val clickable: Boolean = false,
+  override val checkable: Boolean = false,
+  private val kids: List<NodeView> = emptyList(),
+) : NodeView {
+  override val className = "android.widget.Button"
+  override val description: String? = null
+  override val resourceId: String? = null
+  override val editable = false
+  override val checked = false
+  override val scrollable = false
+  override val focused = false
+  override val password = false
+  override val visible = true
+  override fun children() = kids
+}
+
+fun appWindow(packageName: String?, vararg kids: NodeView, bounds: IntArray = intArrayOf(0, 0, 1080, 2400), active: Boolean = true) =
+  WindowView(WindowKind.APP, packageName, bounds, active, TestNode(bounds, kids = kids.toList()))
+
+fun button(label: String, l: Int, t: Int, r: Int, b: Int, checkable: Boolean = false) =
+  TestNode(intArrayOf(l, t, r, b), text = label, clickable = true, checkable = checkable)
+
+class FakeField(
+  override var packageName: String = "com.chat",
+  override var text: String = "",
+  override var selectionStart: Int = -1,
+  override var selectionEnd: Int = -1,
+  override var password: Boolean = false,
+  override var multiLine: Boolean = false,
+  override var label: String = "Message",
+) : FieldView {
+  var entered = 0
+
+  override fun setText(text: String, cursor: Int): Boolean {
+    this.text = text
+    selectionStart = cursor
+    selectionEnd = cursor
+    return true
+  }
+
+  override fun enter(): Boolean {
+    entered++
+    return true
+  }
+
+  override fun next() = true
+}
+
+class FakeDevice(var windows: List<WindowView> = listOf(appWindow("com.android.settings"))) : Device {
+  val taps = mutableListOf<List<Int>>()
+  val swipes = mutableListOf<List<Int>>()
+  var pending: ((Boolean) -> Unit)? = null
+  var field: FakeField? = null
+  var finishAtOnce = true
+
+  override fun windows() = windows
+  override fun label(packageName: String) = packageName.substringAfterLast('.').replaceFirstChar { it.uppercase() }
+
+  override fun tap(x: Int, y: Int, count: Int, holdMs: Int, done: (Boolean) -> Unit): List<Long> {
+    taps.add(listOf(x, y, count, holdMs))
+    if (finishAtOnce) done(true) else pending = done
+    return (0 until count).map { it * 150L }
+  }
+
+  override fun swipe(from: IntArray, to: IntArray, durationMs: Int, done: (Boolean) -> Unit): List<Long> {
+    swipes.add(from.toList() + to.toList() + durationMs)
+    if (finishAtOnce) done(true) else pending = done
+    return listOf(0L)
+  }
+
+  override fun field() = field
+  override fun global(key: String) = true
+  override fun launch(packageName: String) = true
+  override fun launcherApps() = listOf("com.android.settings" to "Settings", "com.bank.app" to "Bank", OWN to "Ostia")
+}
+
+class FakeOverlays : Overlays {
+  var onTouch: (() -> Unit)? = null
+  var asked: ConfirmRequest? = null
+  var answer: ((ConfirmAnswer) -> Unit)? = null
+  var rects = listOf<IntArray>()
+  var closed = false
+
+  override fun watchTouches(onTouch: () -> Unit) {
+    this.onTouch = onTouch
+  }
+
+  override fun confirm(request: ConfirmRequest, answer: (ConfirmAnswer) -> Unit) {
+    asked = request
+    this.answer = answer
+  }
+
+  override fun hideConfirm() {
+    asked = null
+  }
+
+  override fun ownRects() = rects
+
+  override fun close() {
+    closed = true
+  }
+}
