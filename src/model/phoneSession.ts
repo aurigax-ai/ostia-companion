@@ -2,26 +2,6 @@ export const SESSION_LIMITS = [5, 15, 30] as const;
 export type SessionLimit = (typeof SESSION_LIMITS)[number];
 export const DEFAULT_LIMIT: SessionLimit = 15;
 
-export type StartBlock = 'unsupported' | 'offline' | 'running' | 'service-off' | null;
-
-export function startBlock({
-  supported,
-  connected,
-  active,
-  serviceOn,
-}: {
-  supported: boolean;
-  connected: boolean;
-  active: boolean;
-  serviceOn: boolean;
-}): StartBlock {
-  if (!supported) return 'unsupported';
-  if (active) return 'running';
-  if (!connected) return 'offline';
-  if (!serviceOn) return 'service-off';
-  return null;
-}
-
 export function isActive(state: string): boolean {
   return state === 'starting' || state === 'running' || state === 'paused';
 }

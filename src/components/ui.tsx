@@ -1,15 +1,33 @@
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { Bot, ChevronRight, LucideIcon, SquareTerminal, TriangleAlert } from 'lucide-react-native';
+import { ActivityIndicator, Animated, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Bot, Check, ChevronDown, ChevronRight, LucideIcon, Search, SquareTerminal, TriangleAlert, X } from 'lucide-react-native';
 import { Pane, Status } from '../model/workspaces';
 import { haptic, pillFade, prefersReducedMotion } from '../services/motion';
-import { colors, radius, space, type } from '../theme';
+import { hideSnackbar, useSnackbar } from '../services/snackbar';
+import { colors, font, radius, space, type } from '../theme';
 
 export const ROW_INSET = space.lg;
 export const TILE_INSET = space.lg + 36 + space.md;
 
+const TAB_BAR = Platform.OS === 'ios' ? 49 : 80;
+
+export function useTabBarInset(): number {
+  return TAB_BAR + useSafeAreaInsets().bottom;
+}
+
 export function tap() {
   haptic('tap');
+}
+
+function Marked({ text, range }: { text: string; range: [number, number] }) {
+  return (
+    <>
+      {text.slice(0, range[0])}
+      <Text style={{ color: colors.brand }}>{text.slice(range[0], range[1])}</Text>
+      {text.slice(range[1])}
+    </>
+  );
 }
 
 export function ListRow({
@@ -20,6 +38,10 @@ export function ListRow({
   onPress,
   mono,
   disabled,
+  attention,
+  chevron = true,
+  mark,
+  label,
 }: {
   title: string;
   subtitle?: string;
@@ -28,11 +50,17 @@ export function ListRow({
   onPress?: () => void;
   mono?: boolean;
   disabled?: boolean;
+  attention?: boolean;
+  chevron?: boolean;
+  mark?: [number, number] | null;
+  label?: string;
 }) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={label}
       accessibilityState={disabled ? { disabled } : undefined}
+      disabled={disabled}
       onPress={onPress ? () => (tap(), onPress()) : undefined}
       android_ripple={onPress ? { color: colors.ripple } : undefined}
       style={({ pressed }) => [
@@ -44,16 +72,16 @@ export function ListRow({
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.rowText}>
         <Text style={[type.body, disabled && styles.dim]} numberOfLines={1}>
-          {title}
+          {mark ? <Marked text={title} range={mark} /> : title}
         </Text>
         {subtitle ? (
-          <Text style={[mono ? type.mono : type.caption, styles.subtitle, disabled && styles.dim]} numberOfLines={1}>
+          <Text style={[mono ? type.mono : type.caption, styles.subtitle, attention && styles.attention, disabled && styles.dim]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
-      {onPress ? <ChevronRight size={16} color={colors.dim} strokeWidth={2.25} style={styles.chevron} /> : null}
+      {onPress && chevron ? <ChevronRight size={16} color={colors.dim} strokeWidth={2.25} style={styles.chevron} /> : null}
     </Pressable>
   );
 }
@@ -92,17 +120,157 @@ export function SectionHeader({
   title,
   tone = 'muted',
   trailing,
+  open,
+  onToggle,
 }: {
   title: string;
   tone?: 'muted' | 'attn';
   trailing?: React.ReactNode;
+  open?: boolean;
+  onToggle?: () => void;
+}) {
+  const Fold = open ? ChevronDown : ChevronRight;
+  const heading = (
+    <>
+      <View style={styles.sectionHead}>
+        {onToggle ? <Fold size={16} color={colors.muted} strokeWidth={2.25} /> : null}
+        <Text style={[type.label, styles.sectionTitle, tone === 'attn' && { color: colors.attn }]} numberOfLines={1}>
+          {title}
+        </Text>
+      </View>
+      {trailing}
+    </>
+  );
+  if (!onToggle) return <View style={styles.section}>{heading}</View>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ expanded: !!open }}
+      onPress={() => (tap(), onToggle())}
+      style={styles.section}
+    >
+      {heading}
+    </Pressable>
+  );
+}
+
+export function Meta({ text, tone = 'muted' }: { text: string; tone?: 'muted' | 'attn' }) {
+  return <Text style={[type.caption, tone === 'attn' && styles.attention]}>{text}</Text>;
+}
+
+export function SearchField({
+  value,
+  onChangeText,
+  placeholder,
+  onFocus,
+  onClear,
+  autoFocus,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  onFocus?: () => void;
+  onClear?: () => void;
+  autoFocus?: boolean;
 }) {
   return (
-    <View style={styles.section}>
-      <Text style={[type.label, styles.sectionTitle, tone === 'attn' && { color: colors.attn }]} numberOfLines={1}>
-        {title}
+    <View style={styles.search}>
+      <Search size={18} color={colors.muted} strokeWidth={2.25} />
+      <TextInput
+        style={styles.searchInput}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={onFocus}
+        placeholder={placeholder}
+        placeholderTextColor={colors.dim}
+        cursorColor={colors.brand}
+        selectionColor={colors.brandSoft}
+        autoFocus={autoFocus}
+        autoCorrect={false}
+        autoCapitalize="none"
+        returnKeyType="search"
+        accessibilityLabel={placeholder}
+      />
+      {value || onClear ? <IconButton icon={X} label="Clear search" onPress={() => (onChangeText(''), onClear?.())} color={colors.muted} /> : null}
+    </View>
+  );
+}
+
+export function Fab({ label, icon: Icon, onPress, bottom = 0 }: { label: string; icon: LucideIcon; onPress: () => void; bottom?: number }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={() => (tap(), onPress())}
+      android_ripple={{ color: colors.ripple, foreground: true }}
+      style={({ pressed }) => [styles.fab, { bottom: space.gutter + bottom }, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
+    >
+      <Icon size={20} color={colors.onBrand} strokeWidth={2.25} />
+      <Text style={[type.label, { color: colors.onBrand }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
+      {visible ? (
+        <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom }]}>
+          <View style={styles.handle} />
+          {children}
+        </View>
+      ) : null}
+    </Modal>
+  );
+}
+
+export function SnackbarHost({ bottom = 0 }: { bottom?: number }) {
+  const message = useSnackbar();
+  if (!message) return null;
+  return (
+    <View style={[styles.snackbar, { bottom: space.sm + bottom }]} accessibilityLiveRegion="polite" accessibilityRole="alert">
+      <Text style={[type.bodyMuted, styles.snackbarText]} numberOfLines={2}>
+        {message.text}
       </Text>
-      {trailing}
+      {message.action ? (
+        <Button label={message.action.label} variant="text" compact onPress={() => (hideSnackbar(), message.action!.run())} />
+      ) : null}
+    </View>
+  );
+}
+
+export function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return (
+    <View style={styles.segmented} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      {options.map((option, index) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={String(option.value)}
+            accessibilityRole="radio"
+            accessibilityLabel={option.label}
+            accessibilityState={{ checked: selected }}
+            onPress={() => (tap(), onChange(option.value))}
+            style={[styles.segment, index > 0 && styles.segmentLine, selected && styles.segmentOn]}
+          >
+            {selected ? <Check size={14} color={colors.fg} strokeWidth={2.5} /> : null}
+            <Text style={[type.label, !selected && { color: colors.muted }]}>{option.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -272,7 +440,7 @@ export function IconButton({
   );
 }
 
-export function HeaderTitle({ title, subtitle, mono }: { title: string; subtitle?: React.ReactNode; mono?: boolean }) {
+export function HeaderTitle({ title, subtitle, mono, attention }: { title: string; subtitle?: React.ReactNode; mono?: boolean; attention?: boolean }) {
   return (
     <View style={{ flexShrink: 1 }}>
       <Text style={type.headline} numberOfLines={1}>
@@ -280,7 +448,7 @@ export function HeaderTitle({ title, subtitle, mono }: { title: string; subtitle
       </Text>
       {subtitle ? (
         typeof subtitle === 'string' ? (
-          <Text style={mono ? type.mono : type.caption} numberOfLines={1}>
+          <Text style={[mono ? type.mono : type.caption, attention && styles.attention]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : (
@@ -411,6 +579,66 @@ const styles = StyleSheet.create({
     paddingBottom: space.sm,
   },
   sectionTitle: { flexShrink: 1, color: colors.muted },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs, flexShrink: 1 },
+  attention: { color: colors.attn },
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginHorizontal: space.gutter,
+    paddingLeft: space.lg,
+    minHeight: 48,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+  },
+  searchInput: { flex: 1, paddingVertical: space.sm, color: colors.fg, fontFamily: font.regular, fontSize: 16 },
+  fab: {
+    position: 'absolute',
+    right: space.gutter,
+    bottom: space.gutter,
+    minHeight: 56,
+    paddingHorizontal: space.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    backgroundColor: colors.brand,
+    overflow: 'hidden',
+  },
+  segmented: {
+    flexDirection: 'row',
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    overflow: 'hidden',
+  },
+  segment: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  segmentLine: { borderLeftWidth: 1, borderLeftColor: colors.lineStrong },
+  segmentOn: { backgroundColor: colors.surfaceHigh },
+  snackbar: {
+    position: 'absolute',
+    left: space.gutter,
+    right: space.gutter,
+    bottom: space.sm,
+    minHeight: 48,
+    paddingLeft: space.lg,
+    paddingRight: space.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.sm,
+    backgroundColor: colors.fg,
+  },
+  scrim: { flex: 1, backgroundColor: colors.scrim },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.sm,
+  },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.lineStrong, marginBottom: space.md },
+  snackbarText: { flex: 1, paddingVertical: space.md, color: colors.bg },
   badge: {
     minWidth: 20,
     height: 20,

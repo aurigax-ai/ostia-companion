@@ -22,6 +22,9 @@ export interface Pane {
   agent?: string;
   agentState?: AgentState;
   agentMessage?: string;
+  hibernated?: boolean;
+  waking?: boolean;
+  since?: number;
 }
 
 export interface PaneUpdate {
@@ -30,23 +33,6 @@ export interface PaneUpdate {
   running?: boolean;
   blockCount?: number;
   lastExitCode?: number;
-}
-
-export interface InboxItem {
-  pane: Pane;
-  workspace: string;
-  reason: string;
-}
-
-export function needsYou(sessions: Session[], panes: Pane[]): InboxItem[] {
-  const names = new Map(sessions.map((session) => [session.sessionId, session.name]));
-  return panes
-    .filter((pane) => pane.agentState === 'waiting' || pane.agentState === 'error')
-    .map((pane) => ({
-      pane,
-      workspace: names.get(pane.sessionId) ?? '',
-      reason: pane.agentMessage || (pane.agentState === 'error' ? 'Failed' : 'Waiting for you'),
-    }));
 }
 
 export function shortPath(path: string | undefined): string {

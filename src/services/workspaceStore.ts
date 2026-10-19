@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { EMPTY_SNAPSHOT, Snapshot, applyLoad } from '../model/snapshot';
+import { EMPTY_SNAPSHOT, Snapshot, applyLoad, noteChanges } from '../model/snapshot';
 import { applyPaneUpdate, applySessionState } from '../model/workspaces';
 import { animateNextLayout } from './motion';
 import { OstiaRpc } from './rpc';
@@ -51,8 +51,10 @@ function start() {
     if (status === 'connected') void refreshWorkspaces();
   });
   OstiaRpc.addEventListener((type, payload) => {
-    if (type === 'pane.state') update({ panes: applyPaneUpdate(snapshot.panes, payload) });
-    else if (type === 'session.state') {
+    if (type === 'pane.state') {
+      const panes = applyPaneUpdate(snapshot.panes, payload);
+      update({ panes, seen: noteChanges(snapshot.panes, panes, snapshot.seen, Date.now(), true) });
+    } else if (type === 'session.state') {
       update({ sessions: applySessionState(snapshot.sessions, payload.sessionId, payload.state) });
       refetchAgents();
     }
