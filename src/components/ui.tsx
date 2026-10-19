@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import { ActivityIndicator, Animated, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bot, Check, ChevronDown, ChevronRight, LucideIcon, Search, SquareTerminal, TriangleAlert, X } from 'lucide-react-native';
 import { Pane, Status } from '../model/workspaces';
 import { haptic, pillFade, prefersReducedMotion } from '../services/motion';
@@ -13,7 +13,7 @@ export const TILE_INSET = space.lg + 36 + space.md;
 const TAB_BAR = Platform.OS === 'ios' ? 49 : 80;
 
 export function useTabBarInset(): number {
-  return TAB_BAR + useSafeAreaInsets().bottom;
+  return TAB_BAR + (useContext(SafeAreaInsetsContext)?.bottom ?? 0);
 }
 
 export function tap() {
