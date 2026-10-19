@@ -255,6 +255,8 @@ class FloatingBar(private val context: Context, private val onAction: (BarAction
     }
 
     fun heightFor(context: Context): Int = topPx(context) + context.dp(BAR_DP)
+
+    fun rect(context: Context): IntArray = intArrayOf(0, topPx(context), context.resources.displayMetrics.widthPixels, heightFor(context))
   }
 }
 
@@ -319,7 +321,12 @@ class ServiceOverlays(private val context: Context) : Overlays {
     if (watch == null) watch = TouchWatch(context, { listOfNotNull(panel.bounds, bar?.bounds) }, onTouch).also { it.show() }
   }
 
-  override fun confirm(request: ConfirmRequest, answer: (ConfirmAnswer) -> Unit) = onMain {
+  override fun confirm(request: ConfirmRequest, answer: (ConfirmAnswer) -> Unit) {
+    panelRect = lowerHalf()
+    onMain { showConfirm(request, answer) }
+  }
+
+  private fun showConfirm(request: ConfirmRequest, answer: (ConfirmAnswer) -> Unit) {
     panel.show(request) { choice ->
       panelRect = null
       answer(choice)
@@ -327,12 +334,17 @@ class ServiceOverlays(private val context: Context) : Overlays {
     panel.onPlaced { panelRect = it }
   }
 
-  override fun hideConfirm() = onMain {
-    panel.hide()
+  override fun hideConfirm() {
     panelRect = null
+    onMain { panel.hide() }
   }
 
-  override fun bar(content: BarContent, onAction: (BarAction) -> Unit) = onMain {
+  override fun bar(content: BarContent, onAction: (BarAction) -> Unit) {
+    if (barRect == null) barRect = FloatingBar.rect(context)
+    onMain { showBar(content, onAction) }
+  }
+
+  private fun showBar(content: BarContent, onAction: (BarAction) -> Unit) {
     val shown = bar ?: FloatingBar(context, onAction).also { bar = it }
     val fresh = !shown.shown
     shown.show(content)
@@ -344,6 +356,11 @@ class ServiceOverlays(private val context: Context) : Overlays {
   }
 
   override fun ownRects(): List<IntArray> = listOfNotNull(panelRect, barRect)
+
+  private fun lowerHalf(): IntArray {
+    val screen = context.resources.displayMetrics
+    return intArrayOf(0, screen.heightPixels / 2, screen.widthPixels, screen.heightPixels)
+  }
 
   override fun close() {
     closed = true

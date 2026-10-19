@@ -62,6 +62,7 @@ class PhoneControlModule : Module() {
 
     Function("start") { options: Map<String, Any?> ->
       val context = appContext.reactContext ?: return@Function false
+      if (SessionStatusHub.current.state in setOf("starting", "running", "paused")) return@Function false
       val granted = consent ?: return@Function false
       val session = SessionConfig.parse(JSONObject(options)) ?: return@Function false
       consent = null

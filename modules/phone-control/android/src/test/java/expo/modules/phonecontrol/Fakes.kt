@@ -30,11 +30,14 @@ class FakeScheduler(private val clock: FakeClock) : Scheduler {
   }
 
   fun runDue() {
-    while (true) {
-      val next = tasks.filter { !it.cancelled && it.at <= clock.now }.minWithOrNull(compareBy({ it.at }, { it.order })) ?: return
-      tasks.remove(next)
-      next.run()
-    }
+    while (runNext()) Unit
+  }
+
+  fun runNext(): Boolean {
+    val next = tasks.filter { !it.cancelled && it.at <= clock.now }.minWithOrNull(compareBy({ it.at }, { it.order })) ?: return false
+    tasks.remove(next)
+    next.run()
+    return true
   }
 
   fun advance(ms: Long) {

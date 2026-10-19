@@ -37,6 +37,14 @@ class SessionBarTest {
   }
 
   @Test
+  fun theBarTickEndsTheSessionWhenTheWallClockPassedTheLimit() {
+    clock.now += 300_000
+    scheduler.runNext()
+    assertTrue(session.ended)
+    assertEquals("stopped" to "time-limit", host.statuses.last().let { it.state to it.reason })
+  }
+
+  @Test
   fun PHC_C18_anOpenAskShowsOnTheBarAndAnswerOpensIt() {
     val (method, answer) = link.calls.single()
     assertEquals("ask.list", method)

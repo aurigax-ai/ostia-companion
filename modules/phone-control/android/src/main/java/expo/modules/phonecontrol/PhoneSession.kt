@@ -100,6 +100,7 @@ class PhoneSession(
   private var streamSide = MAX_CAPTURE_SIDE
   private var streamSeq = 0L
   private var streamTask: Cancellable? = null
+  @Volatile
   var ended = false
     private set
   val attached get() = device != null
@@ -133,7 +134,7 @@ class PhoneSession(
   }
 
   private fun barTick() {
-    if (ended) return
+    if (ended || expired()) return
     refreshBar()
     scheduler.postDelayed(BAR_TICK_MS) { barTick() }
   }
