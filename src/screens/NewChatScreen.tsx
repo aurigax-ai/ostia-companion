@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { ChevronDown, Folder } from 'lucide-react-native';
+import { Bot, ChevronDown, Folder } from 'lucide-react-native';
 import { MessageField } from '../components/PromptComposer';
 import { Group, IconTile, ListRow, Sheet, Warning } from '../components/ui';
 import { AGENTS, AgentName, chatTarget } from '../model/agentStart';
@@ -14,7 +14,7 @@ import { phoneControlSupported } from '../services/phoneSession';
 import { useCaps, useWorkspaces } from '../services/workspaceStore';
 import { colors, font, radius, space, type } from '../theme';
 
-type Picking = null | 'workspace' | Shortcut;
+type Picking = null | 'agent' | 'workspace' | Shortcut;
 
 export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
   const insets = useSafeAreaInsets();
@@ -29,7 +29,6 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [picking, setPicking] = useState<Picking>(null);
-  const other = AGENTS.find((candidate) => candidate !== agent) ?? agent;
   const name = target?.name ?? 'No workspace';
   const shortcuts = shortcutsFor(text, phoneControlSupported());
   const workspaces = sessions.filter((session) => session.kind !== 'scratch' && session.kind !== 'manager');
@@ -38,7 +37,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
     navigation.setOptions({
       headerTitle: () => (
         <View style={styles.to}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`To ${agent}. Switch to ${other}`} disabled={sending} onPress={() => setAgent(other)} style={styles.toRow}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`To ${agent}. Choose the agent`} disabled={sending} onPress={() => setPicking('agent')} style={styles.toRow}>
             <Text style={type.headline}>{agent}</Text>
             <ChevronDown size={16} color={colors.muted} strokeWidth={2.25} />
           </Pressable>
@@ -51,7 +50,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
         </View>
       ),
     });
-  }, [navigation, agent, other, name, sending]);
+  }, [navigation, agent, name, sending]);
 
   const edit = (next: string) => {
     setText(next);
@@ -65,7 +64,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
 
   const choose = (sessionId: string, workspace: string) => {
     if (picking === 'workspace') setChosen(sessionId);
-    else if (picking) edit(picking.fill(workspace));
+    else if (picking && picking !== 'agent') edit(picking.fill(workspace));
     setPicking(null);
   };
 
@@ -122,7 +121,21 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
           autoFocus
         />
       </View>
-      <Sheet visible={picking !== null} onClose={() => setPicking(null)}>
+      <Sheet visible={picking === 'agent'} onClose={() => setPicking(null)}>
+        <Text style={[type.captionStrong, styles.sheetTitle]}>Chat with</Text>
+        <Group>
+          {AGENTS.map((choice) => (
+            <ListRow
+              key={choice}
+              leading={<IconTile icon={Bot} tone={choice === agent ? 'brand' : 'neutral'} />}
+              title={choice}
+              chevron={false}
+              onPress={() => (setAgent(choice), setPicking(null))}
+            />
+          ))}
+        </Group>
+      </Sheet>
+      <Sheet visible={picking !== null && picking !== 'agent'} onClose={() => setPicking(null)}>
         <Text style={[type.captionStrong, styles.sheetTitle]}>{picking === 'workspace' ? 'Start the chat in' : 'Review which workspace?'}</Text>
         <ScrollView style={styles.sheetList}>
           <Group>

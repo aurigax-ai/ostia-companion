@@ -190,5 +190,8 @@ class RequestHandlerTest {
     assertNull(SessionConfig.parse(JSONObject(good.toString()).put("level", "root")))
     assertNull(SessionConfig.parse(JSONObject(good.toString()).put("fingerprint", "md5/abc")))
     assertNull(SessionConfig.parse(JSONObject(good.toString()).put("sessionId", "")))
+    assertNull(parsed.requestId)
+    assertEquals("req-7", SessionConfig.parse(JSONObject(good.toString()).put("requestId", "req-7"))!!.requestId)
+    assertNull(SessionConfig.parse(JSONObject(good.toString()).put("requestId", "bad id\n"))!!.requestId)
   }
 }

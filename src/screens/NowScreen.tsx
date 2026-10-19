@@ -88,7 +88,7 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
           return (
             <GroupItem first={index === 0} last={index === section.data.length - 1}>
               <ListRow
-                leading={<IconTile icon={row.kind === 'ask' ? MessagesSquare : terminalIcon(row.pane)} tone={needs ? 'attn' : 'neutral'} />}
+                leading={<IconTile icon={row.kind === 'ask' ? MessagesSquare : terminalIcon(row.pane)} dot={needs} />}
                 title={row.workspace || 'Workspace'}
                 subtitle={rowLine(row)}
                 attention={needs}

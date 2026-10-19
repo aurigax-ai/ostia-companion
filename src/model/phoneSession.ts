@@ -56,3 +56,16 @@ const FAILURES: Record<StartFailure, string> = {
 export function failureText(failure: StartFailure): string {
   return FAILURES[failure];
 }
+
+const ENDED: Record<string, string> = {
+  'stop-phone': 'you stopped it',
+  'stop-desktop': 'stopped on the desktop',
+  'time-limit': 'time limit',
+  'projection-ended': 'Android stopped sharing',
+  'service-off': 'accessibility service off',
+  revoked: 'phone removed on the desktop',
+};
+
+export function endedLine(reason: string | null): string {
+  return `Phone control ended · ${(reason && ENDED[reason]) || 'connection closed'}`;
+}

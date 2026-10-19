@@ -23,6 +23,7 @@ export interface PhoneSessionOptions {
   level: 'view' | 'control';
   agentName: string;
   blocked: string[];
+  requestId?: string;
 }
 
 export interface PendingAsk {

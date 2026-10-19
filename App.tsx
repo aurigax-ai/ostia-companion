@@ -34,7 +34,7 @@ import { FileViewerScreen } from './src/screens/FileViewerScreen';
 import { NewChatScreen } from './src/screens/NewChatScreen';
 import { PhoneSessionScreen } from './src/screens/PhoneSessionScreen';
 import { BlockedAppsScreen } from './src/screens/BlockedAppsScreen';
-import { startPhoneSessionLinks } from './src/services/phoneSession';
+import { startPhoneSessionLinks, startSessionEndNotice } from './src/services/phoneSession';
 import { startScreenRequests } from './src/services/screenRequests';
 import { loadPhoneControl } from './src/services/phoneControlStore';
 import { loadListPrefs } from './src/services/listPrefsStore';
@@ -105,6 +105,7 @@ export default function App() {
     void loadPhoneControl();
     void loadListPrefs();
     startScreenRequests();
+    startSessionEndNotice(() => navigationRef.isReady() && navigationRef.navigate('PhoneSession'));
     startPhoneSessionLinks((sessionId, name, askId) => navigationRef.isReady() && navigationRef.navigate('Workspace', { sessionId, name, askId }));
     connect().catch(() => setPaired(false));
   }, [connect]);

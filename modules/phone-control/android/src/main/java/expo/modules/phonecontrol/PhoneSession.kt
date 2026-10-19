@@ -116,7 +116,7 @@ class PhoneSession(
 
   fun startParams(): StartParams {
     val size = source?.size ?: DisplaySize(0, 0, 1f, 0)
-    return StartParams(config.sessionId, config.label, size.width, size.height, size.density, size.rotation, config.level, config.limitSec, endsAt, overlays?.barHeight ?: 0, null)
+    return StartParams(config.sessionId, config.label, size.width, size.height, size.density, size.rotation, config.level, config.limitSec, endsAt, overlays?.barHeight ?: 0, config.agentName.takeIf { it == "claude" || it == "codex" }, config.requestId)
   }
 
   fun attach(device: Device, overlays: Overlays) {

@@ -197,14 +197,17 @@ export function SearchField({
   );
 }
 
+const SNACKBAR_ROOM = 64;
+
 export function Fab({ label, icon: Icon, onPress, bottom = 0 }: { label: string; icon: LucideIcon; onPress: () => void; bottom?: number }) {
+  const lifted = useSnackbar() ? SNACKBAR_ROOM : 0;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={() => (tap(), onPress())}
       android_ripple={{ color: colors.ripple, foreground: true }}
-      style={({ pressed }) => [styles.fab, { bottom: space.gutter + bottom }, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
+      style={({ pressed }) => [styles.fab, { bottom: space.gutter + bottom + lifted }, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
     >
       <Icon size={20} color={colors.onBrand} strokeWidth={2.25} />
       <Text style={[type.label, { color: colors.onBrand }]}>{label}</Text>
@@ -294,10 +297,12 @@ export function IconTile({
   icon: Icon,
   tone = 'neutral',
   size = 'md',
+  dot,
 }: {
   icon: LucideIcon;
   tone?: keyof typeof TILE_TONES;
   size?: 'md' | 'lg';
+  dot?: boolean;
 }) {
   const palette = TILE_TONES[tone];
   return (
@@ -310,6 +315,7 @@ export function IconTile({
       ]}
     >
       <Icon size={size === 'lg' ? 28 : 18} color={palette.fg} strokeWidth={size === 'lg' ? 1.75 : 2} />
+      {dot ? <View style={styles.tileDot} accessibilityLabel="Needs you" /> : null}
     </View>
   );
 }
@@ -656,6 +662,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tileLarge: { width: 64, height: 64, borderRadius: radius.xl },
+  tileDot: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.attn, borderWidth: 2, borderColor: colors.surface },
   tileGhost: { borderWidth: 1, borderColor: colors.lineStrong, borderStyle: 'dashed' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 24 },
   pillAttn: { backgroundColor: colors.attnSoft, borderRadius: radius.full, paddingHorizontal: space.sm },

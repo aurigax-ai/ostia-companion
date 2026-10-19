@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { failureText, isActive, pausedText, stoppedText, timeLeft } from './phoneSession';
+import { endedLine, failureText, isActive, pausedText, stoppedText, timeLeft } from './phoneSession';
 
 describe('phone session model', () => {
   it('counts starting, running and paused as active', () => {
@@ -23,5 +23,11 @@ describe('phone session model', () => {
   it('PHC-C9 says why the agent is paused', () => {
     expect(pausedText('human-touch')).toBe('Paused because you touched the screen');
     expect(pausedText(null)).toBe('Paused');
+  });
+
+  it('PHA-C21 says in one short line why phone control ended', () => {
+    expect(endedLine('time-limit')).toBe('Phone control ended · time limit');
+    expect(endedLine('stop-desktop')).toBe('Phone control ended · stopped on the desktop');
+    expect(endedLine('unreachable')).toBe('Phone control ended · connection closed');
   });
 });

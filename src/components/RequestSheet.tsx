@@ -32,14 +32,7 @@ export function RequestSheet() {
     return () => subscription.remove();
   }, [request, defaults.level, defaults.limit]);
 
-  useEffect(() => {
-    if (!request?.skipSheet || !service) return;
-    if (AppState.currentState === 'active') return void allowRequest({ level: defaults.level, limit: defaults.limit });
-    const subscription = AppState.addEventListener('change', (state) => state === 'active' && void allowRequest({ level: defaults.level, limit: defaults.limit }));
-    return () => subscription.remove();
-  }, [request, service, defaults.level, defaults.limit]);
-
-  const shown = !!request && (!request.skipSheet || !service);
+  const shown = !!request && !request.skipSheet;
 
   return (
     <Sheet visible={shown} onClose={denyRequest}>
