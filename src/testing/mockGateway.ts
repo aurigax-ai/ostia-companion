@@ -27,6 +27,7 @@ export interface MockGatewayOptions {
   screenController?: boolean;
   onScreen?: (screen: MockScreenLink) => void;
   log?: (line: string) => void;
+  phoneWorkspace?: { sessionId: string; agent: 'claude' | 'codex' };
 }
 
 export interface MockScreenFrame {
@@ -201,6 +202,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     screenController = true,
     onScreen = () => {},
     log = () => {},
+    phoneWorkspace,
   } = options;
   const screens: MockScreenLink[] = [];
   const { key, cert, fingerprint } = certificate(name);
@@ -430,7 +432,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         }
         clearTimeout(helloTimer);
         connection.device = device;
-        return respond(id, { deviceId: device.deviceId, caps: device.caps, desktop: { name, version: 'mock' } });
+        return respond(id, { deviceId: device.deviceId, caps: device.caps, desktop: { name, version: 'mock' }, ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
       }
       if (!connection.device) {
         fail(id, UNAUTHENTICATED, 'unauthenticated');
@@ -445,7 +447,22 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       if (['session.list', 'pane.list', 'pty.attach', 'pty.detach', 'ask.list', 'fs.list', 'fs.read'].includes(method) && !has('read')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
       }
-      if (method === 'session.list') return respond(id, { sessions: scenario.sessions });
+      if (method === 'session.list') return respond(id, { sessions: scenario.sessions.map((s) => (s.sessionId === phoneWorkspace?.sessionId ? { ...s, phone: true } : s)) });
+      if (['turn.list', 'turn.output', 'snippet.list'].includes(method) && !has('read')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
+      if (method === 'turn.list' || method === 'turn.output') {
+        const pane = scenario.panes.find((p) => p.paneId === params.paneId);
+        if (!pane || (pane.agent !== 'claude' && pane.agent !== 'codex')) return fail(id, INVALID_PARAMS, 'not-an-agent');
+        if (method === 'turn.list') return respond(id, { turns: scenario.turns[pane.paneId] ?? [], truncated: false });
+        const output = scenario.outputs[params.stepId];
+        return output === undefined ? fail(id, INVALID_PARAMS, 'unknown-step') : respond(id, { output });
+      }
+      if (method === 'snippet.list') {
+        if (params.sessionId !== undefined && !scenario.sessions.some((s) => s.sessionId === params.sessionId && !REFUSED_KINDS.includes(s.kind))) {
+          return fail(id, INVALID_PARAMS, 'unknown-session');
+        }
+        const own = scenario.snippets.filter((s) => s.source === 'user' || s.sessionId === params.sessionId);
+        return respond(id, { snippets: own.map(({ sessionId: _, ...snippet }) => snippet) });
+      }
       if (method === 'ask.list') return respond(id, { asks: scenario.asks });
       if (method === 'fs.list' || method === 'fs.read' || method === 'artifact.open') {
         if (typeof params.sessionId !== 'string' || !params.sessionId) return fail(id, INVALID_PARAMS, 'missing sessionId');
@@ -518,7 +535,11 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         if (!pane?.agent || pane.agent === 'other') return fail(id, INVALID_PARAMS, 'not-an-agent');
         const keys = method === 'agent.prompt' ? `${params.text}\r` : params.key === 'ctrl-c' ? '\x03' : '\x1b';
         typed.set(pane.paneId, [...(typed.get(pane.paneId) ?? []), keys]);
-        if (method === 'agent.prompt') writePane(pane.paneId, `\r\n\x1b[36m>\x1b[0m ${params.text}\r\n`);
+        if (method === 'agent.prompt') {
+          writePane(pane.paneId, `\r\n\x1b[36m>\x1b[0m ${params.text}\r\n`);
+          const turns = (scenario.turns[pane.paneId] ??= []);
+          turns.push({ id: `${pane.paneId}-t${turns.length + 1}`, startedAt: Date.now(), prompt: params.text, steps: [], final: 'Noted.', commands: 0, filesEdited: 0, ended: true });
+        }
         else writePane(pane.paneId, '\r\n\x1b[90m(interrupted)\x1b[0m\r\n');
         log(`agent: ${method} ${pane.paneId}`);
         return respond(id, { ok: true });
@@ -532,8 +553,10 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         return respond(id, {});
       }
       if (method === 'agent.start') {
-        const session = scenario.sessions.find((s) => s.sessionId === params.sessionId);
+        if (params.sessionId === undefined && !phoneWorkspace) return fail(id, INVALID_PARAMS, 'phone-workspace-unavailable');
+        const session = scenario.sessions.find((s) => s.sessionId === (params.sessionId ?? phoneWorkspace?.sessionId));
         if (!session) return fail(id, INVALID_PARAMS, 'unknown-session');
+        params.agent = params.agent ?? phoneWorkspace?.agent ?? 'claude';
         if (REFUSED_KINDS.includes(session.kind)) return fail(id, INVALID_PARAMS, 'refused');
         const prompt = typeof params.prompt === 'string' ? params.prompt.trim() : '';
         if (!['claude', 'codex'].includes(params.agent) || !prompt || prompt.length > PROMPT_LIMIT || /^[-+]/.test(prompt) || !/\s/.test(prompt)) {
@@ -546,6 +569,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         const paneId = `p-start-${++startedPanes}`;
         scenario.panes.push({ paneId, sessionId: session.sessionId, kind: 'terminal', title: params.agent, cwd: session.workDir, running: true, blockCount: 1, agent: params.agent, agentState: 'working' });
         writePane(paneId, `$ ${params.agent} '${prompt.replace(/'/g, "'\\''")}'\r\n\x1b[36m>\x1b[0m ${prompt}\r\n`);
+        scenario.turns[paneId] = [{ id: `${paneId}-t1`, startedAt: Date.now(), prompt, steps: [], commands: 0, filesEdited: 0, ended: false }];
         setSessionState(session.sessionId, 'working');
         log(`agent: agent.start ${paneId} in ${session.sessionId}`);
         return respond(id, { paneId, confirmed: true });

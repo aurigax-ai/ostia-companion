@@ -92,3 +92,10 @@ test('PHA-C15 chosen workspaces are ticked one by one, never a scratch workspace
   await waitFor(() => expect(mockControl.set).toHaveBeenCalledWith({ chosen: ['s-ledger'] }));
   expect(mockControl.confirm).not.toHaveBeenCalled();
 });
+
+test('PHA-C27 Settings shows the Phone workspace the desktop set, read only', async () => {
+  jest.requireMock<{ usePhoneWorkspace: jest.Mock }>('../services/phoneWorkspace').usePhoneWorkspace.mockReturnValue({ set: true, agent: 'codex' });
+  await render(inSafeArea(<SettingsScreen navigation={{ navigate } as any} route={{} as any} onUnpair={jest.fn(async () => {})} />));
+  expect(screen.getByText('Set on the desktop')).toBeTruthy();
+  expect(screen.getByText('codex')).toBeTruthy();
+});

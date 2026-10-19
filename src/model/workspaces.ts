@@ -8,6 +8,7 @@ export interface Session {
   workDir: string;
   state: SessionState;
   group?: { id: string; name: string };
+  phone?: boolean;
 }
 
 export interface Pane {
@@ -107,6 +108,10 @@ export function applySessionState(sessions: Session[], sessionId: string, state:
 }
 
 const STATUS_GLYPHS = /^[\u2800-\u28ff\u25d0-\u25d3\u2722-\u273d\u00b7]+\s*/;
+
+export function paneScreen(pane: Pane): 'Conversation' | 'Terminal' {
+  return pane.kind === 'terminal' && (pane.agent === 'claude' || pane.agent === 'codex') ? 'Conversation' : 'Terminal';
+}
 
 export function paneTitle(pane: Pane): string {
   return pane.title.replace(STATUS_GLYPHS, '') || 'Terminal';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatTarget, startFailureText } from './agentStart';
+import { chatTarget, parsePhoneWorkspace, startFailureText } from './agentStart';
 
 describe('agent start model', () => {
   it('names each refusal of agent.start the desktop sends', () => {
@@ -28,12 +28,34 @@ describe('new chat target', () => {
     { sessionId: 's-term', kind: 'terminal' },
     { sessionId: 's-agent', kind: 'agent' },
   ];
+  const id = (target: ReturnType<typeof chatTarget>) => (target?.kind === 'workspace' ? target.session.sessionId : target?.kind ?? null);
 
   it('PHA-C8 aims at the workspace asked for, else the last one used, else the first agent workspace', () => {
-    expect(chatTarget(sessions, 's-term', 's-agent')?.sessionId).toBe('s-term');
-    expect(chatTarget(sessions, undefined, 's-term')?.sessionId).toBe('s-term');
-    expect(chatTarget(sessions, undefined, 's-scratch')?.sessionId).toBe('s-agent');
-    expect(chatTarget(sessions, undefined, null)?.sessionId).toBe('s-agent');
-    expect(chatTarget([], undefined, null)).toBeNull();
+    expect(id(chatTarget(sessions, 's-term', 's-agent', null))).toBe('s-term');
+    expect(id(chatTarget(sessions, undefined, 's-term', null))).toBe('s-term');
+    expect(id(chatTarget(sessions, undefined, 's-scratch', null))).toBe('s-agent');
+    expect(id(chatTarget(sessions, undefined, null, null))).toBe('s-agent');
+    expect(chatTarget([], undefined, null, null)).toBeNull();
+  });
+
+  it('PHA-C8 starts in the Phone workspace when the desktop has one, unless a workspace is asked for', () => {
+    const phone = { set: true, agent: 'claude' as const };
+    const withPhone = [...sessions, { sessionId: 's-phone', kind: 'agent', phone: true }];
+    expect(id(chatTarget(withPhone, undefined, 's-term', phone))).toBe('phone');
+    expect(id(chatTarget(withPhone, 's-term', null, phone))).toBe('s-term');
+    expect(id(chatTarget(withPhone, 's-phone', null, phone))).toBe('phone');
+    expect(id(chatTarget(withPhone, undefined, null, { set: false, agent: 'claude' }))).toBe('s-agent');
+  });
+});
+
+describe('the Phone workspace', () => {
+  it('reads hello\'s phoneWorkspace and is absent on an older desktop', () => {
+    expect(parsePhoneWorkspace({ set: true, agent: 'codex' })).toEqual({ set: true, agent: 'codex' });
+    expect(parsePhoneWorkspace({ set: false, agent: 'bash' })).toEqual({ set: false, agent: null });
+    expect(parsePhoneWorkspace(undefined)).toBeNull();
+  });
+
+  it('names the unavailable Phone workspace', () => {
+    expect(startFailureText({ code: -32602, message: 'phone-workspace-unavailable' })).toMatch(/^The Phone workspace is not set up/);
   });
 });

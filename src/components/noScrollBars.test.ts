@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const SCROLLING = /<(ScrollView|FlatList|SectionList|FlashList|WebView)\b([^>]*)/g;
+const SCROLLING = /(?<![\w$])<(ScrollView|FlatList|SectionList|FlashList|WebView)\b([^>]*)/g;
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -13,7 +13,7 @@ function sources(dir: string): string[] {
 }
 
 describe('scroll bars', () => {
-  it('no list, scroll view or web view in the app draws a scroll bar', () => {
+  it('PHA-C29 no list, scroll view or web view in the app draws a scroll bar', () => {
     const files = sources(join(__dirname, '..'));
     const views = files.flatMap((file) => [...readFileSync(file, 'utf8').matchAll(SCROLLING)].map((match) => ({ file, tag: match[1], props: match[2] })));
     expect(views.length).toBeGreaterThan(15);
