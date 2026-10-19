@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="phone_control_accessibility_label">Ostia phone control</string>
+  <string name="phone_control_accessibility_description">Lets an agent on your own desktop tap, swipe and type on this phone, only during a session you start in Ostia. It does nothing outside a session. Touching the screen pauses the agent, and Stop ends the session.</string>
+</resources>
