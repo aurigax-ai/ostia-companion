@@ -24,7 +24,6 @@ export function PromptComposer({
     onPrompt(prompt);
     setText('');
   };
-  const ready = !!text.trim() && canRespond;
   return (
     <View style={[styles.bar, { paddingBottom: space.sm + bottomInset }]}>
       <View style={styles.chips}>
@@ -33,27 +32,64 @@ export function PromptComposer({
         <View style={{ flex: 1 }} />
         <IconButton icon={Keyboard} label="Raw keyboard" onPress={onKeyboard} color={colors.muted} />
       </View>
-      <View style={styles.field}>
-        <TextInput
-          style={styles.input}
-          placeholder={canRespond ? 'Prompt the agent' : 'Turn on Respond in Settings › Remote'}
-          placeholderTextColor={colors.dim}
-          value={text}
-          onChangeText={setText}
-          multiline
-          editable={canRespond}
-          cursorColor={colors.brand}
-          selectionColor={colors.brandSoft}
-          accessibilityLabel="Prompt"
-        />
-        <IconButton
-          icon={ArrowUp}
-          label="Send prompt"
-          onPress={send}
-          variant={ready ? 'filled' : 'tonal'}
-          color={ready ? colors.onBrand : colors.dim}
-        />
-      </View>
+      <MessageField
+        value={text}
+        onChangeText={setText}
+        onSend={send}
+        placeholder={canRespond ? 'Prompt the agent' : 'Turn on Respond in Settings › Remote'}
+        editable={canRespond}
+        label="Prompt"
+        sendLabel="Send prompt"
+      />
+    </View>
+  );
+}
+
+export function MessageField({
+  value,
+  onChangeText,
+  onSend,
+  placeholder,
+  editable = true,
+  sending,
+  autoFocus,
+  label = 'Message',
+  sendLabel = 'Send',
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSend: () => void;
+  placeholder: string;
+  editable?: boolean;
+  sending?: boolean;
+  autoFocus?: boolean;
+  label?: string;
+  sendLabel?: string;
+}) {
+  const ready = !!value.trim() && editable && !sending;
+  return (
+    <View style={styles.field}>
+      <TextInput
+        style={styles.input}
+        placeholder={placeholder}
+        placeholderTextColor={colors.dim}
+        value={value}
+        onChangeText={onChangeText}
+        multiline
+        editable={editable && !sending}
+        autoFocus={autoFocus}
+        cursorColor={colors.brand}
+        selectionColor={colors.brandSoft}
+        accessibilityLabel={label}
+      />
+      <IconButton
+        icon={ArrowUp}
+        label={sendLabel}
+        onPress={() => ready && onSend()}
+        variant={ready ? 'filled' : 'tonal'}
+        color={ready ? colors.onBrand : colors.dim}
+        disabled={sending}
+      />
     </View>
   );
 }

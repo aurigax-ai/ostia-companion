@@ -5,6 +5,7 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
 }));
 
+jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
 jest.mock('react-native-webview', () => ({ WebView: 'WebView' }));
 jest.mock('../generated/mermaidSource', () => ({ MERMAID_SOURCE: '' }));
 jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: 'cache' } }));
