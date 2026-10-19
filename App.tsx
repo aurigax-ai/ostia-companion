@@ -20,6 +20,7 @@ import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
 import { resetAsks } from './src/services/askStore';
 import { resetArtifacts } from './src/services/artifactStore';
+import { resetSnippets } from './src/services/snippets';
 import { MainTabs } from './src/screens/MainTabs';
 import { AllowModeScreen } from './src/screens/AllowModeScreen';
 import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
@@ -87,6 +88,7 @@ export default function App() {
     resetWorkspaces();
     resetAsks();
     resetArtifacts();
+    resetSnippets();
     if (!data) return setPaired(false);
     OstiaRpc.initialize(data);
     setPaired(true);

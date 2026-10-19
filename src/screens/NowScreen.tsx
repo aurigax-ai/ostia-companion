@@ -76,7 +76,7 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
                   subtitle={pinned ? `${pinned.agent} · ${pinned.agentMessage || (pinned.agentState === 'working' ? 'Working' : 'Your Phone agent')}` : `${phone.agent ?? 'claude'} · Your Phone agent`}
                   trailing={pinned ? <Meta text={ago(changedAt(pinned, seen), now)} /> : null}
                   chevron={false}
-                  onPress={() => (pinned ? navigation.navigate('Conversation', { paneId: pinned.paneId, title: paneTitle(pinned) }) : newChat())}
+                  onPress={() => (pinned ? navigation.navigate(paneScreen(pinned), { paneId: pinned.paneId, title: paneTitle(pinned) }) : newChat())}
                 />
               </Group>
             ) : null}

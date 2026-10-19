@@ -6,6 +6,8 @@ import { ConversationScreen } from './ConversationScreen';
 
 const mockConv = {
   turns: { kind: 'turns', list: { turns: [] as object[], truncated: false } } as object,
+  later: null as object | null,
+  loads: 0,
   output: jest.fn(async (..._args: unknown[]) => ({ ok: true, output: ' FAIL month.test.ts\nTests 1 failed' }) as object),
   prompt: jest.fn(async (..._args: unknown[]) => ({ ok: true }) as unknown),
   interrupt: jest.fn(async (..._args: unknown[]) => ({ ok: true }) as unknown),
@@ -37,7 +39,7 @@ const TURNS = {
 };
 
 jest.mock('../services/turns', () => ({
-  loadTurns: async () => mockConv.turns,
+  loadTurns: async () => (mockConv.loads++ > 0 && mockConv.later ? mockConv.later : mockConv.turns),
   loadStepOutput: (...args: unknown[]) => mockConv.output(...args),
 }));
 jest.mock('../services/askStore', () => ({
@@ -80,6 +82,8 @@ async function renderConversation() {
 
 beforeEach(() => {
   mockConv.turns = TURNS;
+  mockConv.later = null;
+  mockConv.loads = 0;
   mockConv.asks = [];
   mockConv.caps = ['read', 'notify', 'respond'];
   mockConv.agentState = 'done';
@@ -145,3 +149,27 @@ test('an open ask for this agent shows in the thread', async () => {
   await renderConversation();
   expect(await screen.findByText('Which environment?')).toBeTruthy();
 });
+
+test('PHA-C24 a message the agent did not take says so, and the message stays shown until the next send', async () => {
+  mockConv.prompt.mockRejectedValueOnce({ code: -32005, message: 'not-submitted' });
+  await renderConversation();
+  await fireEvent.changeText(await screen.findByLabelText('Message'), 'run the export tests too');
+  await fireEvent.press(screen.getByLabelText('Send'));
+  expect(await screen.findByText(/did not start a turn/)).toBeTruthy();
+  await waitFor(() => expect(mockConv.loads).toBeGreaterThan(1));
+  expect(screen.getByText(/did not start a turn/)).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Send'));
+  await waitFor(() => expect(screen.queryByText(/did not start a turn/)).toBeNull());
+});
+
+test('PHA-C25 a thread whose pane goes away later stays and says so instead of jumping to the terminal', async () => {
+  mockConv.later = { kind: 'error', text: 'This agent is no longer on the desktop.' };
+  mockConv.prompt.mockResolvedValueOnce({ ok: true });
+  await renderConversation();
+  await fireEvent.changeText(await screen.findByLabelText('Message'), 'one more thing please');
+  await fireEvent.press(screen.getByLabelText('Send'));
+  expect(await screen.findByText('This agent is no longer on the desktop.')).toBeTruthy();
+  expect(screen.getByText('Split the ledger export into monthly files')).toBeTruthy();
+  expect(navigation.replace).not.toHaveBeenCalled();
+});
+

@@ -28,6 +28,7 @@ export interface MockGatewayOptions {
   onScreen?: (screen: MockScreenLink) => void;
   log?: (line: string) => void;
   phoneWorkspace?: { sessionId: string; agent: 'claude' | 'codex' };
+  redactionFails?: boolean;
 }
 
 export interface MockScreenFrame {
@@ -157,6 +158,7 @@ interface Connection {
 
 const SCREEN_LIMITS = [300, 900, 1800];
 const NO_CONTROLLER = -32004;
+const REDACTION_FAILED = -32603;
 const RATE_LIMITED = -32007;
 const AGENT_STARTS_PER_MINUTE = 3;
 const PROMPT_LIMIT = 4000;
@@ -203,6 +205,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     onScreen = () => {},
     log = () => {},
     phoneWorkspace,
+    redactionFails = false,
   } = options;
   const screens: MockScreenLink[] = [];
   const { key, cert, fingerprint } = certificate(name);
@@ -451,7 +454,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       if (['turn.list', 'turn.output', 'snippet.list'].includes(method) && !has('read')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
       if (method === 'turn.list' || method === 'turn.output') {
         const pane = scenario.panes.find((p) => p.paneId === params.paneId);
-        if (!pane || (pane.agent !== 'claude' && pane.agent !== 'codex')) return fail(id, INVALID_PARAMS, 'not-an-agent');
+        if (!pane) return fail(id, INVALID_PARAMS, 'not-an-agent');
+        if (redactionFails) return fail(id, REDACTION_FAILED, 'redaction-failed');
         if (method === 'turn.list') return respond(id, { turns: scenario.turns[pane.paneId] ?? [], truncated: false });
         const output = scenario.outputs[params.stepId];
         return output === undefined ? fail(id, INVALID_PARAMS, 'unknown-step') : respond(id, { output });
