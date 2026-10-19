@@ -69,7 +69,8 @@ export interface MockGateway {
   typed: (paneId: string) => string[];
   opened: string[];
   screens: MockScreenLink[];
-  requestScreen: (sessionId: string) => void;
+  requestScreen: (sessionId: string, from?: { agent: string; reason: string }) => string;
+  declined: { requestId: string; reason: string }[];
   writeArtifact: (sessionId: string, path: string, content: string | null) => void;
   close: () => Promise<void>;
 }
@@ -215,6 +216,9 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const typed = new Map<string, string[]>();
   const opened: string[] = [];
   const agentStarts = new Map<string, number[]>();
+  const pendingRequests = new Set<string>();
+  const declined: { requestId: string; reason: string }[] = [];
+  let screenRequests = 0;
   let startedPanes = 0;
   const touched = new Map<string, number>();
   const started = Date.now();
@@ -353,6 +357,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       if (problem) return fail(id, INVALID_PARAMS, problem);
       if (!scenario.sessions.some((s) => s.sessionId === params.sessionId)) return fail(id, INVALID_PARAMS, 'unknown-session');
       if (screens.some((s) => !s.closed && s.deviceId === device.deviceId)) return fail(id, INVALID_PARAMS, 'busy');
+      if (typeof params.requestId === 'string') pendingRequests.delete(params.requestId);
       const screen: MockScreenLink = {
         screenId: `scr_${randomBytes(6).toString('hex')}`,
         deviceId: device.deviceId,
@@ -373,7 +378,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       socket.on('close', () => clearTimeout(limit));
       connection.screen = screen;
       screens.push(screen);
-      log(`screen: ${screen.screenId} from ${device.name} for ${params.sessionId} (${params.level}, ${params.limitSec / 60} min)`);
+      log(`screen: ${screen.screenId} from ${device.name} for ${params.sessionId} (${params.level}, ${params.limitSec / 60} min${params.requestId ? `, answers ${params.requestId}` : ""}${params.agent ? `, ${params.agent}` : ""})`);
       respond(id, { screenId: screen.screenId });
       onScreen(screen);
     };
@@ -518,6 +523,14 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         log(`agent: ${method} ${pane.paneId}`);
         return respond(id, { ok: true });
       }
+      if (method === 'screen.decline') {
+        if (!has('notify')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'notify' });
+        if (!['off', 'unsupported', 'denied', 'busy'].includes(params.reason)) return fail(id, INVALID_PARAMS, 'bad-params');
+        if (!pendingRequests.delete(params.requestId)) return fail(id, INVALID_PARAMS, 'unknown-request');
+        declined.push({ requestId: params.requestId, reason: params.reason });
+        log(`screen: request ${params.requestId} declined (${params.reason})`);
+        return respond(id, {});
+      }
       if (method === 'agent.start') {
         const session = scenario.sessions.find((s) => s.sessionId === params.sessionId);
         if (!session) return fail(id, INVALID_PARAMS, 'unknown-session');
@@ -609,7 +622,13 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     typed: (paneId) => typed.get(paneId) ?? [],
     opened,
     screens,
-    requestScreen: (sessionId) => event('screen.requested', { sessionId, by: 'desktop' }, 'notify'),
+    requestScreen: (sessionId, from) => {
+      const requestId = `req-${++screenRequests}`;
+      pendingRequests.add(requestId);
+      event('screen.requested', { requestId, sessionId, ...(from ? { by: 'agent', ...from } : { by: 'desktop' }) }, 'notify');
+      return requestId;
+    },
+    declined,
     writeArtifact: (sessionId, path, content) => {
       const tree = (scenario.artifacts[sessionId] ??= {});
       const change = content === null ? 'removed' : tree[path] === undefined ? 'added' : 'changed';

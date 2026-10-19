@@ -87,12 +87,35 @@ describe('mock gateway: phone screen link (contract v1.8)', () => {
 
   it('PHC-C19 asks a phone with notify for a session and starts nothing', async () => {
     const { gw, client } = await linked();
-    gw.requestScreen('s-api');
+    const requestId = gw.requestScreen('s-api');
     await client.settle();
     expect(client.unsolicited).toContainEqual(
-      expect.objectContaining({ method: 'event', params: { type: 'screen.requested', payload: { sessionId: 's-api', by: 'desktop' } } }),
+      expect.objectContaining({ method: 'event', params: { type: 'screen.requested', payload: { requestId, sessionId: 's-api', by: 'desktop' } } }),
     );
     expect(gw.screens).toHaveLength(1);
+  });
+
+  it('PHA-C11 an agent\'s request carries its name and reason', async () => {
+    const { gw, client } = await linked();
+    const requestId = gw.requestScreen('s-api', { agent: 'claude', reason: 'Free up space' });
+    await client.settle();
+    expect(client.unsolicited).toContainEqual(
+      expect.objectContaining({ params: { type: 'screen.requested', payload: { requestId, sessionId: 's-api', by: 'agent', agent: 'claude', reason: 'Free up space' } } }),
+    );
+  });
+
+  it('PHA-C13 PHA-C14 a declined request is answered once with its reason', async () => {
+    const gw = (gateway = await startMockGateway({}));
+    const { result } = await pair(gw);
+    const client = connect(gw);
+    await client.call('hello', { deviceToken: result.deviceToken, client: 'test' });
+    const first = gw.requestScreen('s-api');
+    const second = gw.requestScreen('s-api');
+    expect((await client.call('screen.decline', { requestId: first, reason: 'denied' })).result).toEqual({});
+    expect((await client.call('screen.decline', { requestId: first, reason: 'denied' })).error).toEqual(expect.objectContaining({ code: -32602, message: 'unknown-request' }));
+    expect((await client.call('screen.decline', { requestId: second, reason: 'maybe' })).error).toEqual(expect.objectContaining({ message: 'bad-params' }));
+    expect((await client.call('screen.decline', { requestId: second, reason: 'off' })).result).toEqual({});
+    expect(gw.declined).toEqual([{ requestId: first, reason: 'denied' }, { requestId: second, reason: 'off' }]);
   });
 
   it('closes the link 5 s after endsAt', async () => {

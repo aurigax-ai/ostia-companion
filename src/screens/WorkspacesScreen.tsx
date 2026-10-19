@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useMemo, useState } from 'react';
 import { Keyboard, RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import { Clock, Folder, FolderOpen, MonitorOff } from 'lucide-react-native';
 import { ConnectionBanner } from '../components/ConnectionBanner';
-import { Badge, Divider, Empty, GroupItem, IconTile, ListRow, Meta, SearchField, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, terminalIcon } from '../components/ui';
+import { Divider, Empty, GroupItem, IconTile, ListRow, Meta, SearchField, SectionHeader, SnackbarHost, useTabBarInset, TILE_INSET, terminalIcon } from '../components/ui';
 import { matchRange, search, SearchHit, workspaceSections, WorkspaceRow } from '../model/workspaceList';
 import { paneTitle, Session } from '../model/workspaces';
 import { TabProps } from '../navigation';
@@ -100,10 +100,10 @@ export function WorkspacesScreen({ navigation }: TabProps<'Workspaces'>) {
           <GroupItem first={index === 0} last={index === section.data.length - 1}>
             {item.kind === 'workspace' ? (
               <ListRow
-                leading={<IconTile icon={Folder} tone={item.row.attention ? 'attn' : 'neutral'} />}
+                leading={<IconTile icon={Folder} dot={item.row.attention} />}
                 title={item.row.session.name}
                 subtitle={item.row.summary}
-                trailing={item.row.needs > 0 ? <Badge text={String(item.row.needs)} /> : null}
+                trailing={item.row.needs > 0 ? <Meta text={String(item.row.needs)} tone="attn" /> : null}
                 chevron={false}
                 onPress={() => open(item.row.session)}
               />

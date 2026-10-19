@@ -220,6 +220,7 @@ data class SessionConfig(
   val limitSec: Int,
   val level: String,
   val blocked: Set<String>,
+  val requestId: String? = null,
 ) {
   fun into(intent: Intent): Intent =
     intent
@@ -234,15 +235,17 @@ data class SessionConfig(
       .putExtra("limitSec", limitSec)
       .putExtra("level", level)
       .putStringArrayListExtra("blocked", ArrayList(blocked))
+      .putExtra("requestId", requestId)
 
   companion object {
     val LIMITS = setOf(300, 900, 1800)
     val LEVELS = setOf("view", "control")
     private const val MAX_BLOCKED = 500
+    private val REQUEST_ID = Regex("[A-Za-z0-9._:-]{1,100}")
 
     fun from(intent: Intent): SessionConfig? {
       val json = JSONObject()
-      listOf("host", "fingerprint", "deviceToken", "sessionId", "label", "desktopName", "agentName", "level").forEach { key ->
+      listOf("host", "fingerprint", "deviceToken", "sessionId", "label", "desktopName", "agentName", "level", "requestId").forEach { key ->
         intent.getStringExtra(key)?.let { json.put(key, it) }
       }
       json.put("port", intent.getIntExtra("port", 0)).put("limitSec", intent.getIntExtra("limitSec", 0))
@@ -272,6 +275,7 @@ data class SessionConfig(
         limit,
         level,
         blocked,
+        json.optString("requestId", "").takeIf { REQUEST_ID.matches(it) },
       )
     }
   }

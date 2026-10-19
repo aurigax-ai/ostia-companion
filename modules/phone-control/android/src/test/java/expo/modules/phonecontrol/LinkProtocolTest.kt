@@ -13,6 +13,15 @@ class LinkProtocolTest {
   private val frame = Frame(800, 1600, 1080, 2160, byteArrayOf(1, 2, 3), false)
 
   @Test
+  fun PHA_C12_startCarriesTheRequestItAnswersOnlyWhenThereIsOne() {
+    val start = StartParams("s1", "api", 1080, 2400, 2.75f, 0, "control", 300, 9, 0, "claude", null)
+    assertTrue(!JSONObject(LinkProtocol.start(2, start)).getJSONObject("params").has("requestId"))
+    val answered = JSONObject(LinkProtocol.start(2, start.copy(requestId = "req-7"))).getJSONObject("params")
+    assertEquals("req-7", answered.getString("requestId"))
+    assertEquals("claude", answered.getString("agent"))
+  }
+
+  @Test
   fun parsesDesktopRequestsWithTheirIds() {
     val message = LinkProtocol.parse("""{"jsonrpc":"2.0","id":"r7","method":"phone.capture","params":{"maxSide":800}}""")
     message as Incoming.Request

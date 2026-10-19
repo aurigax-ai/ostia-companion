@@ -17,7 +17,8 @@ import {
   takePendingAsk,
 } from 'phone-control';
 import type { Level } from '../model/phoneControlPrefs';
-import type { SessionLimit, StartFailure } from '../model/phoneSession';
+import { endedLine, isActive, SessionLimit, StartFailure } from '../model/phoneSession';
+import { showSnackbar } from './snackbar';
 import { getBlockedApps } from './blockedAppsStore';
 import { OstiaRpc } from './rpc';
 
@@ -62,7 +63,7 @@ export async function confirmWithFingerprint(promptMessage: string): Promise<Sta
 export async function startPhoneSession(
   sessionId: string,
   label: string,
-  { level, limit, fingerprint }: { level: Level; limit: SessionLimit; fingerprint: boolean },
+  { level, limit, fingerprint, agent, requestId }: { level: Level; limit: SessionLimit; fingerprint: boolean; agent?: string | null; requestId?: string | null },
 ): Promise<StartFailure | null> {
   const pairing = OstiaRpc.getPairing();
   if (!pairing) return 'not-paired';
@@ -82,7 +83,8 @@ export async function startPhoneSession(
     desktopName: pairing.desktopName || 'Your desktop',
     limitSec: limit * 60,
     level,
-    agentName: 'The agent',
+    agentName: agent ?? 'The agent',
+    ...(requestId ? { requestId } : {}),
     blocked: getBlockedApps(),
   });
   return started ? null : 'not-started';
@@ -106,4 +108,16 @@ export function startPhoneSessionLinks(toAsk: (sessionId: string, name: string, 
     if (ask) toAsk(ask.sessionId, ask.label, ask.askId);
   };
   AppState.addEventListener('change', (state) => state === 'active' && openPendingAsk());
+}
+
+let endNoticeStarted = false;
+
+export function startSessionEndNotice(onDetails: () => void): void {
+  if (endNoticeStarted || !isSupported()) return;
+  endNoticeStarted = true;
+  let wasActive = isActive(sessionStatus().state);
+  addStatusListener((next) => {
+    if (wasActive && next.state === 'stopped') showSnackbar(endedLine(next.reason), { label: 'Details', run: onDetails });
+    wasActive = isActive(next.state);
+  });
 }

@@ -76,7 +76,8 @@ test('PHC-C20 PHA-C8 the first message starts claude in the first agent workspac
 
 test('PHA-C8 the header switches the agent and the workspace', async () => {
   await renderScreen('s-api');
-  await fireEvent.press(screen.getByLabelText('To claude. Switch to codex'));
+  await fireEvent.press(screen.getByLabelText('To claude. Choose the agent'));
+  await fireEvent.press(screen.getByText('codex'));
   await fireEvent.press(screen.getByLabelText('In api-server. Choose the workspace'));
   expect(screen.queryByText('scratch')).toBeNull();
   await fireEvent.press(screen.getByText('ledger-api'));
@@ -97,10 +98,13 @@ test('PHA-C9 a slash shows the shortcuts, and a pick fills the message without s
   await fireEvent.press(screen.getByLabelText('/review'));
   await fireEvent.press(screen.getByText('ledger-api'));
   expect(screen.getByLabelText('Message').props.value).toBe('Review the last changes in ledger-api');
+  expect(mockChat.start).not.toHaveBeenCalled();
+  expect(navigation.replace).not.toHaveBeenCalled();
   await fireEvent.changeText(screen.getByLabelText('Message'), '/su');
   await fireEvent.press(screen.getByLabelText('/summary'));
   expect(screen.getByLabelText('Message').props.value).toBe('What changed today across my workspaces?');
   expect(mockChat.start).not.toHaveBeenCalled();
+  expect(navigation.replace).not.toHaveBeenCalled();
 });
 
 test('PHA-C10 no /storage without phone control', async () => {
