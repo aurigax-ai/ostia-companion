@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fillSnippet, parseSnippets, snippetsFor } from './snippets';
+import { blanks, fillSnippet, parseSnippets, snippetsFor, unfilled } from './snippets';
 
 const WIRE = {
   snippets: [
@@ -23,6 +23,14 @@ describe('snippets', () => {
     const [standup, tests] = parseSnippets(WIRE);
     expect(fillSnippet(standup)).toBe('Draft my standup for yesterday in <team>');
     expect(fillSnippet(tests)).toBe('pnpm test {{not-an-arg}}');
+  });
+
+  it('PHA-C26 names the blanks a pick leaves until the human fills them', () => {
+    const [standup, tests] = parseSnippets(WIRE);
+    expect(blanks(standup)).toEqual(['<team>']);
+    expect(blanks(tests)).toEqual([]);
+    expect(unfilled('Draft my standup for yesterday in <team>', ['<team>'])).toEqual(['<team>']);
+    expect(unfilled('Draft my standup for yesterday in billing', ['<team>'])).toEqual([]);
   });
 
   it('offers the snippets whose name starts with what follows the slash', () => {

@@ -31,7 +31,7 @@ describe('new chat target', () => {
   const id = (target: ReturnType<typeof chatTarget>) => (target?.kind === 'workspace' ? target.session.sessionId : target?.kind ?? null);
 
   it('PHA-C8 aims at the workspace asked for, else the last one used, else the first agent workspace', () => {
-    expect(id(chatTarget(sessions, 's-term', 's-agent', null))).toBe('s-term');
+    expect(id(chatTarget(sessions, { kind: 'workspace', sessionId: 's-term' }, 's-agent', null))).toBe('s-term');
     expect(id(chatTarget(sessions, undefined, 's-term', null))).toBe('s-term');
     expect(id(chatTarget(sessions, undefined, 's-scratch', null))).toBe('s-agent');
     expect(id(chatTarget(sessions, undefined, null, null))).toBe('s-agent');
@@ -42,9 +42,16 @@ describe('new chat target', () => {
     const phone = { set: true, agent: 'claude' as const };
     const withPhone = [...sessions, { sessionId: 's-phone', kind: 'agent', phone: true }];
     expect(id(chatTarget(withPhone, undefined, 's-term', phone))).toBe('phone');
-    expect(id(chatTarget(withPhone, 's-term', null, phone))).toBe('s-term');
-    expect(id(chatTarget(withPhone, 's-phone', null, phone))).toBe('phone');
+    expect(id(chatTarget(withPhone, { kind: 'workspace', sessionId: 's-term' }, null, phone))).toBe('s-term');
+    expect(id(chatTarget(withPhone, { kind: 'workspace', sessionId: 's-phone' }, null, phone))).toBe('phone');
+    expect(id(chatTarget(withPhone, { kind: 'phone' }, 's-term', phone))).toBe('phone');
     expect(id(chatTarget(withPhone, undefined, null, { set: false, agent: 'claude' }))).toBe('s-agent');
+  });
+
+  it('a workspace whose id happens to be "phone" is still reachable', () => {
+    const named = [{ sessionId: 'phone', kind: 'agent' }];
+    expect(id(chatTarget(named, { kind: 'workspace', sessionId: 'phone' }, null, { set: true, agent: 'claude' }))).toBe('phone');
+    expect(chatTarget(named, { kind: 'workspace', sessionId: 'phone' }, null, { set: true, agent: 'claude' })?.kind).toBe('workspace');
   });
 });
 

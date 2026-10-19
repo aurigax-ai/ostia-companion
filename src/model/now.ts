@@ -39,9 +39,10 @@ export function nowSections(asks: Ask[], sessions: Session[], panes: Pane[], see
   const names = new Map(sessions.map((session) => [session.sessionId, session.name]));
   const asked = new Set(asks.map((ask) => ask.paneId));
   const row = (pane: Pane) => ({ kind: 'pane' as const, pane, workspace: names.get(pane.sessionId) ?? '', at: changedAt(pane, seen) });
-  const agents = panes.filter((pane) => isAgent(pane) && pane.paneId !== pinned);
+  const all = panes.filter(isAgent);
+  const needs = all.filter((pane) => !pane.hibernated && (pane.agentState === 'waiting' || pane.agentState === 'error') && !asked.has(pane.paneId));
+  const agents = all.filter((pane) => pane.paneId !== pinned);
   const awake = agents.filter((pane) => !pane.hibernated);
-  const needs = awake.filter((pane) => (pane.agentState === 'waiting' || pane.agentState === 'error') && !asked.has(pane.paneId));
   const working = awake.filter((pane) => pane.agentState === 'working');
   const done = awake.filter((pane) => {
     const at = changedAt(pane, seen);
