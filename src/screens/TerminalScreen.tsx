@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { Eye, Keyboard } from 'lucide-react-native';
 import { TerminalTheme, TerminalView, TerminalViewRef } from 'expo-libghostty';
 import { AskHeadsUp } from '../components/AskHeadsUp';
@@ -82,6 +83,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const [keyRow, setKeyRow] = useState<KeyRowState>({ ctrl: false });
   const keyRowRef = useRef<KeyRowState>({ ctrl: false });
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const terminalRef = useRef<TerminalViewRef>(null);
   const caps = useCaps();
   const canInput = caps.includes('input');
@@ -307,7 +309,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     <KeyboardAvoidingView
       style={styles.fill}
       behavior="padding"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      keyboardVerticalOffset={headerHeight}
     >
       <GestureDetector gesture={pager}>
       <Animated.View style={[styles.fill, { transform: [{ translateX: slide }] }]}>

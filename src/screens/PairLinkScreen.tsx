@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { CheckCodeView } from '../components/CheckCodeView';
 import { Button } from '../components/ui';
 import { ScreenProps } from '../navigation';
@@ -13,6 +14,7 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
   const [link, setLink] = useState('');
   const pairing = usePairing(onPaired);
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   if (pairing.check) {
     return (
@@ -28,7 +30,7 @@ export function PairLinkScreen({ onPaired }: ScreenProps<'PairLink'> & { onPaire
   const submit = () => void pairing.run((onCheck) => pairWith(link, onCheck));
 
   return (
-    <KeyboardAvoidingView style={styles.fill} behavior="padding">
+    <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={headerHeight}>
       <View style={[styles.screen, { paddingBottom: space.lg + insets.bottom }]}>
       <Text style={type.bodyMuted}>
         Paste the link shown under the QR code.

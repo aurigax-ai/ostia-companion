@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { CheckCodeView } from '../components/CheckCodeView';
 import { HeaderTitle } from '../components/ui';
 import { ScreenProps } from '../navigation';
@@ -12,6 +13,7 @@ const HALF = CODE_LENGTH / 2;
 
 export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'PairCode'> & { onPaired: () => Promise<void> }) {
   const desktop = route.params;
+  const headerHeight = useHeaderHeight();
   const [chars, setChars] = useState('');
   const [failed, setFailed] = useState<string | null>(null);
   const input = useRef<TextInput>(null);
@@ -45,7 +47,7 @@ export function PairCodeScreen({ navigation, route, onPaired }: ScreenProps<'Pai
   const boxes = Array.from({ length: CODE_LENGTH }, (_, index) => chars[index] ?? '');
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior="padding">
+    <KeyboardAvoidingView style={styles.screen} behavior="padding" keyboardVerticalOffset={headerHeight}>
       <Text style={type.title}>Enter the pairing code</Text>
       <Text style={[type.bodyMuted, { marginTop: space.sm }]}>
         Shown under the QR code on your desktop.
