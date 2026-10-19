@@ -39,7 +39,21 @@
           "color": "#f2b347"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Ostia listens while you dictate a message. The speech is recognised on this phone.",
+          "speechRecognitionPermission": "Ostia turns your speech into text on this phone."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Ostia opens the camera to attach a photo to a message.",
+          "photosPermission": "Ostia reads the photo you pick to attach to a message."
+        }
+      ]
     ],
     "backgroundColor": "#161616"
   }

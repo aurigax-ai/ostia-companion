@@ -29,6 +29,7 @@ export interface MockGatewayOptions {
   log?: (line: string) => void;
   phoneWorkspace?: { sessionId: string; agent: 'claude' | 'codex' };
   redactionFails?: boolean;
+  imagesUnsupported?: boolean;
 }
 
 export interface MockScreenFrame {
@@ -69,6 +70,7 @@ export interface MockGateway {
   updatePane: (paneId: string, patch: Partial<Pane>) => void;
   setSessionState: (sessionId: string, state: SessionState) => void;
   typed: (paneId: string) => string[];
+  pasted: (paneId: string) => { mime: string; bytes: number }[];
   opened: string[];
   screens: MockScreenLink[];
   requestScreen: (sessionId: string, from?: { agent: string; reason: string }) => string;
@@ -162,6 +164,9 @@ const REDACTION_FAILED = -32603;
 const RATE_LIMITED = -32007;
 const AGENT_STARTS_PER_MINUTE = 3;
 const PROMPT_LIMIT = 4000;
+const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp'];
+const IMAGE_LIMIT_BYTES = 10 * 1024 * 1024;
+const IMAGES_PER_MINUTE = 6;
 const REFUSED_KINDS = ['scratch', 'manager'];
 const SCREEN_GRACE_MS = 5000;
 const CLOSE_TIME_LIMIT = 4005;
@@ -221,6 +226,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const typed = new Map<string, string[]>();
   const opened: string[] = [];
   const agentStarts = new Map<string, number[]>();
+  const imagePastes = new Map<string, number[]>();
+  const pasted = new Map<string, { mime: string; bytes: number }[]>();
   const pendingRequests = new Set<string>();
   const declined: { requestId: string; reason: string }[] = [];
   let screenRequests = 0;
@@ -537,6 +544,18 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       if (method === 'agent.prompt' || method === 'agent.interrupt') {
         const pane = scenario.panes.find((p) => p.paneId === params.paneId);
         if (!pane?.agent || pane.agent === 'other') return fail(id, INVALID_PARAMS, 'not-an-agent');
+        const sentImage = method === 'agent.prompt' && params.image !== undefined && !options.imagesUnsupported;
+        if (sentImage) {
+          const { mime, data } = params.image ?? {};
+          if (!IMAGE_MIMES.includes(mime) || typeof data !== 'string') return fail(id, INVALID_PARAMS, 'image-type');
+          const bytes = Buffer.from(data, 'base64').length;
+          if (bytes > IMAGE_LIMIT_BYTES) return fail(id, INVALID_PARAMS, 'image-too-large');
+          const now = Date.now();
+          const recent = (imagePastes.get(connection.device!.deviceId) ?? []).filter((at) => now - at < 60_000);
+          if (recent.length >= IMAGES_PER_MINUTE) return fail(id, RATE_LIMITED, 'rate-limited');
+          imagePastes.set(connection.device!.deviceId, [...recent, now]);
+          pasted.set(pane.paneId, [...(pasted.get(pane.paneId) ?? []), { mime, bytes }]);
+        }
         const keys = method === 'agent.prompt' ? `${params.text}\r` : params.key === 'ctrl-c' ? '\x03' : '\x1b';
         typed.set(pane.paneId, [...(typed.get(pane.paneId) ?? []), keys]);
         if (method === 'agent.prompt') {
@@ -545,8 +564,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
           turns.push({ id: `${pane.paneId}-t${turns.length + 1}`, startedAt: Date.now(), prompt: params.text, steps: [], final: 'Noted.', commands: 0, filesEdited: 0, ended: true });
         }
         else writePane(pane.paneId, '\r\n\x1b[90m(interrupted)\x1b[0m\r\n');
-        log(`agent: ${method} ${pane.paneId}`);
-        return respond(id, { ok: true });
+        log(`agent: ${method} ${pane.paneId}${sentImage ? ' with an image' : ''}`);
+        return respond(id, sentImage ? { ok: true, image: 'pasted' } : { ok: true });
       }
       if (method === 'screen.decline') {
         if (!has('notify')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'notify' });
@@ -648,6 +667,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     updatePane,
     setSessionState,
     typed: (paneId) => typed.get(paneId) ?? [],
+    pasted: (paneId) => pasted.get(paneId) ?? [],
     opened,
     screens,
     requestScreen: (sessionId, from) => {
