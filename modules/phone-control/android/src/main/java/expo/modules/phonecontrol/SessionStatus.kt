@@ -24,6 +24,15 @@ object SessionStatusHub {
     listeners.forEach { it(status) }
   }
 
+  @Volatile
+  var pendingAsk: Map<String, String>? = null
+
+  fun takePendingAsk(): Map<String, String>? {
+    val ask = pendingAsk
+    pendingAsk = null
+    return ask
+  }
+
   fun listen(listener: (SessionStatus) -> Unit): () -> Unit {
     listeners.add(listener)
     return { listeners.remove(listener) }

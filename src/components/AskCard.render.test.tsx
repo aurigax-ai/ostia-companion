@@ -47,3 +47,11 @@ test('AGT-C10 without respond the buttons are disabled and the card says how to 
   expect(onAnswer).not.toHaveBeenCalled();
   expect(screen.getByText('Turn on Respond for this phone in Settings › Remote.')).toBeTruthy();
 });
+
+test('the approve choice spans the card on its own row and never takes a share of the height', async () => {
+  await render(<AskCard ask={PERMISSION} workspace="api-server" canRespond onAnswer={jest.fn()} flat />);
+  const button = screen.getByRole('button', { name: 'Allow once' });
+  const style = Object.assign({}, ...[button.props.style].flat(Infinity).filter(Boolean));
+  expect(style.flexBasis).toBeUndefined();
+  expect(style.flexGrow).toBeUndefined();
+});

@@ -134,6 +134,13 @@ class PhoneControlService : Service(), SessionHost, AccessibilityClient {
 
   override fun publish(status: SessionStatus) = SessionStatusHub.publish(status)
 
+  override fun openAsk(ask: AskLine) {
+    val started = session ?: return
+    val launch = packageManager.getLaunchIntentForPackage(packageName)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) ?: return
+    SessionStatusHub.pendingAsk = mapOf("sessionId" to started.sessionId, "askId" to ask.askId, "label" to started.label)
+    (OstiaAccessibilityService.instance ?: this).startActivity(launch)
+  }
+
   override fun finished() {
     if (OstiaAccessibilityService.client === this) OstiaAccessibilityService.client = null
     if (receiving) unregisterReceiver(screenOff)

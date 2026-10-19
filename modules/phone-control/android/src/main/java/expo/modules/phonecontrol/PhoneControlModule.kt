@@ -90,6 +90,21 @@ class PhoneControlModule : Module() {
       Unit
     }
 
+    Function("takePendingAsk") { SessionStatusHub.takePendingAsk() }
+
+    Function("installedApps") {
+      val context = appContext.reactContext ?: return@Function emptyList<Map<String, Any>>()
+      val pm = context.packageManager
+      val autofill = pm.queryIntentServices(Intent("android.service.autofill.AutofillService"), 0).map { it.serviceInfo.packageName }.toSet()
+      val fixed = Blocklist(context.packageName, autofill, emptySet())
+      pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+        .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+        .distinctBy { it.first }
+        .filter { it.first != context.packageName }
+        .sortedBy { it.second.lowercase() }
+        .map { mapOf("package" to it.first, "label" to it.second, "alwaysBlocked" to fixed.blocks(it.first)) }
+    }
+
     Function("stop") {
       val context = appContext.reactContext ?: return@Function Unit
       if (SessionStatusHub.current.state in setOf("starting", "running", "paused")) {

@@ -1,10 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Notifications from 'expo-notifications';
+import { AppState, Platform } from 'react-native';
 import {
   accessibilityEnabled,
   addStatusListener,
   askConsent,
+  installedApps,
   isSupported,
   PhoneSessionStatus,
   openAccessibilitySettings,
@@ -12,11 +14,15 @@ import {
   sessionStatus,
   startSession,
   stopSession,
+  takePendingAsk,
 } from 'phone-control';
 import type { SessionLimit, StartFailure } from '../model/phoneSession';
+import type { Session } from '../model/workspaces';
+import { getBlockedApps } from './blockedAppsStore';
 import { OstiaRpc } from './rpc';
+import { onWorkspaces } from './workspaceStore';
 
-export { accessibilityEnabled, isSupported as phoneControlSupported, openAccessibilitySettings };
+export { accessibilityEnabled, installedApps as phoneApps, isSupported as phoneControlSupported, openAccessibilitySettings };
 
 let status: PhoneSessionStatus = sessionStatus();
 const listeners = new Set<() => void>();
@@ -67,7 +73,7 @@ export async function startPhoneSession(sessionId: string, label: string, limit:
     limitSec: limit * 60,
     level: 'control',
     agentName: 'The agent',
-    blocked: [],
+    blocked: getBlockedApps(),
   });
   return started ? null : 'not-started';
 }
@@ -78,4 +84,41 @@ export function stopPhoneSession(): void {
 
 export function resumePhoneSession(): void {
   resumeSession();
+}
+
+type PhoneNavigate = {
+  toAsk: (sessionId: string, name: string, askId: string) => void;
+  toSession: (sessionId: string, name: string) => void;
+};
+
+let linksStarted = false;
+
+export function startPhoneSessionLinks(navigate: PhoneNavigate): void {
+  if (linksStarted || Platform.OS !== 'android' || !isSupported()) return;
+  linksStarted = true;
+  let sessions: Session[] = [];
+  onWorkspaces((snapshot) => (sessions = snapshot.sessions));
+  const openPendingAsk = () => {
+    const ask = takePendingAsk();
+    if (ask) navigate.toAsk(ask.sessionId, ask.label, ask.askId);
+  };
+  AppState.addEventListener('change', (state) => state === 'active' && openPendingAsk());
+  OstiaRpc.addEventListener((type, payload) => {
+    if (type !== 'screen.requested' || typeof payload?.sessionId !== 'string') return;
+    const name = sessions.find((session) => session.sessionId === payload.sessionId)?.name ?? 'a workspace';
+    const desktop = OstiaRpc.getPairing()?.desktopName || 'Your desktop';
+    void Notifications.scheduleNotificationAsync({
+      identifier: `screen-request:${payload.sessionId}`,
+      content: {
+        title: `${desktop} asks to use this phone`,
+        body: `For ${name}. Open to start a session, or ignore it.`,
+        data: { kind: 'screen-request', sessionId: payload.sessionId, name },
+      },
+      trigger: { channelId: 'agents' },
+    });
+  });
+  Notifications.addNotificationResponseReceivedListener((response) => {
+    const data = response.notification.request.content.data as { kind?: string; sessionId?: string; name?: string };
+    if (data?.kind === 'screen-request' && data.sessionId) navigate.toSession(data.sessionId, data.name ?? 'Workspace');
+  });
 }

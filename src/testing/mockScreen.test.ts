@@ -85,6 +85,16 @@ describe('mock gateway: phone screen link (contract v1.8)', () => {
     expect(screenOf(gw).closed).toBe(true);
   });
 
+  it('PHC-C19 asks a phone with notify for a session and starts nothing', async () => {
+    const { gw, client } = await linked();
+    gw.requestScreen('s-api');
+    await client.settle();
+    expect(client.unsolicited).toContainEqual(
+      expect.objectContaining({ method: 'event', params: { type: 'screen.requested', payload: { sessionId: 's-api', by: 'desktop' } } }),
+    );
+    expect(gw.screens).toHaveLength(1);
+  });
+
   it('closes the link 5 s after endsAt', async () => {
     const { client } = await linked({}, { endsAt: Date.now() - 4950 });
     expect(await client.closed).toBe(4005);
