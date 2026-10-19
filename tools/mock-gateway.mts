@@ -1,4 +1,5 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startMockGateway } from '../src/testing/mockGateway.ts';
@@ -42,3 +43,21 @@ for (const address of Object.values(networkInterfaces()).flat()) {
 process.on('SIGUSR1', () => gateway.devices.slice().forEach((device) => gateway.revoke(device.deviceId)));
 process.on('SIGUSR2', () => gateway.screens.filter((screen) => !screen.closed).forEach((screen) => void screen.request('phone.stop')));
 console.log(`kill -USR1 ${process.pid} revokes every phone; kill -USR2 ${process.pid} stops every phone screen`);
+
+const drivePort = Number(process.env.MOCK_DRIVE_PORT ?? 8724);
+createServer((req, res) => {
+  let body = '';
+  req.on('data', (chunk) => (body += chunk));
+  req.on('end', async () => {
+    const screen = gateway.screens.findLast((s) => !s.closed);
+    if (req.method !== 'POST' || !screen) return res.writeHead(404).end();
+    try {
+      const { method, params } = JSON.parse(body);
+      const reply = await screen.request(method, params ?? {});
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(reply));
+    } catch {
+      res.writeHead(400).end();
+    }
+  });
+}).listen(drivePort, '127.0.0.1');
+console.log(`Drive the linked phone: curl -d '{"method":"phone.tree"}' http://127.0.0.1:${drivePort}/`);

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Play, Square } from 'lucide-react-native';
 import { Button, Card, Group, ListRow, SectionHeader, Warning } from '../components/ui';
 import {
   DEFAULT_LIMIT,
   failureText,
   isActive,
+  pausedText,
   SESSION_LIMITS,
   SessionLimit,
   startBlock,
@@ -13,7 +14,15 @@ import {
   timeLeft,
 } from '../model/phoneSession';
 import { ScreenProps } from '../navigation';
-import { phoneControlSupported, startPhoneSession, stopPhoneSession, usePhoneSession } from '../services/phoneSession';
+import {
+  accessibilityEnabled,
+  openAccessibilitySettings,
+  phoneControlSupported,
+  resumePhoneSession,
+  startPhoneSession,
+  stopPhoneSession,
+  usePhoneSession,
+} from '../services/phoneSession';
 import { OstiaRpc } from '../services/rpc';
 import { useConnectionStatus } from '../services/workspaceStore';
 import { space, type } from '../theme';
@@ -22,6 +31,7 @@ const BLOCKS = {
   unsupported: 'This phone cannot be shared: it needs Android 10 or later and this build of Ostia.',
   offline: 'Connect to the desktop first.',
   running: null,
+  'service-off': null,
 };
 
 function useNow(active: boolean) {
@@ -34,17 +44,27 @@ function useNow(active: boolean) {
   return now;
 }
 
+function useAccessibility() {
+  const [enabled, setEnabled] = useState(accessibilityEnabled);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => state === 'active' && setEnabled(accessibilityEnabled()));
+    return () => subscription.remove();
+  }, []);
+  return enabled;
+}
+
 export function PhoneSessionScreen({ route }: ScreenProps<'PhoneSession'>) {
   const { sessionId, name } = route.params;
   const session = usePhoneSession();
   const connected = useConnectionStatus() === 'connected';
+  const taps = useAccessibility();
   const desktop = OstiaRpc.getPairing()?.desktopName || 'your desktop';
   const active = isActive(session.state);
   const now = useNow(active);
   const [limit, setLimit] = useState<SessionLimit>(DEFAULT_LIMIT);
   const [starting, setStarting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const block = startBlock({ supported: phoneControlSupported(), connected, active });
+  const block = startBlock({ supported: phoneControlSupported(), connected, active, serviceOn: taps });
 
   const start = async () => {
     setProblem(null);
@@ -58,16 +78,23 @@ export function PhoneSessionScreen({ route }: ScreenProps<'PhoneSession'>) {
   };
 
   if (active) {
+    const paused = session.state === 'paused';
     return (
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.live}>
-          <Text style={type.headline}>{session.state === 'starting' ? 'Connecting…' : `${desktop} can see this screen`}</Text>
+          <Text style={type.headline}>
+            {session.state === 'starting' ? 'Connecting…' : paused ? pausedText(session.reason) : `${desktop} can see this screen`}
+          </Text>
           <Text style={[type.bodyMuted, styles.gap]}>
             {name} · {timeLeft(session.endsAt, now)}
           </Text>
-          <Button label="Stop" icon={Square} variant="danger" onPress={stopPhoneSession} style={styles.liveAction} />
+          {paused ? <Button label="Resume" icon={Play} onPress={resumePhoneSession} style={styles.liveAction} /> : null}
+          <Button label="Stop" icon={Square} variant="danger" onPress={stopPhoneSession} style={paused ? styles.gapLarge : styles.liveAction} />
         </Card>
-        <Text style={[type.caption, styles.note]}>Stop is also in the notification. Nothing is kept when the session ends.</Text>
+        <Text style={[type.caption, styles.note]}>
+          Touching the screen pauses the agent until you resume. Stop is also in the notification. Nothing is kept when the session
+          ends.
+        </Text>
       </ScrollView>
     );
   }
@@ -77,10 +104,28 @@ export function PhoneSessionScreen({ route }: ScreenProps<'PhoneSession'>) {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={[type.bodyMuted, styles.intro]}>An agent on {desktop} will see this screen while the session runs.</Text>
+      <Text style={[type.bodyMuted, styles.intro]}>
+        {`An agent on ${desktop} will see this screen and tap and type on it while the session runs.`}
+      </Text>
       <Group>
         <ListRow title="Workspace" trailing={<Text style={type.mono}>{name}</Text>} />
+        <ListRow
+          title="Phone control"
+          trailing={
+            taps ? (
+              <Text style={type.bodyMuted}>On</Text>
+            ) : (
+              <Button label="Turn on" variant="text" compact onPress={openAccessibilitySettings} />
+            )
+          }
+        />
       </Group>
+      {taps ? null : (
+        <Text style={[type.caption, styles.note]}>
+          Turn on Ostia phone control in Android's accessibility settings, once. The phone needs it to tap and type, and to keep
+          the apps you never share out of every picture. It acts only during a session you start here.
+        </Text>
+      )}
       <SectionHeader title="Session ends after" />
       <View style={styles.chips} accessibilityRole="radiogroup">
         {SESSION_LIMITS.map((minutes) => (
@@ -95,8 +140,9 @@ export function PhoneSessionScreen({ route }: ScreenProps<'PhoneSession'>) {
         ))}
       </View>
       <Text style={[type.caption, styles.note]}>
-        Android asks before every session. Apps that mark their screens secure appear black. You can stop at any time from the
-        notification.
+        Android asks before every session. Apps that mark their screens secure appear black, and password managers,
+        authenticators and payment apps are never opened. Touching the screen pauses the agent. You can stop at any time from
+        the notification.
       </Text>
       {warning ? <Warning text={warning} /> : null}
       <Button label="Start" icon={Play} loading={starting} disabled={block !== null} onPress={() => void start()} style={styles.action} />
@@ -113,6 +159,7 @@ const styles = StyleSheet.create({
   note: { paddingHorizontal: space.gutter, paddingTop: space.sm },
   live: { padding: space.lg },
   gap: { marginTop: space.xs },
+  gapLarge: { marginTop: space.sm },
   action: { marginHorizontal: space.gutter, marginTop: space.xl },
   liveAction: { marginTop: space.lg },
   center: { textAlign: 'center' },

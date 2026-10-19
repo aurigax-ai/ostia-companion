@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { failureText, isActive, startBlock, stoppedText, timeLeft } from './phoneSession';
+import { failureText, isActive, pausedText, startBlock, stoppedText, timeLeft } from './phoneSession';
 
 describe('phone session model', () => {
-  it('blocks a start on an unsupported phone, while one runs, and when offline, in that order', () => {
-    expect(startBlock({ supported: false, connected: true, active: false })).toBe('unsupported');
-    expect(startBlock({ supported: true, connected: false, active: true })).toBe('running');
-    expect(startBlock({ supported: true, connected: false, active: false })).toBe('offline');
-    expect(startBlock({ supported: true, connected: true, active: false })).toBeNull();
+  it('blocks a start on an unsupported phone, while one runs, when offline, and with the service off, in that order', () => {
+    expect(startBlock({ supported: false, connected: true, active: false, serviceOn: true })).toBe('unsupported');
+    expect(startBlock({ supported: true, connected: false, active: true, serviceOn: false })).toBe('running');
+    expect(startBlock({ supported: true, connected: false, active: false, serviceOn: false })).toBe('offline');
+    expect(startBlock({ supported: true, connected: true, active: false, serviceOn: false })).toBe('service-off');
+    expect(startBlock({ supported: true, connected: true, active: false, serviceOn: true })).toBeNull();
   });
 
   it('counts starting, running and paused as active', () => {
@@ -25,5 +26,10 @@ describe('phone session model', () => {
 
   it('PHC-C2 says nothing was sent when the capture prompt is cancelled', () => {
     expect(failureText('cancelled')).toBe('Not started. Nothing was sent to the desktop.');
+  });
+
+  it('PHC-C9 says why the agent is paused', () => {
+    expect(pausedText('human-touch')).toBe('Paused because you touched the screen');
+    expect(pausedText(null)).toBe('Paused');
   });
 });

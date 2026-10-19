@@ -2,12 +2,23 @@ export const SESSION_LIMITS = [5, 15, 30] as const;
 export type SessionLimit = (typeof SESSION_LIMITS)[number];
 export const DEFAULT_LIMIT: SessionLimit = 15;
 
-export type StartBlock = 'unsupported' | 'offline' | 'running' | null;
+export type StartBlock = 'unsupported' | 'offline' | 'running' | 'service-off' | null;
 
-export function startBlock({ supported, connected, active }: { supported: boolean; connected: boolean; active: boolean }): StartBlock {
+export function startBlock({
+  supported,
+  connected,
+  active,
+  serviceOn,
+}: {
+  supported: boolean;
+  connected: boolean;
+  active: boolean;
+  serviceOn: boolean;
+}): StartBlock {
   if (!supported) return 'unsupported';
   if (active) return 'running';
   if (!connected) return 'offline';
+  if (!serviceOn) return 'service-off';
   return null;
 }
 
@@ -19,6 +30,16 @@ export function timeLeft(endsAt: number, now: number): string {
   const seconds = Math.max(0, Math.ceil((endsAt - now) / 1000));
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, '0')} left`;
+}
+
+const PAUSED: Record<string, string> = {
+  'human-touch': 'Paused because you touched the screen',
+  'screen-off': 'Paused because the screen went off',
+  confirm: 'Waiting for your answer',
+};
+
+export function pausedText(reason: string | null): string {
+  return (reason && PAUSED[reason]) || 'Paused';
 }
 
 const STOPPED: Record<string, string> = {
@@ -34,6 +55,7 @@ const STOPPED: Record<string, string> = {
   'no-controller': 'Install the screens extension on the desktop to share this phone.',
   'unknown-session': 'That workspace is closed on the desktop.',
   busy: 'This phone is already shared with the desktop.',
+  'service-off': 'Ostia phone control was turned off in Android settings.',
 };
 
 export function stoppedText(reason: string | null): string {
