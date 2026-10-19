@@ -48,19 +48,19 @@ export function parsePhoneWorkspace(value: unknown): PhoneWorkspace | null {
   return { set: raw.set === true, agent: AGENTS.includes(raw.agent as AgentName) ? (raw.agent as AgentName) : null };
 }
 
-export const PHONE_TARGET = 'phone';
-
 export type ChatTarget<T> = { kind: 'phone' } | { kind: 'workspace'; session: T };
+
+export type ChatChoice = { kind: 'phone' } | { kind: 'workspace'; sessionId: string };
 
 export function chatTarget<T extends { sessionId: string; kind: string; phone?: boolean }>(
   sessions: T[],
-  asked: string | undefined,
+  asked: ChatChoice | undefined,
   last: string | null,
   phone: PhoneWorkspace | null,
 ): ChatTarget<T> | null {
   const startable = sessions.filter((session) => session.kind !== 'scratch' && session.kind !== 'manager' && !session.phone);
-  if (asked === PHONE_TARGET && phone?.set) return { kind: 'phone' };
-  const named = sessions.find((session) => session.sessionId === asked);
+  if (asked?.kind === 'phone' && phone?.set) return { kind: 'phone' };
+  const named = asked?.kind === 'workspace' ? sessions.find((session) => session.sessionId === asked.sessionId) : undefined;
   if (named) return named.phone && phone?.set ? { kind: 'phone' } : { kind: 'workspace', session: named };
   if (phone?.set) return { kind: 'phone' };
   const session = startable.find((s) => s.sessionId === last) ?? startable.find((s) => s.kind === 'agent') ?? startable[0];

@@ -35,6 +35,7 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
   const pairing = OstiaRpc.getPairing();
   const phone = usePhoneWorkspace();
   const pinned = phone?.set ? phoneAgent(sessions, panes, seen) : null;
+  const pinnedNeeds = pinned?.agentState === 'waiting' || pinned?.agentState === 'error';
   const lists = useMemo(() => nowSections(asks.asks, sessions, panes, seen, now, pinned?.paneId ?? null), [asks.asks, sessions, panes, seen, now, pinned?.paneId]);
   const sheetAsk = asks.asks.find((ask) => ask.askId === askId) ?? null;
   const newChat = () => navigation.navigate('NewChat');
@@ -71,7 +72,8 @@ export function NowScreen({ navigation }: TabProps<'Chats'>) {
             {phone?.set ? (
               <Group inset={TILE_INSET} style={styles.pinned}>
                 <ListRow
-                  leading={<IconTile icon={Smartphone} />}
+                  leading={<IconTile icon={Smartphone} dot={pinnedNeeds} />}
+                  attention={pinnedNeeds}
                   title="Phone"
                   subtitle={pinned ? `${pinned.agent} · ${pinned.agentMessage || (pinned.agentState === 'working' ? 'Working' : 'Your Phone agent')}` : `${phone.agent ?? 'claude'} · Your Phone agent`}
                   trailing={pinned ? <Meta text={ago(changedAt(pinned, seen), now)} /> : null}

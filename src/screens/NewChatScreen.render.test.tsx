@@ -148,7 +148,7 @@ test('PHA-C27 with a Phone workspace, New chat talks to the Phone agent and send
   expect(screen.getByLabelText('In codex · Phone. Choose the workspace')).toBeTruthy();
   await send('free up space on this phone');
   expect(mockChat.start).toHaveBeenCalledWith(null, null, 'free up space on this phone');
-  expect(mockChat.remember).toHaveBeenCalledWith('phone');
+  expect(mockChat.remember).not.toHaveBeenCalled();
 });
 
 test('PHA-C27 a workspace picked instead of the Phone workspace gets the chat', async () => {

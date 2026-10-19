@@ -56,7 +56,12 @@ jest.mock('../services/workspaceStore', () => ({
   }),
 }));
 jest.mock('../services/rpc', () => ({ OstiaRpc: { addEventListener: () => () => {} } }));
-jest.mock('../services/snippets', () => ({ useSnippets: () => [{ name: 'standup', command: 'Draft my standup for {{day}}', defaults: { day: 'yesterday' } }] }));
+jest.mock('../services/snippets', () => ({
+  useSnippets: () => [
+    { name: 'standup', command: 'Draft my standup for {{day}}', defaults: { day: 'yesterday' } },
+    { name: 'handoff', command: 'Hand this to {{who}} with notes', defaults: {} },
+  ],
+}));
 jest.mock('../services/phoneSession', () => ({ phoneControlSupported: () => true }));
 
 const navigation = { navigate: jest.fn(), replace: jest.fn(), setOptions: jest.fn() };
@@ -171,5 +176,19 @@ test('PHA-C25 a thread whose pane goes away later stays and says so instead of j
   expect(await screen.findByText('This agent is no longer on the desktop.')).toBeTruthy();
   expect(screen.getByText('Split the ledger export into monthly files')).toBeTruthy();
   expect(navigation.replace).not.toHaveBeenCalled();
+});
+
+test('PHA-C26 a picked snippet with a blank is not sent until the human fills it', async () => {
+  await renderConversation();
+  await fireEvent.changeText(await screen.findByLabelText('Message'), '/hand');
+  await fireEvent.press(screen.getByLabelText('/handoff'));
+  expect(screen.getByLabelText('Message').props.value).toBe('Hand this to <who> with notes');
+  await fireEvent.press(screen.getByLabelText('Send'));
+  expect(screen.getByText('Fill in <who> first.')).toBeTruthy();
+  expect(mockConv.prompt).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Message'), 'Hand this to Dana with notes');
+  expect(screen.queryByText('Fill in <who> first.')).toBeNull();
+  await fireEvent.press(screen.getByLabelText('Send'));
+  expect(mockConv.prompt).toHaveBeenCalledWith('p-agent', 'Hand this to Dana with notes');
 });
 

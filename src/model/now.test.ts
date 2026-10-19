@@ -66,4 +66,13 @@ describe('Now', () => {
     expect(ids(nowSections([], phone, panes, {}, NOW, pinned!.paneId).doneToday)).toEqual(['p-other']);
     expect(phoneAgent(sessions, panes, {})).toBeNull();
   });
+
+  it('PHA-C2 still counts the pinned Phone agent when it needs you', () => {
+    const phone: Session[] = [...sessions, { sessionId: 's-phone', name: 'phone', kind: 'agent', workDir: '/p', state: 'waiting', phone: true }];
+    const panes = [agent('p-phone', { sessionId: 's-phone', agentState: 'waiting', since: NOW - 60_000 })];
+    const now = nowSections([], phone, panes, {}, NOW, 'p-phone');
+    expect(ids(now.needsYou)).toEqual(['p-phone']);
+    expect(now.count).toBe(1);
+    expect(now.working).toEqual([]);
+  });
 });

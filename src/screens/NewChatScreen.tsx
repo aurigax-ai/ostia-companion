@@ -5,7 +5,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { Bot, ChevronDown, Folder, Smartphone } from 'lucide-react-native';
 import { ChatComposer } from '../components/ChatComposer';
 import { Group, IconTile, ListRow, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
-import { AGENTS, AgentName, chatTarget, PHONE_TARGET } from '../model/agentStart';
+import { AGENTS, AgentName, ChatChoice, chatTarget } from '../model/agentStart';
 import { ScreenProps } from '../navigation';
 import { startAgent } from '../services/agentStart';
 import { rememberChatWorkspace, useListPrefs } from '../services/listPrefsStore';
@@ -22,7 +22,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
   const { sessions } = useWorkspaces();
   const phone = usePhoneWorkspace();
   const { lastChat } = useListPrefs();
-  const [chosen, setChosen] = useState<string | undefined>(route.params?.sessionId);
+  const [chosen, setChosen] = useState<ChatChoice | undefined>(route.params?.sessionId ? { kind: 'workspace', sessionId: route.params.sessionId } : undefined);
   const target = chatTarget(sessions, chosen, lastChat, phone);
   const [picked, setPicked] = useState<AgentName | null>(null);
   const [text, setText] = useState('');
@@ -69,7 +69,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
     const started = await startAgent(workspace?.sessionId ?? null, onPhone ? picked : agent, prompt);
     setSending(false);
     if (!started.ok) return setProblem(started.text);
-    rememberChatWorkspace(workspace?.sessionId ?? PHONE_TARGET);
+    if (workspace) rememberChatWorkspace(workspace.sessionId);
     navigation.replace('Conversation', { paneId: started.paneId, title: agent });
   };
 
@@ -120,7 +120,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
                 title="Phone"
                 subtitle="Your Phone workspace on the desktop"
                 chevron={false}
-                onPress={() => (setChosen(PHONE_TARGET), setPicking(null))}
+                onPress={() => (setChosen({ kind: 'phone' }), setPicking(null))}
               />
             ) : null}
             {workspaces.map((session) => (
@@ -129,7 +129,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
                 leading={<IconTile icon={Folder} tone={session.sessionId === workspace?.sessionId ? 'brand' : 'neutral'} />}
                 title={session.name}
                 chevron={false}
-                onPress={() => (setChosen(session.sessionId), setPicking(null))}
+                onPress={() => (setChosen({ kind: 'workspace', sessionId: session.sessionId }), setPicking(null))}
               />
             ))}
           </Group>

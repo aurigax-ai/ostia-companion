@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Folder } from 'lucide-react-native';
 import { Shortcut, shortcutsFor } from '../model/shortcuts';
-import { fillSnippet, Snippet, snippetsFor } from '../model/snippets';
+import { blanks, fillSnippet, Snippet, snippetsFor, unfilled } from '../model/snippets';
 import type { Session } from '../model/workspaces';
 import { phoneControlSupported } from '../services/phoneSession';
 import { useSnippets } from '../services/snippets';
 import { colors, font, radius, space, type } from '../theme';
 import { MessageField } from './PromptComposer';
-import { Group, IconTile, ListRow, NO_SCROLL_BARS, Sheet } from './ui';
+import { Group, IconTile, ListRow, NO_SCROLL_BARS, Sheet, Warning } from './ui';
 
 function MenuRow({ name, hint, onPress }: { name: string; hint: string; onPress: () => void }) {
   return (
@@ -47,12 +47,29 @@ export function ChatComposer({
   bottomInset: number;
 }) {
   const [reviewing, setReviewing] = useState<Shortcut | null>(null);
+  const [holes, setHoles] = useState<string[]>([]);
+  const [blocked, setBlocked] = useState<string[]>([]);
   const snippets = useSnippets(snippetsFrom);
   const ostia = shortcutsFor(value, phoneControlSupported());
   const own = snippetsFor(value, snippets);
 
   const pick = (shortcut: Shortcut) => (shortcut.needsWorkspace ? setReviewing(shortcut) : onChangeText(shortcut.fill()));
-  const pickSnippet = (snippet: Snippet) => onChangeText(fillSnippet(snippet));
+  const pickSnippet = (snippet: Snippet) => {
+    setHoles(blanks(snippet));
+    setBlocked([]);
+    onChangeText(fillSnippet(snippet));
+  };
+  const edit = (next: string) => {
+    setBlocked(unfilled(next, blocked));
+    onChangeText(next);
+  };
+  const send = () => {
+    const left = unfilled(value, holes);
+    setBlocked(left);
+    if (left.length > 0) return;
+    setHoles([]);
+    onSend();
+  };
 
   return (
     <>
@@ -69,8 +86,9 @@ export function ChatComposer({
           </ScrollView>
         </View>
       ) : null}
+      {blocked.length > 0 ? <Warning text={`Fill in ${blocked.join(', ')} first.`} /> : null}
       <View style={[styles.bar, { paddingBottom: space.sm + bottomInset }]}>
-        <MessageField value={value} onChangeText={onChangeText} onSend={onSend} placeholder={placeholder} editable={editable} sending={sending} autoFocus={autoFocus} />
+        <MessageField value={value} onChangeText={edit} onSend={send} placeholder={placeholder} editable={editable} sending={sending} autoFocus={autoFocus} />
       </View>
       <Sheet visible={reviewing !== null} onClose={() => setReviewing(null)}>
         <Text style={[type.captionStrong, styles.sheetTitle]}>Review which workspace?</Text>

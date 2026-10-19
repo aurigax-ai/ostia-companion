@@ -34,6 +34,15 @@ export function fillSnippet(snippet: Snippet): string {
   );
 }
 
+export function blanks(snippet: Snippet): string[] {
+  const names = [...snippet.command.matchAll(PLACEHOLDER)].map((match) => match[2]).filter((name): name is string => !!name && snippet.defaults[name] === undefined);
+  return [...new Set(names)].map((name) => `<${name}>`);
+}
+
+export function unfilled(text: string, holes: string[]): string[] {
+  return holes.filter((hole) => text.includes(hole));
+}
+
 export function snippetsFor(text: string, snippets: Snippet[]): Snippet[] {
   if (!/^\/\S*$/.test(text)) return [];
   const typed = text.slice(1).toLowerCase();
