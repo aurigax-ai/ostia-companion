@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Play, Square } from 'lucide-react-native';
 import { Button, Card, Group, ListRow, SectionHeader, Warning } from '../components/ui';
+import { blockedSummary } from '../model/blockedApps';
 import {
   DEFAULT_LIMIT,
   failureText,
@@ -23,6 +24,7 @@ import {
   stopPhoneSession,
   usePhoneSession,
 } from '../services/phoneSession';
+import { useBlockedApps } from '../services/blockedAppsStore';
 import { OstiaRpc } from '../services/rpc';
 import { useConnectionStatus } from '../services/workspaceStore';
 import { space, type } from '../theme';
@@ -53,11 +55,12 @@ function useAccessibility() {
   return enabled;
 }
 
-export function PhoneSessionScreen({ route }: ScreenProps<'PhoneSession'>) {
+export function PhoneSessionScreen({ navigation, route }: ScreenProps<'PhoneSession'>) {
   const { sessionId, name } = route.params;
   const session = usePhoneSession();
   const connected = useConnectionStatus() === 'connected';
   const taps = useAccessibility();
+  const blockedCount = useBlockedApps().length;
   const desktop = OstiaRpc.getPairing()?.desktopName || 'your desktop';
   const active = isActive(session.state);
   const now = useNow(active);
@@ -139,10 +142,13 @@ export function PhoneSessionScreen({ route }: ScreenProps<'PhoneSession'>) {
           />
         ))}
       </View>
+      <SectionHeader title="Never opened by the agent" />
+      <Group>
+        <ListRow title={blockedSummary(blockedCount)} onPress={() => navigation.navigate('BlockedApps')} />
+      </Group>
       <Text style={[type.caption, styles.note]}>
-        Android asks before every session. Apps that mark their screens secure appear black, and password managers,
-        authenticators and payment apps are never opened. Touching the screen pauses the agent. You can stop at any time from
-        the notification.
+        Android asks before every session. Apps that mark their screens secure appear black. Touching the screen pauses the
+        agent. You can stop at any time from the bar at the top or the notification.
       </Text>
       {warning ? <Warning text={warning} /> : null}
       <Button label="Start" icon={Play} loading={starting} disabled={block !== null} onPress={() => void start()} style={styles.action} />

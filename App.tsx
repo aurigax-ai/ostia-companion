@@ -32,6 +32,9 @@ import { ArtifactsScreen } from './src/screens/ArtifactsScreen';
 import { FilesScreen } from './src/screens/FilesScreen';
 import { FileViewerScreen } from './src/screens/FileViewerScreen';
 import { PhoneSessionScreen } from './src/screens/PhoneSessionScreen';
+import { BlockedAppsScreen } from './src/screens/BlockedAppsScreen';
+import { startPhoneSessionLinks } from './src/services/phoneSession';
+import { loadBlockedApps } from './src/services/blockedAppsStore';
 import { RootStack } from './src/navigation';
 import { colors, font } from './src/theme';
 
@@ -93,6 +96,11 @@ export default function App() {
     void loadPrefs();
     void loadAlertPrefs();
     startAgentAlerts((target) => navigationRef.isReady() && navigationRef.navigate(target.screen, target.params));
+    void loadBlockedApps();
+    startPhoneSessionLinks({
+      toAsk: (sessionId, name, askId) => navigationRef.isReady() && navigationRef.navigate('Workspace', { sessionId, name, askId }),
+      toSession: (sessionId, name) => navigationRef.isReady() && navigationRef.navigate('PhoneSession', { sessionId, name }),
+    });
     connect().catch(() => setPaired(false));
   }, [connect]);
 
@@ -122,6 +130,7 @@ export default function App() {
               <Stack.Screen name="Artifacts" component={ArtifactsScreen} />
               <Stack.Screen name="FileView" component={FileViewerScreen} />
               <Stack.Screen name="PhoneSession" component={PhoneSessionScreen} options={{ title: 'Use this phone' }} />
+              <Stack.Screen name="BlockedApps" component={BlockedAppsScreen} options={{ title: 'Never opened by the agent' }} />
               <Stack.Screen name="Settings" options={{ title: 'Settings', ...largeTitle }}>
                 {(props) => <SettingsScreen {...props} onUnpair={unpair} />}
               </Stack.Screen>

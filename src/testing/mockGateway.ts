@@ -69,6 +69,7 @@ export interface MockGateway {
   typed: (paneId: string) => string[];
   opened: string[];
   screens: MockScreenLink[];
+  requestScreen: (sessionId: string) => void;
   writeArtifact: (sessionId: string, path: string, content: string | null) => void;
   close: () => Promise<void>;
 }
@@ -583,6 +584,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     typed: (paneId) => typed.get(paneId) ?? [],
     opened,
     screens,
+    requestScreen: (sessionId) => event('screen.requested', { sessionId, by: 'desktop' }, 'notify'),
     writeArtifact: (sessionId, path, content) => {
       const tree = (scenario.artifacts[sessionId] ??= {});
       const change = content === null ? 'removed' : tree[path] === undefined ? 'added' : 'changed';

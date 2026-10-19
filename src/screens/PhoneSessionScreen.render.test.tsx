@@ -22,11 +22,14 @@ jest.mock('../services/phoneSession', () => ({
   accessibilityEnabled: () => mockSession.taps,
   openAccessibilitySettings: () => mockSession.openSettings(),
 }));
+jest.mock('../services/blockedAppsStore', () => ({ useBlockedApps: () => ['com.bank.app'] }));
 jest.mock('../services/rpc', () => ({ OstiaRpc: { getPairing: () => ({ desktopName: 'studio' }) } }));
 jest.mock('../services/workspaceStore', () => ({ useConnectionStatus: () => 'connected' }));
 
+const mockNavigate = jest.fn();
+
 async function renderScreen() {
-  await render(<PhoneSessionScreen navigation={{} as any} route={{ params: { sessionId: 's-phone', name: 'phone' } } as any} />);
+  await render(<PhoneSessionScreen navigation={{ navigate: mockNavigate } as any} route={{ params: { sessionId: 's-phone', name: 'phone' } } as any} />);
 }
 
 beforeEach(() => {
@@ -99,4 +102,10 @@ test('PHC-C9 shows a paused session with Resume', async () => {
   expect(screen.getByText('Paused because you touched the screen')).toBeTruthy();
   await fireEvent.press(screen.getByText('Resume'));
   expect(mockSession.resume).toHaveBeenCalled();
+});
+
+test('lists what the agent never opens and edits it', async () => {
+  await renderScreen();
+  await fireEvent.press(screen.getByText('Password managers, authenticators, payments and 1 more'));
+  expect(mockNavigate).toHaveBeenCalledWith('BlockedApps');
 });
