@@ -3,7 +3,7 @@ import { Alert, AppState, Platform, ScrollView, Share, StyleSheet, Switch, Text,
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Check, Minus, Plus } from 'lucide-react-native';
-import { Button, Group, IconButton, ListRow, SectionHeader, Sheet, SnackbarHost, useTabBarInset } from '../components/ui';
+import { Button, Group, IconButton, ListRow, SectionHeader, Sheet, SnackbarHost, useTabBarInset, NO_SCROLL_BARS } from '../components/ui';
 import { Level } from '../model/phoneControlPrefs';
 import { SESSION_LIMITS, SessionLimit } from '../model/phoneSession';
 import { connectionRows, routeLabel } from '../model/connectionInfo';
@@ -163,7 +163,7 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
 
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: space.xxxl + tabBar }}>
+    <ScrollView {...NO_SCROLL_BARS} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingBottom: space.xxxl + tabBar }}>
       <SectionHeader title="Desktop" />
       <Group>
         <ListRow title={name} trailing={<Value text={STATE[status]} />} />

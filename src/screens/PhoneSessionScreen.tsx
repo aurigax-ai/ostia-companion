@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 import { Play, Smartphone, Square } from 'lucide-react-native';
-import { Button, Card, Empty } from '../components/ui';
+import { Button, Card, Empty, NO_SCROLL_BARS } from '../components/ui';
 import { isActive, pausedText, stoppedText, timeLeft } from '../model/phoneSession';
 import { ScreenProps } from '../navigation';
 import { resumePhoneSession, stopPhoneSession, usePhoneSession } from '../services/phoneSession';
@@ -24,7 +24,7 @@ export function PhoneSessionScreen(_: ScreenProps<'PhoneSession'>) {
 
   const paused = session.state === 'paused';
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView {...NO_SCROLL_BARS} contentContainerStyle={styles.content}>
       <Card style={styles.live}>
         <Text style={type.headline}>
           {session.state === 'starting' ? 'Connecting…' : paused ? pausedText(session.reason) : `${desktop} can see this screen`}

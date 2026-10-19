@@ -4,7 +4,7 @@ import { FileText, FolderOpen, Globe, PanelsTopLeft, Plus, Sparkles } from 'luci
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
 import { ConnectionBanner, LoadedAt } from '../components/ConnectionBanner';
-import { Badge, Divider, Empty, Fab, GroupItem, HeaderTitle, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, StatusPill, TILE_INSET, terminalIcon } from '../components/ui';
+import { Badge, Divider, Empty, Fab, GroupItem, HeaderTitle, IconTile, ListRow, Meta, SectionHeader, SnackbarHost, StatusPill, TILE_INSET, terminalIcon, NO_SCROLL_BARS } from '../components/ui';
 import { Ask } from '../model/asks';
 import { attentionRank, byAttention } from '../model/order';
 import { paneSections } from '../model/workspaceList';
@@ -64,7 +64,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
 
   return (
     <View style={{ flex: 1 }}>
-      <SectionList
+      <SectionList {...NO_SCROLL_BARS}
         sections={sections}
         keyExtractor={(row) => (row.kind === 'ask' ? `ask:${row.ask.askId}` : row.kind === 'pane' || row.kind === 'sleeping' ? row.pane.paneId : row.kind)}
         ListHeaderComponent={
