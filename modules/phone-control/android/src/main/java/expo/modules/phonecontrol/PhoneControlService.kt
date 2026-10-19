@@ -22,29 +22,27 @@ import org.json.JSONObject
 import java.text.DateFormat
 import java.util.Date
 
-class PhoneControlService : Service(), LinkListener, PhoneScreen {
+class HandlerScheduler(private val handler: Handler) : Scheduler {
+  override fun post(task: () -> Unit) {
+    handler.post(task)
+  }
+
+  override fun postDelayed(delayMs: Long, task: () -> Unit): Cancellable {
+    val runnable = Runnable(task)
+    handler.postDelayed(runnable, delayMs)
+    return Cancellable { handler.removeCallbacks(runnable) }
+  }
+
+  override fun clear() {
+    handler.removeCallbacksAndMessages(null)
+  }
+}
+
+class PhoneControlService : Service(), SessionHost {
   private lateinit var thread: HandlerThread
   private lateinit var handler: Handler
   private var projection: MediaProjection? = null
-  private var capture: ScreenCapture? = null
-  private var link: ScreenLink? = null
-  private var config: SessionConfig? = null
-  private var requests: RequestHandler? = null
-  private var endsAt = 0L
-  private var screenId: String? = null
-  private var ended = false
-  private var streamFps = 0
-  private var streamSide = MAX_CAPTURE_SIDE
-  private var streamSeq = 0L
-  private val endAtLimit = Runnable { end("time-limit") }
-  private val streamTick = object : Runnable {
-    override fun run() {
-      val source = capture ?: return
-      if (streamFps <= 0) return
-      if (source.changed) source.capture(streamSide, false)?.let { link?.sendFrame(LinkProtocol.frameBytes(streamSeq++, it)) }
-      handler.postDelayed(this, 1000L / streamFps)
-    }
-  }
+  private var session: PhoneSession? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -56,132 +54,66 @@ class PhoneControlService : Service(), LinkListener, PhoneScreen {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
-      ACTION_STOP -> handler.post { end("stop-phone") }
+      ACTION_STOP -> handler.post { session?.stop("stop-phone") ?: stopSelf() }
       ACTION_START -> begin(intent)
     }
     return START_NOT_STICKY
   }
 
   private fun begin(intent: Intent) {
-    val session = SessionConfig.from(intent)
+    if (session != null) return
+    val config = SessionConfig.from(intent)
     val consent = consentOf(intent)
-    if (config != null) return
-    if (session == null || consent == null) {
-      stopSelf()
-      return
-    }
-    config = session
-    endsAt = System.currentTimeMillis() + session.limitSec * 1000L
+    val endsAt = System.currentTimeMillis() + (config?.limitSec ?: 0) * 1000L
     ServiceCompat.startForeground(
       this,
       NOTIFICATION_ID,
-      notification(session),
+      notification(config?.desktopName ?: "Your desktop", endsAt),
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0,
     )
-    SessionStatusHub.publish(SessionStatus("starting", endsAt = endsAt, sessionId = session.sessionId))
+    if (config == null || consent == null) {
+      finished()
+      return
+    }
+    val started = PhoneSession(config, endsAt, System::currentTimeMillis, HandlerScheduler(handler), this)
+    session = started
     handler.post {
-      val manager = getSystemService(MediaProjectionManager::class.java)
-      val granted = manager.getMediaProjection(Activity.RESULT_OK, consent)
+      val granted = getSystemService(MediaProjectionManager::class.java).getMediaProjection(Activity.RESULT_OK, consent)
       if (granted == null) {
-        end("projection-ended")
+        started.stop("projection-ended")
         return@post
       }
       projection = granted
       granted.registerCallback(object : MediaProjection.Callback() {
         override fun onStop() {
-          handler.post { end("projection-ended") }
+          handler.post { started.stop("projection-ended") }
         }
       }, handler)
-      capture = ScreenCapture(this, granted, handler).also { it.start() }
-      requests = RequestHandler(session.level, this)
-      handler.postDelayed(endAtLimit, maxOf(0L, endsAt - System.currentTimeMillis()))
-      link = ScreenLink(session.target, { startParams(session) }, this).also { it.open() }
+      started.start(ScreenCapture(this, granted, handler).also { it.start() }) { listener -> ScreenLink(config.target, started::startParams, listener) }
     }
   }
 
-  private fun startParams(session: SessionConfig): StartParams {
-    val size = capture?.size ?: DisplaySize(0, 0, 1f, 0)
-    return StartParams(session.sessionId, session.label, size.width, size.height, size.density, size.rotation, session.level, session.limitSec, endsAt, 0, null)
-  }
+  override fun publish(status: SessionStatus) = SessionStatusHub.publish(status)
 
-  override fun onLinked(screenId: String) {
-    handler.post {
-      if (ended) return@post
-      this.screenId = screenId
-      SessionStatusHub.publish(SessionStatus("running", endsAt = endsAt, screenId = screenId, sessionId = config?.sessionId))
-    }
-  }
-
-  override fun onRefused(reason: String) {
-    handler.post { end(reason, notifyDesktop = false) }
-  }
-
-  override fun onRequest(request: Incoming.Request) {
-    handler.post {
-      val handlerNow = requests ?: return@post
-      if (ended) return@post
-      when (val reply = handlerNow.handle(request.method, request.params)) {
-        is Reply.Ok -> link?.reply(request.id, reply.result)
-        is Reply.Fail -> link?.fail(request.id, reply.error)
-      }
-    }
-  }
-
-  override fun onEvent(event: Incoming.Event) = Unit
-
-  override fun onClosed(code: Int) {
-    handler.post { end(closeReason(code), notifyDesktop = false) }
-  }
-
-  override fun capture(maxSide: Int): Frame? = capture?.capture(maxSide, false)
-
-  override fun foreground(): Foreground = Foreground("", "")
-
-  override fun stream(fps: Int, maxSide: Int) {
-    streamFps = fps
-    streamSide = maxSide
-    handler.removeCallbacks(streamTick)
-    if (fps > 0) handler.post(streamTick)
-  }
-
-  override fun stopFromDesktop() {
-    handler.post { end("stop-desktop") }
-  }
-
-  override fun onConfigurationChanged(newConfig: Configuration) {
-    super.onConfigurationChanged(newConfig)
-    handler.post {
-      val source = capture ?: return@post
-      if (source.follow() && screenId != null) link?.send(LinkProtocol.stateEvent("running", null, source.size, endsAt))
-    }
-  }
-
-  private fun end(reason: String, notifyDesktop: Boolean = true) {
-    if (ended) return
-    ended = true
-    handler.removeCallbacks(endAtLimit)
-    handler.removeCallbacks(streamTick)
-    val size = capture?.size
-    if (notifyDesktop && screenId != null && size != null) link?.send(LinkProtocol.stateEvent("stopped", reason, size, endsAt))
-    link?.close()
-    link = null
-    capture?.stop()
-    capture = null
+  override fun finished() {
     projection?.stop()
     projection = null
-    requests = null
-    SessionStatusHub.publish(SessionStatus("stopped", reason, endsAt, screenId, config?.sessionId))
     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     stopSelf()
   }
 
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    handler.post { session?.displayChanged() }
+  }
+
   override fun onDestroy() {
-    handler.post { end("stop-phone") }
+    handler.post { session?.stop("stop-phone") }
     thread.quitSafely()
     super.onDestroy()
   }
 
-  private fun notification(session: SessionConfig): Notification {
+  private fun notification(desktopName: String, endsAt: Long): Notification {
     val manager = getSystemService(NotificationManager::class.java)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.getNotificationChannel(CHANNEL_ID) == null) {
       manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Phone sessions", NotificationManager.IMPORTANCE_LOW))
@@ -196,7 +128,7 @@ class PhoneControlService : Service(), LinkListener, PhoneScreen {
     )
     val until = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(endsAt))
     return NotificationCompat.Builder(this, CHANNEL_ID)
-      .setContentTitle("${session.desktopName} can see this screen")
+      .setContentTitle("$desktopName can see this screen")
       .setContentText("Ends at $until. Tap to stop.")
       .setSmallIcon(smallIcon(this))
       .setOngoing(true)

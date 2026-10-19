@@ -17,14 +17,19 @@ interface LinkListener {
   fun onClosed(code: Int)
 }
 
-class ScreenLink(private val target: LinkTarget, private val start: () -> StartParams, private val listener: LinkListener) {
+class ScreenLink(
+  private val target: LinkTarget,
+  private val start: () -> StartParams,
+  private val listener: LinkListener,
+  private val sockets: () -> WebSocket.Factory = { pinnedClient(target.fingerprint) },
+) : Link {
   private var socket: WebSocket? = null
   private var linked = false
   private var closed = false
 
-  fun open() {
+  override fun open() {
     val request = Request.Builder().url("wss://${target.host}:${target.port}/ws").build()
-    socket = pinnedClient(target.fingerprint).newWebSocket(request, object : WebSocketListener() {
+    socket = sockets().newWebSocket(request, object : WebSocketListener() {
       override fun onOpen(webSocket: WebSocket, response: Response) {
         webSocket.send(LinkProtocol.hello(HELLO_ID, target.deviceToken))
       }
@@ -72,23 +77,25 @@ class ScreenLink(private val target: LinkTarget, private val start: () -> StartP
     }
   }
 
-  fun reply(id: Any, result: JSONObject) {
+  override fun reply(id: Any, result: JSONObject) {
     socket?.send(LinkProtocol.result(id, result))
   }
 
-  fun fail(id: Any, error: RpcError) {
+  override fun fail(id: Any, error: RpcError) {
     socket?.send(LinkProtocol.error(id, error))
   }
 
-  fun send(text: String) {
+  override fun send(text: String) {
     socket?.send(text)
   }
 
-  fun sendFrame(bytes: ByteArray) {
-    socket?.send(bytes.toByteString())
+  override fun sendFrame(bytes: ByteArray): Boolean {
+    val open = socket ?: return false
+    if (open.queueSize() + bytes.size > MAX_QUEUED_BYTES) return false
+    return open.send(bytes.toByteString())
   }
 
-  fun close() {
+  override fun close() {
     closed = true
     socket?.close(NORMAL_CLOSE, "session ended")
   }
@@ -111,5 +118,6 @@ class ScreenLink(private val target: LinkTarget, private val start: () -> StartP
     const val START_ID = 2
     const val NORMAL_CLOSE = 1000
     const val LINK_LOST = 1006
+    const val MAX_QUEUED_BYTES = 2L * 1024 * 1024
   }
 }

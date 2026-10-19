@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startMockGateway } from '../src/testing/mockGateway.ts';
@@ -14,15 +14,18 @@ const gateway = await startMockGateway({
   devicesFile: join(tmpdir(), `ostia-mock-devices-${process.env.MOCK_PORT ?? 8723}.json`),
   log: (line) => console.log(line),
   onScreen: (screen) => {
-    const folder = join(tmpdir(), 'ostia-mock-screens');
-    mkdirSync(folder, { recursive: true });
+    const folder = process.env.MOCK_SAVE_SCREENS ? join(tmpdir(), 'ostia-mock-screens') : null;
+    const file = folder ? join(folder, `${screen.screenId}.jpg`) : null;
+    if (folder) mkdirSync(folder, { recursive: true });
     const timer = setInterval(async () => {
-      if (screen.closed) return clearInterval(timer);
+      if (screen.closed) {
+        if (file) rmSync(file, { force: true });
+        return clearInterval(timer);
+      }
       const reply = await screen.request('phone.capture', { maxSide: 800 });
       if (!reply.result) return console.log(`screen: capture ${reply.error?.message}`);
-      const file = join(folder, `${screen.screenId}.jpg`);
-      writeFileSync(file, Buffer.from(reply.result.data, 'base64'));
-      console.log(`screen: ${reply.result.width}x${reply.result.height} of ${reply.result.screenWidth}x${reply.result.screenHeight} → ${file}`);
+      if (file) writeFileSync(file, Buffer.from(reply.result.data, 'base64'));
+      console.log(`screen: ${reply.result.width}x${reply.result.height} of ${reply.result.screenWidth}x${reply.result.screenHeight}${file ? ` → ${file}` : ''}`);
     }, 3000);
   },
 });

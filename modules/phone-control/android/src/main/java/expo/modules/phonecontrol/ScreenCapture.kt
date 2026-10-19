@@ -13,13 +13,13 @@ import android.util.DisplayMetrics
 import android.view.Display
 import java.io.ByteArrayOutputStream
 
-class ScreenCapture(private val context: Context, private val projection: MediaProjection, private val handler: Handler) {
+class ScreenCapture(private val context: Context, private val projection: MediaProjection, private val handler: Handler) : FrameSource {
   private var reader: ImageReader? = null
   private var display: VirtualDisplay? = null
   private var latest: Image? = null
-  var size: DisplaySize = readDisplay()
+  override var size: DisplaySize = readDisplay()
     private set
-  var changed = false
+  override var changed = false
     private set
 
   fun start() {
@@ -37,7 +37,7 @@ class ScreenCapture(private val context: Context, private val projection: MediaP
     )
   }
 
-  fun follow(): Boolean {
+  override fun follow(): Boolean {
     val next = readDisplay()
     if (next == size) return false
     size = next
@@ -51,7 +51,7 @@ class ScreenCapture(private val context: Context, private val projection: MediaP
     return true
   }
 
-  fun capture(maxSide: Int, blocked: Boolean): Frame? {
+  override fun capture(maxSide: Int, blocked: Boolean): Frame? {
     val image = latest ?: return null
     changed = false
     val plane = image.planes[0]
@@ -68,7 +68,7 @@ class ScreenCapture(private val context: Context, private val projection: MediaP
     return Frame(width, height, size.width, size.height, out.toByteArray(), blocked)
   }
 
-  fun stop() {
+  override fun stop() {
     display?.release()
     display = null
     dropLatest()
