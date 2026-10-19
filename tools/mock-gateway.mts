@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startMockGateway } from '../src/testing/mockGateway.ts';
@@ -12,6 +13,18 @@ const gateway = await startMockGateway({
   reusableCode: true,
   devicesFile: join(tmpdir(), `ostia-mock-devices-${process.env.MOCK_PORT ?? 8723}.json`),
   log: (line) => console.log(line),
+  onScreen: (screen) => {
+    const folder = join(tmpdir(), 'ostia-mock-screens');
+    mkdirSync(folder, { recursive: true });
+    const timer = setInterval(async () => {
+      if (screen.closed) return clearInterval(timer);
+      const reply = await screen.request('phone.capture', { maxSide: 800 });
+      if (!reply.result) return console.log(`screen: capture ${reply.error?.message}`);
+      const file = join(folder, `${screen.screenId}.jpg`);
+      writeFileSync(file, Buffer.from(reply.result.data, 'base64'));
+      console.log(`screen: ${reply.result.width}x${reply.result.height} of ${reply.result.screenWidth}x${reply.result.screenHeight} → ${file}`);
+    }, 3000);
+  },
 });
 
 const code = `${gateway.pairCode.slice(0, 4)}-${gateway.pairCode.slice(4)}`;
@@ -22,3 +35,7 @@ for (const address of Object.values(networkInterfaces()).flat()) {
     console.log(`Phone on ${address.address}:\n  ${gateway.link(address.address)}`);
   }
 }
+
+process.on('SIGUSR1', () => gateway.devices.slice().forEach((device) => gateway.revoke(device.deviceId)));
+process.on('SIGUSR2', () => gateway.screens.filter((screen) => !screen.closed).forEach((screen) => void screen.request('phone.stop')));
+console.log(`kill -USR1 ${process.pid} revokes every phone; kill -USR2 ${process.pid} stops every phone screen`);

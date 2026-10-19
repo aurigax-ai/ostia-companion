@@ -45,9 +45,13 @@ export function connect(gw: MockGateway) {
   const pending = new Map<number, (message: any) => void>();
   const unsolicited: any[] = [];
   const output: string[] = [];
+  let serveRequest: ((method: string, params: any) => { result?: object; error?: object }) | null = null;
   socket.on('message', (data: Buffer, isBinary: boolean) => {
     if (isBinary) return void (data[0] === 0x01 && output.push(data.subarray(1).toString('utf8')));
     const message = JSON.parse(data.toString());
+    if (serveRequest && message.method && message.method !== 'event' && message.id != null) {
+      return void socket.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, ...serveRequest(message.method, message.params) }));
+    }
     const resolve = pending.get(message.id);
     if (resolve) {
       pending.delete(message.id);
@@ -64,6 +68,9 @@ export function connect(gw: MockGateway) {
   };
   const input = (text: string) => socket.send(Buffer.concat([Buffer.from([0x02]), Buffer.from(text)]));
   const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
-  return { socket, call, input, output, unsolicited, closed, settle };
+  const serve = (handler: typeof serveRequest) => (serveRequest = handler);
+  const notify = (type: string, payload: object) =>
+    socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type, payload } }));
+  return { socket, call, input, output, unsolicited, closed, settle, serve, notify };
 }
 
