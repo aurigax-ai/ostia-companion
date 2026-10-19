@@ -155,6 +155,10 @@ interface Connection {
 
 const SCREEN_LIMITS = [300, 900, 1800];
 const NO_CONTROLLER = -32004;
+const RATE_LIMITED = -32007;
+const AGENT_STARTS_PER_MINUTE = 3;
+const PROMPT_LIMIT = 4000;
+const REFUSED_KINDS = ['scratch', 'manager'];
 const SCREEN_GRACE_MS = 5000;
 const CLOSE_TIME_LIMIT = 4005;
 const LINK_ONLY = -32600;
@@ -210,6 +214,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const output = new Map<string, string>();
   const typed = new Map<string, string[]>();
   const opened: string[] = [];
+  const agentStarts = new Map<string, number[]>();
+  let startedPanes = 0;
   const touched = new Map<string, number>();
   const started = Date.now();
   let selected = 0;
@@ -428,7 +434,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       if (method === 'screen.start') return has('read') ? openScreen(id, params) : fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
       if (connection.screen && !['ask.answer', 'ask.list'].includes(method)) return fail(id, LINK_ONLY, 'link-only');
       if (method === 'artifact.open' && !has('command')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'command' });
-      if (['ask.answer', 'agent.prompt', 'agent.interrupt'].includes(method) && !has('respond')) {
+      if (['ask.answer', 'agent.prompt', 'agent.interrupt', 'agent.start'].includes(method) && !has('respond')) {
         return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'respond' });
       }
       if (['session.list', 'pane.list', 'pty.attach', 'pty.detach', 'ask.list', 'fs.list', 'fs.read'].includes(method) && !has('read')) {
@@ -511,6 +517,25 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         else writePane(pane.paneId, '\r\n\x1b[90m(interrupted)\x1b[0m\r\n');
         log(`agent: ${method} ${pane.paneId}`);
         return respond(id, { ok: true });
+      }
+      if (method === 'agent.start') {
+        const session = scenario.sessions.find((s) => s.sessionId === params.sessionId);
+        if (!session) return fail(id, INVALID_PARAMS, 'unknown-session');
+        if (REFUSED_KINDS.includes(session.kind)) return fail(id, INVALID_PARAMS, 'refused');
+        const prompt = typeof params.prompt === 'string' ? params.prompt.trim() : '';
+        if (!['claude', 'codex'].includes(params.agent) || !prompt || prompt.length > PROMPT_LIMIT || /^[-+]/.test(prompt) || !/\s/.test(prompt)) {
+          return fail(id, INVALID_PARAMS, 'bad-params');
+        }
+        const now = Date.now();
+        const recent = (agentStarts.get(connection.device!.deviceId) ?? []).filter((at) => now - at < 60_000);
+        if (recent.length >= AGENT_STARTS_PER_MINUTE) return fail(id, RATE_LIMITED, 'rate-limited');
+        agentStarts.set(connection.device!.deviceId, [...recent, now]);
+        const paneId = `p-start-${++startedPanes}`;
+        scenario.panes.push({ paneId, sessionId: session.sessionId, kind: 'terminal', title: params.agent, cwd: session.workDir, running: true, blockCount: 1, agent: params.agent, agentState: 'working' });
+        writePane(paneId, `$ ${params.agent} '${prompt.replace(/'/g, "'\\''")}'\r\n\x1b[36m>\x1b[0m ${prompt}\r\n`);
+        setSessionState(session.sessionId, 'working');
+        log(`agent: agent.start ${paneId} in ${session.sessionId}`);
+        return respond(id, { paneId, confirmed: true });
       }
       if (method === 'pane.list') {
         const panes = params.sessionId ? scenario.panes.filter((p) => p.sessionId === params.sessionId) : scenario.panes;

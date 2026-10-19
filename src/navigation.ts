@@ -5,6 +5,7 @@ export type RootStack = {
   Home: undefined;
   Workspace: { sessionId: string; name: string; askId?: string };
   Terminal: { paneId: string; title: string };
+  NewChat: { sessionId: string; name: string };
   Settings: undefined;
   Desktops: undefined;
   Files: { sessionId: string; path: string; title: string };
