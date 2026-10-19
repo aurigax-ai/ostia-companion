@@ -18,6 +18,7 @@ import { colors, font, radius, space, type } from '../theme';
 
 const POLL_MS = 3000;
 const EVENT_DELAY_MS = 300;
+const NEAR_BOTTOM = 80;
 
 const ICONS: Record<StepKind, LucideIcon> = {
   edit: Pencil,
@@ -103,6 +104,9 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const heading = pane ? paneTitle(pane) : title;
   const [list, setList] = useState<TurnList | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [sendProblem, setSendProblem] = useState<string | null>(null);
+  const loaded = useRef(false);
+  const nearBottom = useRef(true);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [output, setOutput] = useState<Output | null>(null);
@@ -114,9 +118,10 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const openTerminal = useCallback(() => navigation.navigate('Terminal', { paneId, title }), [navigation, paneId, title]);
 
   const reload = useCallback(async () => {
-    const result = await loadTurns(paneId);
+    const result = await loadTurns(paneId, !loaded.current);
     if (result.kind === 'terminal') return navigation.replace('Terminal', { paneId, title });
     if (result.kind === 'error') return setProblem(result.text);
+    loaded.current = true;
     setProblem(null);
     setList(result.list);
   }, [navigation, paneId, title]);
@@ -159,12 +164,12 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
     const prompt = text.trim();
     if (!prompt) return;
     setSending(true);
+    setSendProblem(null);
     try {
       await promptAgent(paneId, prompt);
       setText('');
-      setProblem(null);
     } catch (err: any) {
-      setProblem(err?.message === 'not-submitted' ? `${agent} did not start a turn. Your message is still in its prompt on the desktop.` : err?.message || 'Could not send.');
+      setSendProblem(err?.message === 'not-submitted' ? `${agent} did not start a turn. Your message is still in its prompt on the desktop.` : err?.message || 'Could not send.');
     } finally {
       setSending(false);
       void reload();
@@ -181,8 +186,12 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
           ref={scroll}
           style={styles.fill}
           contentContainerStyle={styles.thread}
-          onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}
-          onLayout={() => scroll.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => nearBottom.current && scroll.current?.scrollToEnd({ animated: false })}
+          onLayout={() => nearBottom.current && scroll.current?.scrollToEnd({ animated: false })}
+          onScroll={({ nativeEvent }) => {
+            nearBottom.current = nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height >= nativeEvent.contentSize.height - NEAR_BOTTOM;
+          }}
+          scrollEventThrottle={100}
           keyboardShouldPersistTaps="handled"
         >
           {list?.truncated ? <Text style={[type.caption, styles.center]}>Older turns stay on the desktop.</Text> : null}
@@ -205,6 +214,7 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
             </View>
           ))}
           {problem ? <Warning text={problem} /> : null}
+          {sendProblem ? <Warning text={sendProblem} /> : null}
         </ScrollView>
       )}
       {running && canRespond ? (
