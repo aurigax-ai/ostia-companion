@@ -23,6 +23,7 @@ interface FrameSource {
 
 interface Link {
   fun open()
+  fun call(method: String, params: JSONObject, answer: (Incoming.Response) -> Unit)
   fun reply(id: Any, result: JSONObject)
   fun fail(id: Any, error: RpcError)
   fun send(text: String)
@@ -32,6 +33,7 @@ interface Link {
 
 interface SessionHost {
   fun publish(status: SessionStatus)
+  fun openAsk(ask: AskLine)
   fun finished()
 }
 
@@ -62,7 +64,10 @@ interface Device {
 data class ConfirmRequest(val agent: String, val what: String, val appLabel: String, val allowForSession: Boolean)
 
 interface Overlays {
+  val barHeight: Int
   fun watchTouches(onTouch: () -> Unit)
+  fun bar(content: BarContent, onAction: (BarAction) -> Unit)
+  fun flash(bounds: IntArray)
   fun confirm(request: ConfirmRequest, answer: (ConfirmAnswer) -> Unit)
   fun hideConfirm()
   fun ownRects(): List<IntArray>
@@ -84,6 +89,8 @@ class PhoneSession(
   private val gate = SessionGate(config.level)
   private val own = OwnGestures()
   private val allowed = mutableSetOf<String>()
+  private val asks = AskTracker(config.sessionId)
+  private var lastAction: String? = null
   private var source: FrameSource? = null
   private var link: Link? = null
   private var device: Device? = null
@@ -93,9 +100,12 @@ class PhoneSession(
   private var streamSide = MAX_CAPTURE_SIDE
   private var streamSeq = 0L
   private var streamTask: Cancellable? = null
+  @Volatile
   var ended = false
     private set
   val attached get() = device != null
+  val sessionId get() = config.sessionId
+  val label get() = config.label
 
   fun start(frames: FrameSource, open: (LinkListener) -> Link) {
     source = frames
@@ -106,7 +116,7 @@ class PhoneSession(
 
   fun startParams(): StartParams {
     val size = source?.size ?: DisplaySize(0, 0, 1f, 0)
-    return StartParams(config.sessionId, config.label, size.width, size.height, size.density, size.rotation, config.level, config.limitSec, endsAt, 0, null)
+    return StartParams(config.sessionId, config.label, size.width, size.height, size.density, size.rotation, config.level, config.limitSec, endsAt, overlays?.barHeight ?: 0, null)
   }
 
   fun attach(device: Device, overlays: Overlays) {
@@ -118,8 +128,35 @@ class PhoneSession(
         val at = clock()
         scheduler.post { humanTouch(at) }
       }
+      barTick()
     }
     followForeground()
+  }
+
+  private fun barTick() {
+    if (ended || expired()) return
+    refreshBar()
+    scheduler.postDelayed(BAR_TICK_MS) { barTick() }
+  }
+
+  private fun refreshBar() {
+    val bar = overlays ?: return
+    val content = BarModel.content(config.agentName, gate.state(), gate.foreground.label, lastAction, BarModel.timeLeft(endsAt, clock()), asks.first())
+    bar.bar(content) { action -> scheduler.post { barAction(action) } }
+  }
+
+  private fun barAction(action: BarAction) {
+    if (ended) return
+    when (action) {
+      BarAction.STOP -> stop("stop-phone")
+      BarAction.RESUME -> resume()
+      BarAction.ANSWER -> asks.first()?.let { host.openAsk(it) }
+    }
+  }
+
+  private fun did(action: String) {
+    lastAction = action
+    refreshBar()
   }
 
   fun serviceOff() {
@@ -172,6 +209,7 @@ class PhoneSession(
   }
 
   private fun stateChanged() {
+    refreshBar()
     val (state, reason) = gate.state()
     val size = source?.size
     if (screenId != null && size != null) link?.send(LinkProtocol.stateEvent(state, reason, size, endsAt))
@@ -182,6 +220,12 @@ class PhoneSession(
     if (ended) return@post
     this.screenId = screenId
     stateChanged()
+    link?.call("ask.list", JSONObject()) { answer ->
+      scheduler.post {
+        asks.load(answer.result?.optJSONArray("asks"))
+        refreshBar()
+      }
+    }
   }
 
   override fun onRefused(reason: String) = scheduler.post { stop(reason, notifyDesktop = false) }
@@ -198,7 +242,15 @@ class PhoneSession(
     }
   }
 
-  override fun onEvent(event: Incoming.Event) = Unit
+  override fun onEvent(event: Incoming.Event) = scheduler.post {
+    if (ended) return@post
+    when (event.type) {
+      "ask.created" -> event.payload.optJSONObject("ask")?.let { asks.add(it) }
+      "ask.resolved" -> asks.resolve(event.payload.optString("askId", ""))
+      else -> return@post
+    }
+    refreshBar()
+  }
 
   override fun onClosed(code: Int) = scheduler.post { stop(closeReason(code), notifyDesktop = false) }
 
@@ -257,7 +309,10 @@ class PhoneSession(
     val target = targetAt(now, x, y)
     val land = {
       val result = JSONObject().apply { target?.let { put("target", JSONObject().put("text", it.label).put("package", it.packageName)) } }
-      gesture(done, result) { finish -> now.tap(x, y, count, holdMs, finish) }
+      gesture(done, result, {
+        did(BarModel.tapped(target?.label ?: ""))
+        overlays?.flash(target?.bounds?.takeIf { it.size == 4 }?.toIntArray() ?: intArrayOf(x - TAP_RING, y - TAP_RING, x + TAP_RING, y + TAP_RING))
+      }) { finish -> now.tap(x, y, count, holdMs, finish) }
     }
     if (target == null || !ConfirmPolicy.needsConfirm(target)) return land()
     val key = ConfirmPolicy.allowKey(target)
@@ -271,12 +326,18 @@ class PhoneSession(
   override fun swipe(from: IntArray, to: IntArray, durationMs: Int, done: (Reply) -> Unit) {
     val now = device ?: return done(fail("no-service"))
     pointRefusal(now, from, to)?.let { return done(Reply.Fail(it)) }
-    gesture(done, JSONObject()) { finish -> now.swipe(from, to, durationMs, finish) }
+    gesture(done, JSONObject(), { did("swiped") }) { finish -> now.swipe(from, to, durationMs, finish) }
   }
 
-  private fun gesture(done: (Reply) -> Unit, result: JSONObject, dispatch: ((Boolean) -> Unit) -> List<Long>) {
+  private fun gesture(done: (Reply) -> Unit, result: JSONObject, landed: () -> Unit, dispatch: ((Boolean) -> Unit) -> List<Long>) {
     val at = clock()
-    val strokes = dispatch { ok -> scheduler.post { if (!ended) done(if (ok) Reply.Ok(result) else fail("cancelled")) } }
+    val strokes = dispatch { ok ->
+      scheduler.post {
+        if (ended) return@post
+        if (ok) landed()
+        done(if (ok) Reply.Ok(result) else fail("cancelled"))
+      }
+    }
     own.started(at, strokes)
   }
 
@@ -284,7 +345,9 @@ class PhoneSession(
     val field = editableField() ?: return fail("no-field")
     if (blocklist.blocks(field.packageName)) return Reply.Fail(blockedError())
     val (next, cursor) = TextEdit.insert(field.text, field.selectionStart, field.selectionEnd, text)
-    return if (field.setText(next, cursor)) Reply.Ok(JSONObject()) else fail("cancelled")
+    if (!field.setText(next, cursor)) return fail("cancelled")
+    did(BarModel.typed(text.length))
+    return Reply.Ok(JSONObject())
   }
 
   private fun editableField(): FieldView? = device?.field()?.takeUnless { it.password }
@@ -292,7 +355,7 @@ class PhoneSession(
   override fun key(key: String, done: (Reply) -> Unit) {
     val now = device ?: return done(fail("no-service"))
     when (key) {
-      "back", "home", "recents" -> done(outcome(now.global(key)))
+      "back", "home", "recents" -> done(outcome(now.global(key)).also { if (it is Reply.Ok) did("pressed $key") })
       "delete" -> {
         val field = editableField() ?: return done(fail("no-field"))
         val (next, cursor) = TextEdit.deleteBack(field.text, field.selectionStart, field.selectionEnd)
@@ -344,7 +407,9 @@ class PhoneSession(
   override fun launch(packageName: String): Reply {
     val now = device ?: return fail("no-service")
     if (blocklist.blocks(packageName)) return Reply.Fail(blockedError())
-    return if (now.launch(packageName)) Reply.Ok(JSONObject()) else fail("not-found")
+    if (!now.launch(packageName)) return fail("not-found")
+    did("opened ${now.label(packageName)}")
+    return Reply.Ok(JSONObject())
   }
 
   override fun apps(): Reply {
@@ -392,5 +457,7 @@ class PhoneSession(
 
   companion object {
     const val CONFIRM_TIMEOUT_MS = 60_000L
+    const val BAR_TICK_MS = 1000L
+    const val TAP_RING = 40
   }
 }

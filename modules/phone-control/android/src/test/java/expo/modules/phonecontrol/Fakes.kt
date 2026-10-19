@@ -30,11 +30,14 @@ class FakeScheduler(private val clock: FakeClock) : Scheduler {
   }
 
   fun runDue() {
-    while (true) {
-      val next = tasks.filter { !it.cancelled && it.at <= clock.now }.minWithOrNull(compareBy({ it.at }, { it.order })) ?: return
-      tasks.remove(next)
-      next.run()
-    }
+    while (runNext()) Unit
+  }
+
+  fun runNext(): Boolean {
+    val next = tasks.filter { !it.cancelled && it.at <= clock.now }.minWithOrNull(compareBy({ it.at }, { it.order })) ?: return false
+    tasks.remove(next)
+    next.run()
+    return true
   }
 
   fun advance(ms: Long) {
@@ -77,8 +80,14 @@ class FakeLink(var room: Boolean = true) : Link {
   val replies = mutableMapOf<Any, JSONObject>()
   val failures = mutableMapOf<Any, RpcError>()
 
+  val calls = mutableListOf<Pair<String, (Incoming.Response) -> Unit>>()
+
   override fun open() {
     opened = true
+  }
+
+  override fun call(method: String, params: JSONObject, answer: (Incoming.Response) -> Unit) {
+    calls.add(method to answer)
   }
 
   override fun reply(id: Any, result: JSONObject) {
@@ -111,6 +120,11 @@ class FakeLink(var room: Boolean = true) : Link {
 class FakeHost : SessionHost {
   val statuses = mutableListOf<SessionStatus>()
   var finished = false
+  var opened: AskLine? = null
+
+  override fun openAsk(ask: AskLine) {
+    opened = ask
+  }
 
   override fun publish(status: SessionStatus) {
     statuses.add(status)
@@ -212,6 +226,10 @@ class FakeDevice(var windows: List<WindowView> = listOf(appWindow("com.android.s
 }
 
 class FakeOverlays : Overlays {
+  override val barHeight = 180
+  var shown: BarContent? = null
+  var onBar: ((BarAction) -> Unit)? = null
+  val flashes = mutableListOf<List<Int>>()
   var onTouch: (() -> Unit)? = null
   var asked: ConfirmRequest? = null
   var answer: ((ConfirmAnswer) -> Unit)? = null
@@ -225,6 +243,15 @@ class FakeOverlays : Overlays {
   override fun confirm(request: ConfirmRequest, answer: (ConfirmAnswer) -> Unit) {
     asked = request
     this.answer = answer
+  }
+
+  override fun bar(content: BarContent, onAction: (BarAction) -> Unit) {
+    shown = content
+    onBar = onAction
+  }
+
+  override fun flash(bounds: IntArray) {
+    flashes.add(bounds.toList())
   }
 
   override fun hideConfirm() {

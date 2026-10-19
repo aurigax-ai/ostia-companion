@@ -45,7 +45,7 @@ export function AskCard({
 
   const secondary = ask.choices.filter((choice) => choice.tone !== 'approve');
   const primary = ask.choices.filter((choice) => choice.tone === 'approve');
-  const choiceButton = (choice: AskChoice, variant: 'filled' | 'tonal') => (
+  const choiceButton = (choice: AskChoice, variant: 'filled' | 'tonal', inRow: boolean) => (
     <Button
       key={choice.id}
       label={choice.label}
@@ -53,7 +53,7 @@ export function AskCard({
       loading={pending === choice.id}
       disabled={disabled}
       onPress={() => choose(choice)}
-      style={styles.choice}
+      style={inRow ? styles.choice : undefined}
     />
   );
 
@@ -103,13 +103,13 @@ export function AskCard({
       <View style={styles.actions}>
         {secondary.length > 0 || (compact && ask.allowText && onReply) ? (
           <View style={styles.choiceRow}>
-            {secondary.map((choice) => choiceButton(choice, 'tonal'))}
+            {secondary.map((choice) => choiceButton(choice, 'tonal', true))}
             {compact && ask.allowText && onReply ? (
               <Button label="Reply" variant="text" disabled={disabled} onPress={onReply} style={styles.choice} />
             ) : null}
           </View>
         ) : null}
-        {primary.map((choice) => choiceButton(choice, 'filled'))}
+        {primary.map((choice) => choiceButton(choice, 'filled', false))}
       </View>
       {!canRespond ? (
         <Text style={[type.caption, styles.note]}>Turn on Respond for this phone in Settings › Remote.</Text>

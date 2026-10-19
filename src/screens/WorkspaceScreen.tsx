@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { RefreshControl, SectionList, View } from 'react-native';
 import { FileText, FolderOpen, Globe, PanelsTopLeft, Smartphone, Sparkles } from 'lucide-react-native';
 import { AskCard } from '../components/AskCard';
@@ -21,13 +21,16 @@ type Row = { kind: 'ask'; ask: Ask } | { kind: 'artifacts' } | { kind: 'files' }
 type Section = { key: string; title: string; data: Row[] };
 
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
-  const { sessionId, name } = route.params;
+  const { sessionId, name, askId } = route.params;
   const { sessions, panes, refreshing, loadedAt } = useWorkspaces();
   const status = useConnectionStatus();
   const asks = useAsks();
   const unreadArtifacts = useArtifacts().unread[sessionId]?.length ?? 0;
   const canRespond = useCaps().includes('respond');
-  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<string | null>(askId ?? null);
+  useEffect(() => {
+    if (askId) setReplyTo(askId);
+  }, [askId]);
   const pairing = OstiaRpc.getPairing();
   const phone = usePhoneSession();
   const phoneHere = isActive(phone.state) && phone.sessionId === sessionId;

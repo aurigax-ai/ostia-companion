@@ -3,7 +3,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 export type RootStack = {
   Home: undefined;
-  Workspace: { sessionId: string; name: string };
+  Workspace: { sessionId: string; name: string; askId?: string };
   Terminal: { paneId: string; title: string };
   Settings: undefined;
   Desktops: undefined;
@@ -11,6 +11,7 @@ export type RootStack = {
   FileView: { sessionId: string; path: string; name: string; root?: FileRoot };
   Artifacts: { sessionId: string; path: string; title: string };
   PhoneSession: { sessionId: string; name: string };
+  BlockedApps: undefined;
   Pair: undefined;
   PairLink: undefined;
   PairCode: { name: string; host: string; port: number; fingerprint: string };

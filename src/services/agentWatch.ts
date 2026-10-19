@@ -82,7 +82,8 @@ export function startAgentAlerts(openTerminal: OpenTerminal): void {
   onAlertPrefs(updateService);
   Notifications.addNotificationResponseReceivedListener((response) => {
     const { identifier, content } = response.notification.request;
-    const data = content.data as { paneId: string; paneTitle: string; askId: string | null };
+    const data = content.data as { paneId: string; paneTitle: string; askId: string | null; kind?: string };
+    if (data.kind === 'screen-request') return;
     if (response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER || !data.askId) {
       openTerminal(tapTarget(data));
       return;

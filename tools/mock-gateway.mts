@@ -49,6 +49,10 @@ createServer((req, res) => {
   let body = '';
   req.on('data', (chunk) => (body += chunk));
   req.on('end', async () => {
+    if (req.method === 'POST' && req.url === '/requested') {
+      gateway.requestScreen(JSON.parse(body || '{}').sessionId ?? 's-api');
+      return res.writeHead(200).end('{}');
+    }
     const screen = gateway.screens.findLast((s) => !s.closed);
     if (req.method !== 'POST' || !screen) return res.writeHead(404).end();
     try {
