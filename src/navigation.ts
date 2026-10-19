@@ -10,6 +10,7 @@ export type RootStack = {
   Files: { sessionId: string; path: string; title: string };
   FileView: { sessionId: string; path: string; name: string; root?: FileRoot };
   Artifacts: { sessionId: string; path: string; title: string };
+  PhoneSession: { sessionId: string; name: string };
   Pair: undefined;
   PairLink: undefined;
   PairCode: { name: string; host: string; port: number; fingerprint: string };
