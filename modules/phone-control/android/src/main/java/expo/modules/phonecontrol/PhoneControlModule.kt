@@ -72,6 +72,24 @@ class PhoneControlModule : Module() {
       true
     }
 
+    Function("accessibilityEnabled") {
+      appContext.reactContext?.let { OstiaAccessibilityService.isEnabled(it) } ?: false
+    }
+
+    Function("openAccessibilitySettings") {
+      val activity = appContext.currentActivity ?: return@Function Unit
+      activity.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+      Unit
+    }
+
+    Function("resume") {
+      val context = appContext.reactContext ?: return@Function Unit
+      if (SessionStatusHub.current.state == "paused") {
+        context.startService(Intent(context, PhoneControlService::class.java).setAction(PhoneControlService.ACTION_RESUME))
+      }
+      Unit
+    }
+
     Function("stop") {
       val context = appContext.reactContext ?: return@Function Unit
       if (SessionStatusHub.current.state in setOf("starting", "running", "paused")) {
