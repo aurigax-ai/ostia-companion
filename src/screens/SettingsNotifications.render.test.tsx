@@ -2,7 +2,6 @@ import { expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SettingsScreen } from './SettingsScreen';
 
 jest.mock('../services/rpc', () => ({ OstiaRpc: { getPairing: () => null } }));
@@ -20,11 +19,7 @@ jest.mock('../services/openTailscaleApp', () => ({ openTailscaleApp: jest.fn() }
 
 test('NTF-C7 shows Off with an Allow button when notification permission is denied', async () => {
   jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ granted: false } as never);
-  await render(
-    <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 412, height: 915 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
-      <SettingsScreen navigation={{ navigate: jest.fn() } as any} route={{} as any} onUnpair={jest.fn(async () => {})} />
-    </SafeAreaProvider>,
-  );
+  await render(<SettingsScreen navigation={{ navigate: jest.fn() } as any} route={{} as any} onUnpair={jest.fn(async () => {})} />);
   expect(await screen.findByText('Off')).toBeTruthy();
   expect(screen.getByText('Allow')).toBeTruthy();
   ['Agent needs you', 'Agent finished', 'Agent failed'].forEach((label) => expect(screen.getByText(label)).toBeTruthy());
