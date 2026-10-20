@@ -93,6 +93,7 @@ test('NAV-C6 lists the terminals in order from the title and switches to the one
   await setPanes([terminal('zsh'), terminal('claude', { agentState: 'waiting', running: true }), terminal('logs', { running: true })]);
   await render(<Harness paneId="zsh" />);
   expect(screen.getByLabelText('Terminal 3 of 3')).toBeTruthy();
+  expect(screen.getByText('· 3 of 3')).toBeTruthy();
   await fireEvent.press(screen.getByLabelText('zsh, list terminals'));
   const rows = screen.getAllByText(/^(claude|logs|zsh)$/).map((node) => node.props.children);
   expect(rows.slice(-3)).toEqual(['claude', 'logs', 'zsh']);

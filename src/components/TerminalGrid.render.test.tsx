@@ -25,7 +25,7 @@ test('CRD-C80 the Terminal view opens at the bottom and a drag scrolls back thro
   expect(screen.queryByText(/row 100\b/)).toBeNull();
   await act(async () => fireGestureHandler(getByGestureTestId('grid-pan'), [{ translationY: 0 }, { translationY: 3000 }, { translationY: 3000, state: 5 }]));
   expect(screen.queryByText(/row 299/)).toBeNull();
-  expect(screen.getAllByText(/row 1[45]\d\b/).length).toBeGreaterThan(5);
+  expect(screen.getAllByText(/row 1[34]\d\b/).length).toBeGreaterThan(5);
 });
 
 test('CRD-C81 the text is selectable for copying, as one block of rows', async () => {
@@ -41,7 +41,7 @@ test('CRD-C82 a row with wide characters is placed cell by cell, so later text d
   const second = screen.getByText('好');
   const flat = Object.assign({}, ...[second.props.style].flat(Infinity).filter(Boolean)) as { left: number };
   const first = Object.assign({}, ...[screen.getByText('你').props.style].flat(Infinity).filter(Boolean)) as { left: number };
-  expect(flat.left - first.left).toBeCloseTo(2 * 0.6 * (360 / (40 * 0.6)) * 1, 0);
+  expect(flat.left - first.left).toBeCloseTo(2 * 0.6 * ((360 - 2 * 12) / (40 * 0.6)) * 1, 0);
 });
 
 test('CRD-C83 dragging within a line does not read the screen again', async () => {
@@ -55,4 +55,17 @@ test('CRD-C83 dragging within a line does not read the screen again', async () =
   window.mockClear();
   await act(async () => fireGestureHandler(getByGestureTestId('grid-pan'), [{ translationY: 0 }, { translationY: 2 }, { translationY: 4 }, { translationY: 4, state: 5 }]));
   expect(window).not.toHaveBeenCalled();
+});
+
+test('PHV-C1 the grid keeps a margin at both screen edges and fits its columns inside it', async () => {
+  const measured = jest.fn();
+  const copy = new TerminalCopy(40, 10);
+  await copy.write(bytes('hello'));
+  await render(<TerminalGrid copy={copy} version={1} onMeasure={measured} />);
+  await act(async () =>
+    fireEvent(screen.getByTestId('terminal-grid'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 360, height: 300 } } }),
+  );
+  expect(measured).toHaveBeenCalledWith({ width: 336, height: 300 });
+  const style = Object.assign({}, ...[screen.getByTestId('terminal-grid').children[0] && (screen.getByTestId('terminal-grid').children[0] as any).props?.style].flat(Infinity).filter(Boolean)) as { marginHorizontal?: number };
+  expect(style.marginHorizontal).toBe(12);
 });

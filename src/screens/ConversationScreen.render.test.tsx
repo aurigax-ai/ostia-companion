@@ -1,7 +1,7 @@
 import { beforeEach, expect, jest, test } from '@jest/globals';
 import React, { useMemo, useState } from 'react';
 import { AppState } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ConversationScreen } from './ConversationScreen';
 
@@ -324,6 +324,17 @@ test('PHA-C24 the human\'s message goes to the agent through agent.prompt, and S
   expect(mockConv.prompt).toHaveBeenCalledWith('p-agent', 'run the export tests too');
   await fireEvent.press(screen.getByText('Stop'));
   expect(mockConv.interrupt).toHaveBeenCalledWith('p-agent', 'esc');
+});
+
+test('PHV-C3 Stop sits in the tools row with the mic and the camera, not on a row of its own', async () => {
+  await renderConversation();
+  await waitFor(() => expect(opens()).toHaveLength(1));
+  await stream([{ type: 'turn.started', turn: 1 }, { type: 'live' }]);
+  const tools = await screen.findByTestId('composer-tools');
+  expect(within(tools).getByText('Stop')).toBeTruthy();
+  expect(within(tools).getByLabelText('Dictate')).toBeTruthy();
+  await stream([{ type: 'turn.ended', turn: 1, status: 'done' }]);
+  expect(screen.queryByText('Stop')).toBeNull();
 });
 
 test('PHA-C24 a message the agent did not take says so, and the message stays shown until the next send', async () => {

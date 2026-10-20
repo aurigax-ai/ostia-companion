@@ -146,11 +146,9 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
               {workspace}
             </Text>
             {ids.length > 1 ? (
-              <View style={styles.dots} accessibilityLabel={`Terminal ${index + 1} of ${ids.length}`}>
-                {ids.map((id, i) => (
-                  <View key={id} style={[styles.dot, i === index && styles.dotOn]} />
-                ))}
-              </View>
+              <Text style={type.caption} numberOfLines={1} accessibilityLabel={`Terminal ${index + 1} of ${ids.length}`}>
+                {`· ${index + 1} of ${ids.length}`}
+              </Text>
             ) : null}
           </View>
         </Pressable>
@@ -428,9 +426,6 @@ const styles = StyleSheet.create({
   inset: { flex: 1, backgroundColor: colors.bg },
   headerTitle: { flexShrink: 1, minHeight: touch, justifyContent: 'center' },
   headerSub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  dots: { flexDirection: 'row', gap: space.xs },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.lineStrong },
-  dotOn: { width: 14, backgroundColor: colors.fg },
   fill: { flex: 1, backgroundColor: colors.bg },
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
