@@ -1,7 +1,6 @@
 import React from 'react';
 import { Ask } from '../model/asks';
-import { AskCard } from './AskCard';
-import { Sheet } from './ui';
+import { PermissionSheet } from './PermissionSheet';
 
 export function AskSheet({
   ask,
@@ -20,9 +19,6 @@ export function AskSheet({
   onAnswer: (answer: { choiceId?: string; text?: string }) => void;
   onClose: () => void;
 }) {
-  return (
-    <Sheet visible={ask !== null} onClose={onClose}>
-      {ask ? <AskCard ask={ask} workspace={workspace} canRespond={canRespond} pending={pending} error={error} onAnswer={onAnswer} flat /> : null}
-    </Sheet>
-  );
+  const where = [workspace, ask?.agent].filter(Boolean).join(' · ');
+  return <PermissionSheet ask={ask} where={where} canRespond={canRespond} pending={pending} error={error} onAnswer={onAnswer} onClose={onClose} />;
 }
