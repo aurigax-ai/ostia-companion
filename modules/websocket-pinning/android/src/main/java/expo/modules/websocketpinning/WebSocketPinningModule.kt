@@ -65,7 +65,9 @@ class WebSocketPinningModule : Module() {
 
     Function("connect") { url: String, fingerprint: String ->
       expectedFingerprint = fingerprint
-      val activeClient = createPinnedClient(fingerprint)
+      val activeClient = createPinnedClient(fingerprint).newBuilder()
+        .connectTimeout(CONNECT_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
       client = activeClient
 
       val request = Request.Builder().url(url).build()
@@ -164,3 +166,4 @@ class WebSocketPinningModule : Module() {
 }
 
 private const val POST_TIMEOUT_SECONDS = 130L
+private const val CONNECT_TIMEOUT_SECONDS = 5L

@@ -1,6 +1,8 @@
 import { PinnedWebSocket } from 'websocket-pinning';
 import { parsePhoneWorkspace, PhoneWorkspace } from '../model/agentStart';
-import { PairingData } from './storage';
+import { DesktopAddress, parseAddresses, Route, savedRoutes, untried } from '../model/rediscovery';
+import { discoverPairedRoutes } from './lanDiscovery';
+import { PairingData, saveRoute } from './storage';
 
 export type Cap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
 export type Role = 'observer' | 'owner';
@@ -53,6 +55,7 @@ class OstiaRpcClient {
 
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = MIN_RECONNECT_DELAY;
+  private run = 0;
 
   private activePaneId: string | null = null;
   private requestedRole: Role = 'observer';
@@ -109,17 +112,38 @@ class OstiaRpcClient {
   public connect() {
     if (!this.pairingData) return;
     this.closeSocket();
-
-    const { gatewayHost, gatewayPort, pinnedFingerprint } = this.pairingData;
     this.setStatus('connecting');
+    this.tryRoutes(this.run, savedRoutes(this.pairingData), [], false);
+  }
+
+  private tryRoutes(run: number, queue: Route[], tried: Route[], discovered: boolean) {
+    if (run !== this.run || !this.pairingData) return;
+    const route = queue[0];
+    if (route) {
+      this.open(route, () => this.tryRoutes(run, queue.slice(1), [...tried, route], discovered));
+      return;
+    }
+    if (discovered) {
+      this.handleClose(1006, 'The desktop is not reachable.');
+      return;
+    }
+    discoverPairedRoutes()
+      .catch((): Route[] => [])
+      .then((found) => this.tryRoutes(run, untried(found, tried), tried, true));
+  }
+
+  private open(route: Route, failed: () => void) {
+    if (!this.pairingData) return;
+    let opened = false;
 
     const socket: PinnedWebSocket = new PinnedWebSocket(
-      `wss://${gatewayHost}:${gatewayPort}/ws`,
-      pinnedFingerprint,
+      `wss://${route.host}:${route.port}/ws`,
+      this.pairingData.pinnedFingerprint,
       {
         onOpen: () => {
           if (this.socket !== socket) return;
-          this.sendHello();
+          opened = true;
+          this.sendHello(route);
         },
         onMessage: (event) => {
           if (this.socket !== socket) return;
@@ -128,7 +152,13 @@ class OstiaRpcClient {
         },
         onClose: (event) => {
           if (this.socket !== socket) return;
-          this.handleClose(event.code, event.reason);
+          if (opened) {
+            this.handleClose(event.code, event.reason);
+            return;
+          }
+          this.socket = null;
+          socket.close();
+          failed();
         },
         onError: (event) => {
           if (this.socket !== socket) return;
@@ -155,6 +185,7 @@ class OstiaRpcClient {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
+    this.run++;
     const socket = this.socket;
     this.socket = null;
     socket?.close();
@@ -196,7 +227,22 @@ class OstiaRpcClient {
     this.setStatus('revoked', reason);
   }
 
-  private async sendHello() {
+  private keepRoute(route: Route | null, addresses: DesktopAddress[] | null) {
+    const current = this.pairingData;
+    if (!current) return;
+    const next: PairingData = {
+      ...current,
+      ...(route ? { gatewayHost: route.host, gatewayPort: route.port } : {}),
+      ...(addresses ? { addresses } : {}),
+    };
+    this.pairingData = next;
+    const { gatewayHost, gatewayPort } = next;
+    void saveRoute(next.deviceId, { gatewayHost, gatewayPort, addresses: next.addresses }).catch((err) =>
+      console.warn('Saving the desktop address failed:', err)
+    );
+  }
+
+  private async sendHello(route: Route) {
     if (!this.pairingData) return;
     try {
       const result = await this.call('hello', {
@@ -204,6 +250,7 @@ class OstiaRpcClient {
         client: 'ostia-companion/1.0',
       });
       this.reconnectDelay = MIN_RECONNECT_DELAY;
+      this.keepRoute(route, parseAddresses(result.addresses));
       this.setCaps(result.caps ?? []);
       this.setFeatures(result.features ?? []);
       this.phoneWorkspace = parsePhoneWorkspace(result.phoneWorkspace);
@@ -232,6 +279,7 @@ class OstiaRpcClient {
     if (message.method === 'event' && message.params) {
       const { type, payload } = message.params;
       if (type === 'caps.changed') this.setCaps(payload?.caps ?? []);
+      if (type === 'addresses.changed') this.keepRoute(null, parseAddresses(payload?.addresses));
       this.emit(type, payload);
       return;
     }

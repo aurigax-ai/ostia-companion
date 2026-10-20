@@ -13,7 +13,14 @@ import { agentPromptScreen, demoScenario, PROMPT_OPTIONS, type Scenario, shellSc
 export type MockCap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
 export type MockDecision = 'approve' | 'deny' | 'never';
 
+export interface MockAddress {
+  kind: 'tailnet' | 'phone' | 'lan';
+  host: string;
+  port: number;
+}
+
 export interface MockGatewayOptions {
+  addresses?: MockAddress[];
   port?: number;
   name?: string;
   caps?: MockCap[];
@@ -76,6 +83,8 @@ export interface MockGateway {
   requestScreen: (sessionId: string, from?: { agent: string; reason: string }) => string;
   declined: { requestId: string; reason: string }[];
   writeArtifact: (sessionId: string, path: string, content: string | null) => void;
+  setAddresses: (next: MockAddress[]) => void;
+  move: (port?: number) => Promise<number>;
   close: () => Promise<void>;
 }
 
@@ -238,6 +247,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const touched = new Map<string, number>();
   const started = Date.now();
   let selected = 0;
+  let addresses = options.addresses ?? null;
 
   const mintCode = () => {
     const code = newCode();
@@ -250,9 +260,9 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     pane.paneId === 'p-claude' ? agentPromptScreen(selected, pane.agentState === 'waiting' ? null : 0) : shellScreen(pane);
   scenario.panes.filter((pane) => pane.kind === 'terminal').forEach((pane) => output.set(pane.paneId, screenOf(pane)));
 
-  const event = (type: string, payload: object, cap: MockCap = 'read') => {
+  const event = (type: string, payload: object, cap: MockCap | null = 'read') => {
     const frame = JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type, payload } });
-    connections.forEach((c) => c.device?.caps.includes(cap) && c.socket.send(frame));
+    connections.forEach((c) => c.device && (cap === null || c.device.caps.includes(cap)) && c.socket.send(frame));
   };
 
   const writePane = (paneId: string, text: string) => {
@@ -446,7 +456,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         }
         clearTimeout(helloTimer);
         connection.device = device;
-        return respond(id, { deviceId: device.deviceId, caps: device.caps, ...(options.imagesUnsupported ? {} : { features: ['prompt-image'] }), desktop: { name, version: 'mock' }, ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
+        return respond(id, { deviceId: device.deviceId, caps: device.caps, ...(options.imagesUnsupported ? {} : { features: ['prompt-image'] }), desktop: { name, version: 'mock' }, ...(addresses ? { addresses } : {}), ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
       }
       if (!connection.device) {
         fail(id, UNAUTHENTICATED, 'unauthenticated');
@@ -635,8 +645,9 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     });
   });
 
-  await new Promise<void>((resolve) => server.listen(options.port ?? 0, '0.0.0.0', resolve));
-  const port = (server.address() as AddressInfo).port;
+  const listen = (wanted: number) =>
+    new Promise<number>((resolve) => server.listen(wanted, '0.0.0.0', () => resolve((server.address() as AddressInfo).port)));
+  const port = await listen(options.port ?? 0);
 
   const gateway: MockGateway = {
     port,
@@ -647,7 +658,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     },
     checkCodes,
     devices,
-    payload: (host) => ({ v: 1, host, port, fingerprint, pairCode, name }),
+    payload: (host) => ({ v: 1, host, port: gateway.port, fingerprint, pairCode, name }),
     link: (host) => `ostia-pair://${Buffer.from(JSON.stringify(gateway.payload(host))).toString('base64url')}`,
     mintCode: () => (pairCode = mintCode()),
     revoke: (deviceId) => {
@@ -688,6 +699,17 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       else tree[path] = content;
       touched.set(`${sessionId}:${path}`, Date.now());
       event('artifact.changed', { sessionId, path, change });
+    },
+    setAddresses: (next) => {
+      addresses = next;
+      event('addresses.changed', { addresses: next }, null);
+    },
+    move: async (wanted = 0) => {
+      connections.forEach((c) => c.socket.terminate());
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      gateway.port = await listen(wanted);
+      return gateway.port;
     },
     close: () =>
       new Promise<void>((resolve) => {
