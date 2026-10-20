@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, AppState, Platform, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, AppState, Platform, ScrollView, Share, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Check, Minus, Plus } from 'lucide-react-native';
@@ -41,15 +41,15 @@ const ALERTS: { key: keyof AlertPrefs; title: string }[] = [
   { key: 'failed', title: 'Agent failed' },
 ];
 
-const TOGGLES: { key: keyof TerminalPrefs; title: string }[] = [
+const TOGGLES: { key: keyof TerminalPrefs; title: string; subtitle?: string }[] = [
   { key: 'fitWhenWatching', title: 'Fit desktop width when watching' },
   { key: 'keyRow', title: 'Key row' },
-  { key: 'haptics', title: 'Haptics' },
+  { key: 'haptics', title: 'Haptics', subtitle: 'Buzz when pairing is approved or fails' },
 ];
 
 function Value({ text, mono: isMono }: { text: string; mono?: boolean }) {
   return (
-    <Text style={[isMono ? type.mono : type.bodyMuted, styles.value]} numberOfLines={1} selectable>
+    <Text style={[isMono ? type.mono : type.bodyMuted, styles.value]} numberOfLines={useWindowDimensions().fontScale > 1 ? 3 : 1} selectable>
       {text}
     </Text>
   );
@@ -251,10 +251,11 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
             </View>
           }
         />
-        {TOGGLES.map(({ key, title }) => (
+        {TOGGLES.map(({ key, title, subtitle }) => (
           <ListRow
             key={key}
             title={title}
+            subtitle={subtitle}
             trailing={
               <Switch
                 accessibilityLabel={title}
@@ -286,7 +287,7 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
 }
 
 const styles = StyleSheet.create({
-  value: { maxWidth: 200, textAlign: 'right' },
+  value: { maxWidth: 200, flexShrink: 1, textAlign: 'right' },
   note: { paddingHorizontal: space.gutter, paddingTop: space.sm },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   size: { ...type.monoLabel, minWidth: 24, textAlign: 'center' },

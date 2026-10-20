@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { Ask, AskChoice, detailPreview, needsConfirm, waitedFor } from '../model/asks';
-import { colors, font, radius, space, type } from '../theme';
+import { colors, font, radius, space, touch, type } from '../theme';
 import { Button, Card } from './ui';
 
 export function AskCard({
@@ -45,6 +45,7 @@ export function AskCard({
 
   const secondary = ask.choices.filter((choice) => choice.tone !== 'approve');
   const primary = ask.choices.filter((choice) => choice.tone === 'approve');
+  const choiceStyle = { ...styles.choice, ...(useWindowDimensions().fontScale > 1.3 ? styles.choiceStacked : null) };
   const choiceButton = (choice: AskChoice, variant: 'filled' | 'tonal', inRow: boolean) => (
     <Button
       key={choice.id}
@@ -53,7 +54,7 @@ export function AskCard({
       loading={pending === choice.id}
       disabled={disabled}
       onPress={() => choose(choice)}
-      style={inRow ? styles.choice : undefined}
+      style={inRow ? choiceStyle : undefined}
     />
   );
 
@@ -105,7 +106,7 @@ export function AskCard({
           <View style={styles.choiceRow}>
             {secondary.map((choice) => choiceButton(choice, 'tonal', true))}
             {compact && ask.allowText && onReply ? (
-              <Button label="Reply" variant="text" disabled={disabled} onPress={onReply} style={styles.choice} />
+              <Button label="Reply" variant="text" disabled={disabled} onPress={onReply} style={choiceStyle} />
             ) : null}
           </View>
         ) : null}
@@ -147,7 +148,8 @@ const styles = StyleSheet.create({
   },
   actions: { gap: space.sm, marginTop: space.lg },
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  choice: { flexGrow: 1, flexBasis: '40%', minHeight: 44 },
+  choice: { flexGrow: 1, flexBasis: '40%', minHeight: touch },
+  choiceStacked: { flexBasis: '100%' },
   note: { marginTop: space.md },
   error: { marginTop: space.sm, color: colors.attn },
 });

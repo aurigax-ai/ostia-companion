@@ -1,15 +1,14 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ask } from '../model/asks';
-import { colors, radius, space, type } from '../theme';
-import { tap } from './ui';
+import { colors, radius, space, touch, type } from '../theme';
 
 export function AskHeadsUp({ ask, onOpen }: { ask: Ask; onOpen: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${ask.title}, answer`}
-      onPress={() => (tap(), onOpen())}
+      onPress={onOpen}
       android_ripple={{ color: colors.ripple }}
       style={styles.bar}
     >
@@ -30,7 +29,7 @@ const styles = StyleSheet.create({
     marginHorizontal: space.gutter,
     marginBottom: space.sm,
     paddingHorizontal: space.md,
-    minHeight: 44,
+    minHeight: touch,
     borderRadius: radius.md + 2,
     backgroundColor: colors.surface,
     overflow: 'hidden',

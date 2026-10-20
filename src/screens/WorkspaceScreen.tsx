@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { Platform, RefreshControl, SectionList, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FileText, FolderOpen, Globe, PanelsTopLeft, Plus, Sparkles } from 'lucide-react-native';
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
@@ -22,6 +23,7 @@ type Section = { key: string; title: string; count?: number; folds?: boolean; op
 
 export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>) {
   const { sessionId, name, askId } = route.params;
+  const insets = useSafeAreaInsets();
   const { sessions, panes, seen, refreshing, loadedAt } = useWorkspaces();
   const folds = useListPrefs().unfolded;
   const status = useConnectionStatus();
@@ -181,7 +183,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
           ) : null
         }
       />
-      {Platform.OS === 'android' ? <Fab label="New session" icon={Plus} onPress={newSession} /> : null}
+      {Platform.OS === 'android' ? <Fab label="New session" icon={Plus} onPress={newSession} bottom={insets.bottom} /> : null}
       <SnackbarHost />
       <AskSheet
         ask={sheetAsk}

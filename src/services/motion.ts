@@ -26,7 +26,6 @@ export function pillFade(): number {
 
 export function haptic(event: HapticEvent): void {
   const kind = hapticFor(event, getPrefs());
-  if (kind === 'selection') void Haptics.selectionAsync();
-  else if (kind === 'success') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  if (kind === 'success') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   else if (kind === 'warning') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 }
