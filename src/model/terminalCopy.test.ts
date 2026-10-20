@@ -51,6 +51,14 @@ describe('TerminalCopy', () => {
     expect(copy.runs()[0]).toMatchObject({ running: false, fullscreen: false });
   });
 
+  it('CRD-V5b the cards before a full-screen program keep their own output while it draws on the alternate screen', async () => {
+    const copy = new TerminalCopy(20, 6);
+    await copy.write(bytes(run('ls', 'a\r\nb\r\n') + `${prompt}vim\r\n\x1b]133;C\x07\x1b[?1049h\x1b[2J\x1b[Hdrawn by vim`));
+    expect(text(copy.runs()[0].output)).toEqual(['a', 'b']);
+    expect(copy.runs()[1].output).toEqual([]);
+    expect(text(copy.screen()).join('')).toContain('drawn by vim');
+  });
+
   it('CRD-V6 resizes the copy to the attach size before the replay is applied, so absolute cursor moves land', async () => {
     const copy = new TerminalCopy(80, 24);
     copy.resize(30, 5);

@@ -2,6 +2,7 @@ import { expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { lockLandscape, lockPortrait } from '../services/orientation';
 import { TerminalScreen } from './TerminalScreen';
 
 const rpc = {
@@ -107,14 +108,16 @@ test('CRD-C43 a typed command goes out as one input with a return, and no resize
   expect(rpc.sent).toEqual(['ls -la\r']);
 });
 
-test('CRD-C44 a full-screen program is one row in Commands and opens the sideways view, which closes when the program exits', async () => {
+test('CRD-C44 a full-screen program is one row in Commands and opens the landscape view, which closes when the program exits', async () => {
   const { header } = await open();
   await feed(`${prompt}vim\r\n\x1b]133;C\x07\x1b[?1049hINSERT`);
   expect(screen.getByText('full screen')).toBeTruthy();
   await fireEvent.press(screen.getByLabelText('vim, open full screen'));
   expect(screen.getByTestId('fullscreen-terminal')).toBeTruthy();
+  expect(lockLandscape).toHaveBeenCalled();
   expect(header().headerShown).toBe(false);
   await feed('\x1b[?1049l\x1b]133;D;0\x07');
   expect(screen.queryByTestId('fullscreen-terminal')).toBeNull();
   expect(header().headerShown).toBe(true);
+  expect(lockPortrait).toHaveBeenCalled();
 });
