@@ -102,6 +102,13 @@ describe('the pi Agent pane', () => {
   });
 });
 
+describe('paneSubtitle for the pi Agent pane', () => {
+  it('PHP-C5 shows its folder, the workspace folder when the pane has none', () => {
+    expect(paneSubtitle(pane('pi', 's', { kind: 'agent', title: 'pi', cwd: '/home/m/proj' }), '/home/m/proj')).toBe('~/proj');
+    expect(paneSubtitle(pane('pi', 's', { kind: 'agent', title: 'pi' }), '/home/m/proj')).toBe('~/proj');
+  });
+});
+
 describe('failedExit', () => {
   it('reports a non-zero exit only once the command stopped', () => {
     expect(failedExit(pane('a', 's', { lastExitCode: 2 }))).toBe(2);

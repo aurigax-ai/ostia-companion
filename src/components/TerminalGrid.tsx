@@ -3,9 +3,10 @@ import { Animated, LayoutChangeEvent, PixelRatio, StyleSheet, Text, View } from 
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { DEFAULT_BG, DEFAULT_FG, Line, Span, TerminalCopy } from '../model/terminalCopy';
 import { Box, LINE_HEIGHT, MONO_ADVANCE, clampZoom, fitToBox, fitToWidth } from '../model/terminalFit';
-import { colors, font } from '../theme';
+import { colors, font, space } from '../theme';
 
 const ROW_SLACK = 6;
+export const GRID_PAD = space.md;
 const BOTTOM_SLACK_LINES = 1;
 
 function spanStyle(span: Span) {
@@ -73,7 +74,8 @@ export function TerminalGrid({
   const scale = 1 / PixelRatio.getFontScale();
 
   const onLayout = (event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
+    const { height } = event.nativeEvent.layout;
+    const width = Math.max(0, event.nativeEvent.layout.width - 2 * GRID_PAD);
     setView({ width, height });
     onMeasure?.({ width, height });
   };
@@ -118,14 +120,15 @@ export function TerminalGrid({
     .runOnJS(true)
     .onBegin((event) => {
       gestureStart.current = { ...scroll.current, zoom };
-      setOrigin({ x: event.focalX, y: event.focalY });
+      setOrigin({ x: event.focalX - GRID_PAD, y: event.focalY });
     })
     .onUpdate((event) => pinchScale.setValue(clampZoom(gestureStart.current.zoom * event.scale) / gestureStart.current.zoom))
     .onEnd((event) => {
       const next = clampZoom(gestureStart.current.zoom * event.scale);
       const ratio = next / gestureStart.current.zoom;
       pinchScale.setValue(1);
-      const x = (gestureStart.current.x + event.focalX) * ratio - event.focalX;
+      const focalX = event.focalX - GRID_PAD;
+      const x = (gestureStart.current.x + focalX) * ratio - focalX;
       const y = (gestureStart.current.y + event.focalY) * ratio - event.focalY;
       setZoom(next);
       const nextFont = fit * next;
@@ -148,6 +151,7 @@ export function TerminalGrid({
   return (
     <GestureDetector gesture={Gesture.Simultaneous(pan, pinch)}>
       <View style={styles.fill} onLayout={onLayout} testID="terminal-grid">
+       <View style={styles.inner}>
         <Animated.View
           style={[
             styles.grid,
@@ -171,6 +175,7 @@ export function TerminalGrid({
             />
           ) : null}
         </Animated.View>
+       </View>
       </View>
     </GestureDetector>
   );
@@ -182,6 +187,7 @@ function gridKey(copy: TerminalCopy): number {
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: DEFAULT_BG, overflow: 'hidden' },
+  inner: { flex: 1, marginHorizontal: GRID_PAD, overflow: 'hidden' },
   grid: { position: 'absolute', top: 0, left: 0 },
   cursor: { position: 'absolute', backgroundColor: colors.brand, opacity: 0.55 },
 });

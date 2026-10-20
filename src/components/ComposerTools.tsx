@@ -3,7 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, Image as Gallery, Mic, Square, X } from 'lucide-react-native';
 import { NO_IMAGES } from '../model/attachment';
 import { colors, radius, space, type } from '../theme';
-import { IconButton } from './ui';
+import { Button, IconButton } from './ui';
 
 export function ComposerTools({
   listening,
@@ -12,6 +12,7 @@ export function ComposerTools({
   images,
   imageUri,
   onRemoveImage,
+  onStop,
   disabled,
 }: {
   listening: boolean;
@@ -20,10 +21,11 @@ export function ComposerTools({
   images: boolean;
   imageUri: string | null;
   onRemoveImage: () => void;
+  onStop?: () => void;
   disabled?: boolean;
 }) {
   return (
-    <View style={styles.row}>
+    <View style={styles.row} testID="composer-tools">
       <IconButton icon={listening ? Square : Mic} label={listening ? 'Stop dictating' : 'Dictate'} onPress={onMic} color={listening ? colors.brand : colors.muted} disabled={disabled} />
       {images ? (
         <>
@@ -41,12 +43,18 @@ export function ComposerTools({
           </Pressable>
         </View>
       ) : null}
+      {onStop ? (
+        <View style={styles.stop}>
+          <Button label="Stop" icon={Square} variant="tonal" compact onPress={onStop} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingBottom: space.sm },
+  stop: { marginLeft: 'auto' },
   noImages: { flex: 1, marginLeft: space.sm },
   thumb: { marginLeft: space.sm, width: 44, height: 44 },
   image: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.bgSunken },

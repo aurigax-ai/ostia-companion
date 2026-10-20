@@ -1,6 +1,6 @@
 import type { Ask } from './asks';
 import { ago, changedAt, DAY_MS, isAgent, Seen } from './now';
-import { failedExit, isOpenable, Pane, paneTitle, Session, shortPath } from './workspaces';
+import { failedExit, isOpenable, isPiPane, Pane, paneTitle, Session, shortPath } from './workspaces';
 
 export const SLEEP_AFTER_MS = 3 * DAY_MS;
 
@@ -26,7 +26,7 @@ function plural(count: number, word: string): string {
 }
 
 function busy(pane: Pane): boolean {
-  return pane.agentState === 'working' || pane.agentState === 'waiting' || (!isAgent(pane) && pane.running);
+  return pane.agentState === 'working' || pane.agentState === 'waiting' || ((!isAgent(pane) || isPiPane(pane)) && pane.running);
 }
 
 export function lastActive(panes: Pane[], seen: Seen): number | null {
