@@ -79,6 +79,14 @@ describe('the agent stream (contract v1.12)', () => {
     expect(events).toContainEqual({ type: 'ask.resolved', askId: 'ask-migration', outcome: 'allow-once' });
   });
 
+  it('PHP-C4 the pi Agent pane streams as agent pi, and takes a prompt', async () => {
+    const client = await phone(['read', 'notify', 'respond']);
+    expect((await client.call('agent.stream.open', { paneId: 'p-pi' })).result).toEqual({ ok: true, paneId: 'p-pi', agent: 'pi', session: 'sess-p-pi', truncated: false });
+    expect((await client.call('agent.prompt', { paneId: 'p-pi', text: 'and the tests?' })).result).toEqual({ ok: true });
+    await sleep(100);
+    expect(frames(client).some((payload) => payload.events.some((e: any) => e.type === 'prompt' && e.text === 'and the tests?'))).toBe(true);
+  });
+
   it('PHC-C5 refuses what it cannot stream', async () => {
     const client = await phone(['read', 'notify'], { hooksOff: ['p-codex'] });
     const error = async (params: object) => (await client.call('agent.stream.open', params)).error;

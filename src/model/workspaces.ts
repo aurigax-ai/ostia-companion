@@ -93,8 +93,8 @@ export interface PaneGroup {
 
 export function groupPanes(panes: Pane[]): PaneGroup[] {
   const groups: PaneGroup[] = [
-    { title: 'Terminals', panes: panes.filter((pane) => pane.kind === 'terminal') },
-    { title: 'Desktop only', panes: panes.filter((pane) => pane.kind !== 'terminal') },
+    { title: 'Terminals', panes: panes.filter(isOpenable) },
+    { title: 'Desktop only', panes: panes.filter((pane) => !isOpenable(pane)) },
   ];
   return groups.filter((group) => group.panes.length > 0);
 }
@@ -109,8 +109,16 @@ export function applySessionState(sessions: Session[], sessionId: string, state:
 
 const STATUS_GLYPHS = /^[\u2800-\u28ff\u25d0-\u25d3\u2722-\u273d\u00b7]+\s*/;
 
+export function isPiPane(pane: Pane): boolean {
+  return pane.kind === 'agent';
+}
+
+export function isOpenable(pane: Pane): boolean {
+  return pane.kind === 'terminal' || isPiPane(pane);
+}
+
 export function paneScreen(pane: Pane): 'Conversation' | 'Terminal' {
-  return pane.kind === 'terminal' && (pane.agent === 'claude' || pane.agent === 'codex') ? 'Conversation' : 'Terminal';
+  return isPiPane(pane) || (pane.kind === 'terminal' && (pane.agent === 'claude' || pane.agent === 'codex')) ? 'Conversation' : 'Terminal';
 }
 
 export function paneTitle(pane: Pane): string {

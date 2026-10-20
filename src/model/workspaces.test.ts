@@ -6,6 +6,8 @@ import {
   applySessionState,
   failedExit,
   groupPanes,
+  isOpenable,
+  paneScreen,
   paneStatus,
   paneSubtitle,
   paneTitle,
@@ -78,6 +80,25 @@ describe('groupPanes', () => {
   it('CRD-C8 leaves out the terminals group when there are none', () => {
     const groups = groupPanes([pane('b1', 's', { kind: 'browser' })]);
     expect(groups.map((group) => group.title)).toEqual(['Desktop only']);
+  });
+});
+
+describe('the pi Agent pane', () => {
+  it('PHP-C3 opens as a chat, and sits with the terminals rather than under desktop only', () => {
+    const pi = pane('pi', 's', { kind: 'agent' });
+    expect(paneScreen(pi)).toBe('Conversation');
+    expect(isOpenable(pi)).toBe(true);
+    expect(isOpenable(pane('b', 's', { kind: 'browser' }))).toBe(false);
+    expect(groupPanes([pane('t', 's'), pi, pane('b', 's', { kind: 'browser' })]).map((g) => [g.title, g.panes.map((p) => p.paneId)])).toEqual([
+      ['Terminals', ['t', 'pi']],
+      ['Desktop only', ['b']],
+    ]);
+  });
+
+  it('PHP-C3 the other kinds keep their screen', () => {
+    expect(paneScreen(pane('c', 's', { agent: 'claude' }))).toBe('Conversation');
+    expect(paneScreen(pane('z', 's'))).toBe('Terminal');
+    expect(paneScreen(pane('e', 's', { kind: 'editor' }))).toBe('Terminal');
   });
 });
 
