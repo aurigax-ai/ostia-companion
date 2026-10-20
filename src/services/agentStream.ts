@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { applyFrame, EMPTY_STREAM, parseFrame, StreamState } from '../model/agentStream';
+import { applyFrame, EMPTY_STREAM, parseFrame, StreamFrame, StreamState } from '../model/agentStream';
 import { OstiaRpc } from './rpc';
 
 const NOT_AN_AGENT = 'not-an-agent';
@@ -20,21 +20,47 @@ export function streamFailure(err: any, firstOpen: boolean): { status: 'terminal
   return { status: 'error', text: err?.message || 'Could not read the conversation.' };
 }
 
-export function useAgentStream(paneId: string) {
+export function useAgentStream(paneId: string, active = true) {
   const [state, setState] = useState<StreamState>(EMPTY_STREAM);
   const [status, setStatus] = useState<StreamStatus>('opening');
   const [problem, setProblem] = useState<string | null>(null);
   const opened = useRef(false);
 
   useEffect(() => {
+    setState(EMPTY_STREAM);
+    setStatus('opening');
+    setProblem(null);
+    opened.current = false;
+  }, [paneId]);
+
+  useEffect(() => {
+    if (!active) return;
     let generation = 0;
     let streaming = false;
     let receiving = false;
     let expected = 1;
+    let queue: StreamFrame[] = [];
+    let frame: number | null = null;
+
+    const drop = () => {
+      queue = [];
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+    };
+
+    const flush = () => {
+      frame = null;
+      const frames = queue;
+      queue = [];
+      if (frames.length === 0) return;
+      const now = Date.now();
+      setState((current) => frames.reduce((next, each) => applyFrame(next, each, now), current));
+    };
 
     const close = () => {
       generation++;
       receiving = false;
+      drop();
       if (!streaming) return;
       streaming = false;
       OstiaRpc.call('agent.stream.close', { paneId }).catch(() => {});
@@ -45,6 +71,7 @@ export function useAgentStream(paneId: string) {
       streaming = true;
       receiving = false;
       expected = 1;
+      drop();
       try {
         await OstiaRpc.call('agent.stream.open', { paneId, turns: TURNS });
         if (mine !== generation) return;
@@ -64,15 +91,16 @@ export function useAgentStream(paneId: string) {
 
     const removeEvents = OstiaRpc.addEventListener((type, payload) => {
       if (type !== 'agent.stream' || payload?.paneId !== paneId || !receiving) return;
-      const frame = parseFrame(payload);
-      if (!frame) return;
-      if (frame.seq !== expected) {
+      const parsed = parseFrame(payload);
+      if (!parsed) return;
+      if (parsed.seq !== expected) {
         receiving = false;
         void open();
         return;
       }
-      expected = frame.seq + 1;
-      setState((current) => applyFrame(current, frame, Date.now()));
+      expected = parsed.seq + 1;
+      queue.push(parsed);
+      if (frame === null) frame = requestAnimationFrame(flush);
     });
 
     const removeStatus = OstiaRpc.addStatusListener((next) => {
@@ -80,8 +108,8 @@ export function useAgentStream(paneId: string) {
     });
 
     const removeApp = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void open();
-      else close();
+      if (next === 'background') close();
+      else if (next === 'active' && !streaming) void open();
     });
 
     if (OstiaRpc.getStatus() === 'connected') void open();
@@ -92,7 +120,7 @@ export function useAgentStream(paneId: string) {
       removeApp.remove();
       close();
     };
-  }, [paneId]);
+  }, [paneId, active]);
 
   return { state, status, problem };
 }

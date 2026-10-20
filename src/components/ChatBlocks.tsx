@@ -1,7 +1,7 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { Block, parseDiff, planDone, toolFailed, toolTarget, toolVerb, Turn, visibleBlocks, workingFor } from '../model/agentStream';
+import { Block, clipHead, MAX_DIFF_LINES, parseDiff, planDone, toolFailed, toolTarget, toolVerb, Turn, visibleBlocks, workingFor } from '../model/agentStream';
 import { colors, font, radius, space, type } from '../theme';
 
 const DIFF_PREVIEW = 40;
@@ -30,7 +30,7 @@ export function ToolLine({ block, onOpen }: { block: ToolBlock; onOpen: (block: 
 
 function DiffView({ block }: { block: Extract<Block, { kind: 'edit' }> }) {
   const [all, setAll] = useState(false);
-  const { lines, added, removed } = parseDiff(block.diff);
+  const { lines, added, removed, hidden } = useMemo(() => parseDiff(block.diff, block.change), [block.diff, block.change]);
   const shown = all ? lines : lines.slice(0, DIFF_PREVIEW);
   return (
     <View style={styles.diff}>
@@ -52,9 +52,10 @@ function DiffView({ block }: { block: Extract<Block, { kind: 'edit' }> }) {
       ))}
       {lines.length > DIFF_PREVIEW && !all ? (
         <Pressable accessibilityRole="button" hitSlop={{ top: 12, bottom: 12 }} onPress={() => setAll(true)}>
-          <Text style={[type.captionStrong, styles.more]}>Show all {lines.length} lines</Text>
+          <Text style={[type.captionStrong, styles.more]}>Show {hidden > 0 ? `the first ${MAX_DIFF_LINES}` : `all ${lines.length}`} lines</Text>
         </Pressable>
       ) : null}
+      {all && hidden > 0 ? <Text style={[type.caption, styles.more]}>{hidden} more lines are on the desktop</Text> : null}
     </View>
   );
 }
@@ -75,31 +76,51 @@ function PlanView({ block }: { block: Extract<Block, { kind: 'plan' }> }) {
   );
 }
 
-function BlockView({ block, onOpen }: { block: Block; onOpen: (block: ToolBlock) => void }) {
-  if (block.kind === 'text') return <Text style={[type.body, styles.text]} selectable>{block.text}</Text>;
+function Clipped({ text, style }: { text: string; style?: object }) {
+  const clipped = useMemo(() => clipHead(text), [text]);
+  return (
+    <Text style={style} selectable>
+      {clipped.text}
+      {clipped.hidden > 0 ? `\n… ${clipped.hidden} more characters are on the desktop` : ''}
+    </Text>
+  );
+}
+
+const BlockView = memo(function BlockView({ block, onOpen }: { block: Block; onOpen: (block: ToolBlock) => void }) {
+  if (block.kind === 'text') return <Clipped text={block.text} style={[type.body, styles.text]} />;
   if (block.kind === 'tool') return <ToolLine block={block} onOpen={onOpen} />;
   if (block.kind === 'edit') return <DiffView block={block} />;
   return <PlanView block={block} />;
+});
+
+function WorkingLine({ startedAt }: { startedAt?: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (startedAt === undefined) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [startedAt]);
+  return (
+    <View style={styles.working}>
+      <ActivityIndicator size="small" color={colors.brand} />
+      <Text style={[type.caption, styles.workingText]}>{workingFor(startedAt, now)}</Text>
+    </View>
+  );
 }
 
-export const TurnView = memo(function TurnView({ turn, now, onOpen }: { turn: Turn; now: number; onOpen: (block: ToolBlock) => void }) {
+export const TurnView = memo(function TurnView({ turn, onOpen }: { turn: Turn; onOpen: (block: ToolBlock) => void }) {
   return (
     <View style={styles.turn}>
       {turn.prompt ? (
         <View style={styles.prompt}>
-          <Text style={type.body} selectable>
-            {turn.prompt.text}
-          </Text>
+          <Clipped text={turn.prompt.text} style={type.body} />
         </View>
       ) : null}
       {visibleBlocks(turn).map((block) => (
         <BlockView key={`${block.kind}:${block.id}`} block={block} onOpen={onOpen} />
       ))}
       {turn.status === 'running' ? (
-        <View style={styles.working}>
-          <ActivityIndicator size="small" color={colors.brand} />
-          <Text style={[type.caption, styles.workingText]}>{workingFor(turn.startedAt, now)}</Text>
-        </View>
+        <WorkingLine startedAt={turn.startedAt} />
       ) : turn.status !== 'done' ? (
         <Text style={[type.caption, styles.dim]}>{turn.status === 'interrupted' ? 'Interrupted' : 'Failed'}</Text>
       ) : null}

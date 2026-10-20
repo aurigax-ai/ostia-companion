@@ -28,6 +28,10 @@ export interface StreamState {
   ended: 'pane-closed' | 'agent-closed' | null;
 }
 
+export const MAX_TURNS = 50;
+export const MAX_SHOWN_CHARS = 20_000;
+export const MAX_DIFF_LINES = 500;
+
 export const EMPTY_STREAM: StreamState = { turns: [], live: false, ended: null };
 
 export interface StreamFrame {
@@ -150,14 +154,27 @@ export function applyEvent(state: StreamState, event: Record<string, unknown>, n
 }
 
 export function applyFrame(state: StreamState, frame: StreamFrame, now: number): StreamState {
-  return frame.events.reduce((next, event) => applyEvent(next, event, frame.backfill ? undefined : now), state);
+  const next = frame.events.reduce((current, event) => applyEvent(current, event, frame.backfill ? undefined : now), state);
+  return next.turns.length > MAX_TURNS ? { ...next, turns: next.turns.slice(-MAX_TURNS) } : next;
+}
+
+export function clipHead(text: string, max = MAX_SHOWN_CHARS): { text: string; hidden: number } {
+  return text.length <= max ? { text, hidden: 0 } : { text: text.slice(0, max), hidden: text.length - max };
+}
+
+export function clipTail(text: string, max = MAX_SHOWN_CHARS): { text: string; hidden: number } {
+  if (text.length <= max) return { text, hidden: 0 };
+  const cut = text.length - max;
+  const newline = text.indexOf('\n', cut);
+  const start = newline >= 0 && newline - cut < 200 ? newline + 1 : cut;
+  return { text: text.slice(start), hidden: start };
 }
 
 export function visibleBlocks(turn: Turn): Block[] {
   const edits = turn.blocks.filter((block) => block.kind === 'edit');
   return turn.blocks.filter((block) => {
     if (block.kind !== 'tool' || block.tool !== 'edit') return true;
-    return !edits.some((edit) => edit.id === block.id || (!!block.target && edit.path.endsWith(block.target)));
+    return !edits.some((edit) => edit.id === block.id || (!!block.target && edit.path === block.target));
   });
 }
 
@@ -198,35 +215,55 @@ export interface DiffLine {
   line?: number;
 }
 
-export function parseDiff(diff: string): { lines: DiffLine[]; added: number; removed: number } {
+const GIT_HEADER = /^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode|old mode|new mode|similarity index|rename |copy |Binary files )/;
+
+export function parseDiff(diff: string, change: EditChange = 'update', maxRows = MAX_DIFF_LINES): { lines: DiffLine[]; added: number; removed: number; hidden: number } {
+  const rows = diff.split('\n');
+  if (rows[rows.length - 1] === '') rows.pop();
   const lines: DiffLine[] = [];
   let added = 0;
   let removed = 0;
+  let total = 0;
+  const push = (line: DiffLine) => {
+    total++;
+    if (lines.length < maxRows) lines.push(line);
+  };
+
+  if (!rows.some((row) => row.startsWith('@@ ')) && change !== 'update') {
+    const kind = change === 'add' ? 'add' : 'del';
+    rows.forEach((row, index) => {
+      if (kind === 'add') added++;
+      else removed++;
+      push({ kind, text: row, line: index + 1 });
+    });
+    return { lines, added, removed, hidden: total - lines.length };
+  }
+
+  let inHunk = false;
   let oldLine = 0;
   let newLine = 0;
-  const rows = diff.split('\n');
-  if (rows[rows.length - 1] === '') rows.pop();
   for (const row of rows) {
     const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(row);
     if (hunk) {
+      inHunk = true;
       oldLine = Number(hunk[1]);
       newLine = Number(hunk[2]);
-      lines.push({ kind: 'hunk', text: row });
-    } else if (/^(---|\+\+\+) /.test(row) && lines.length === 0) continue;
+      push({ kind: 'hunk', text: row });
+    } else if (!inHunk && GIT_HEADER.test(row)) continue;
     else if (row.startsWith('+')) {
       added++;
-      lines.push({ kind: 'add', text: row.slice(1), line: newLine++ });
+      push({ kind: 'add', text: row.slice(1), line: newLine++ });
     } else if (row.startsWith('-')) {
       removed++;
-      lines.push({ kind: 'del', text: row.slice(1), line: oldLine++ });
+      push({ kind: 'del', text: row.slice(1), line: oldLine++ });
     } else if (row.startsWith('\\')) continue;
     else {
-      lines.push({ kind: 'ctx', text: row.slice(1), line: newLine });
+      push({ kind: 'ctx', text: row.startsWith(' ') ? row.slice(1) : row, line: newLine });
       oldLine++;
       newLine++;
     }
   }
-  return { lines, added, removed };
+  return { lines, added, removed, hidden: total - lines.length };
 }
 
 export function workingFor(startedAt: number | undefined, now: number): string {

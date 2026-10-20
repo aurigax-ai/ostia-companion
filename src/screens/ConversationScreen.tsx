@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Bot, Square } from 'lucide-react-native';
@@ -9,7 +9,7 @@ import { ChatComposer } from '../components/ChatComposer';
 import { ComposerTools } from '../components/ComposerTools';
 import { AskSheet } from '../components/AskSheet';
 import { Button, Empty, HeaderTitle, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
-import { toolTarget, toolVerb, turnRunning } from '../model/agentStream';
+import { Block, clipTail, toolTarget, toolVerb, Turn, turnRunning } from '../model/agentStream';
 import { ATTACH_FAILED, imageRefusal } from '../model/attachment';
 import { paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
@@ -22,7 +22,14 @@ import { colors, font, radius, space, type } from '../theme';
 
 const NEAR_BOTTOM = 80;
 
-type Detail = { title: string; input?: string; output?: string };
+const Gap = () => <View style={{ height: space.xl }} />;
+
+type ToolBlock = Extract<Block, { kind: 'tool' }>;
+type Detail = { turnId: string; blockId: string };
+
+const renderTurn = (turn: Turn, onOpen: (turnId: string, block: ToolBlock) => void) => (
+  <TurnView turn={turn} onOpen={(block) => onOpen(turn.id, block)} />
+);
 
 export function ConversationScreen({ navigation, route }: ScreenProps<'Conversation'>) {
   const { paneId, title } = route.params;
@@ -32,7 +39,8 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const images = useFeatures().includes('prompt-image');
   const { sessions, panes } = useWorkspaces();
   const asks = useAsks();
-  const { state, status, problem } = useAgentStream(paneId);
+  const [focused, setFocused] = useState(true);
+  const { state, status, problem } = useAgentStream(paneId, focused);
   const pane = panes.find((p) => p.paneId === paneId);
   const workspace = sessions.find((s) => s.sessionId === pane?.sessionId);
   const agent = pane?.agent && pane.agent !== 'other' ? pane.agent : title;
@@ -46,8 +54,7 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const dictation = useDictation(text, setText);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
-  const [now, setNow] = useState(Date.now());
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<FlatList<Turn>>(null);
   const ownAsks = asks.asks.filter((ask) => ask.paneId === paneId);
   const sheetAsk = ownAsks.find((ask) => !dismissed.includes(ask.askId)) ?? null;
   const waitingAsk = ownAsks.find((ask) => dismissed.includes(ask.askId)) ?? null;
@@ -67,10 +74,18 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   }, [status, navigation, paneId, title]);
 
   useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [running]);
+    const removeBlur = navigation.addListener('blur', () => setFocused(false));
+    const removeFocus = navigation.addListener('focus', () => setFocused(true));
+    return () => {
+      removeBlur();
+      removeFocus();
+    };
+  }, [navigation]);
+
+  const openDetail = useCallback((turnId: string, block: ToolBlock) => setDetail({ turnId, blockId: block.id }), []);
+  const renderItem = useCallback(({ item }: { item: Turn }) => renderTurn(item, openDetail), [openDetail]);
+  const shown = detail ? state.turns.find((turn) => turn.id === detail.turnId)?.blocks.find((block): block is ToolBlock => block.kind === 'tool' && block.id === detail.blockId) : undefined;
+  const shownText = shown ? clipTail([shown.input, shown.output].filter(Boolean).join('\n\n') || 'No output.') : null;
 
   const attach = async (source: 'gallery' | 'camera') => {
     setPickProblem(null);
@@ -115,34 +130,35 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
       {status === 'opening' ? (
         <Loading />
       ) : (
-        <ScrollView
+        <FlatList
           {...NO_SCROLL_BARS}
           ref={scroll}
+          data={state.turns}
+          keyExtractor={(turn) => turn.id}
+          renderItem={renderItem}
           style={styles.fill}
           contentContainerStyle={styles.thread}
+          ItemSeparatorComponent={Gap}
+          ListEmptyComponent={state.live ? <Empty icon={Bot} title="No turns yet" body="The thread starts at the next prompt this agent gets." /> : null}
+          ListFooterComponent={
+            <View style={styles.footer}>
+              {state.ended ? <Text style={[type.caption, styles.center]}>{state.ended === 'agent-closed' ? 'The agent closed.' : 'This pane was closed on the desktop.'}</Text> : null}
+              {problem ? <Warning text={problem} /> : null}
+              {sendProblem ? <Warning text={sendProblem} /> : null}
+              {pickProblem ? <Warning text={pickProblem} /> : null}
+              {dictation.problem ? <Warning text={dictation.problem} /> : null}
+            </View>
+          }
           onContentSizeChange={() => nearBottom.current && scroll.current?.scrollToEnd({ animated: false })}
           onLayout={() => nearBottom.current && scroll.current?.scrollToEnd({ animated: false })}
           onScroll={({ nativeEvent }) => {
             nearBottom.current = nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height >= nativeEvent.contentSize.height - NEAR_BOTTOM;
           }}
           scrollEventThrottle={100}
+          initialNumToRender={8}
+          windowSize={7}
           keyboardShouldPersistTaps="handled"
-        >
-          {state.live && state.turns.length === 0 ? <Empty icon={Bot} title="No turns yet" body="The thread starts at the next prompt this agent gets." /> : null}
-          {state.turns.map((turn, index) => (
-            <TurnView
-              key={turn.id}
-              turn={turn}
-              now={index === state.turns.length - 1 ? now : 0}
-              onOpen={(block) => setDetail({ title: `${toolVerb(block.tool)} ${toolTarget(block)}`, input: block.input, output: block.output })}
-            />
-          ))}
-          {state.ended ? <Text style={[type.caption, styles.center]}>{state.ended === 'agent-closed' ? 'The agent closed.' : 'This pane was closed on the desktop.'}</Text> : null}
-          {problem ? <Warning text={problem} /> : null}
-          {sendProblem ? <Warning text={sendProblem} /> : null}
-          {pickProblem ? <Warning text={pickProblem} /> : null}
-          {dictation.problem ? <Warning text={dictation.problem} /> : null}
-        </ScrollView>
+        />
       )}
       {waitingAsk ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Review the request" hitSlop={{ top: 8, bottom: 8 }} onPress={() => setDismissed((all) => all.filter((id) => id !== waitingAsk.askId))} style={styles.waiting}>
@@ -190,15 +206,16 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
         onAnswer={(answer) => sheetAsk && void answerAsk(sheetAsk.askId, answer)}
         onClose={() => sheetAsk && setDismissed((all) => [...all, sheetAsk.askId])}
       />
-      <Sheet visible={detail !== null} onClose={() => setDetail(null)}>
-        {detail ? (
+      <Sheet visible={shown !== undefined} onClose={() => setDetail(null)}>
+        {shown && shownText ? (
           <View style={styles.detail}>
             <Text style={type.captionStrong} numberOfLines={2}>
-              {detail.title}
+              {`${toolVerb(shown.tool)} ${toolTarget(shown)}`}
             </Text>
             <ScrollView {...NO_SCROLL_BARS} style={styles.output}>
               <Text style={styles.outputText} selectable>
-                {[detail.input, detail.output].filter(Boolean).join('\n\n') || 'No output.'}
+                {shownText.hidden > 0 ? `… ${shownText.hidden} earlier characters are on the desktop\n` : ''}
+                {shownText.text}
               </Text>
             </ScrollView>
           </View>
@@ -210,7 +227,8 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  thread: { paddingHorizontal: space.gutter, paddingTop: space.lg, paddingBottom: space.lg, gap: space.xl, flexGrow: 1 },
+  thread: { paddingHorizontal: space.gutter, paddingTop: space.lg, paddingBottom: space.lg, flexGrow: 1 },
+  footer: { gap: space.md, paddingTop: space.md },
   center: { textAlign: 'center' },
   stop: { alignItems: 'flex-start', paddingHorizontal: space.gutter, paddingBottom: space.sm },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.gutter, marginBottom: space.sm, paddingHorizontal: space.md, minHeight: 36, borderRadius: radius.full, backgroundColor: colors.attnSoft },
