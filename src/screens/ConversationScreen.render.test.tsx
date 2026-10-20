@@ -50,6 +50,7 @@ jest.mock('../services/askStore', () => ({
 }));
 jest.mock('../services/workspaceStore', () => ({
   useCaps: () => mockConv.caps,
+  useFeatures: () => ['prompt-image'],
   useWorkspaces: () => ({
     sessions: [{ sessionId: 's-ostia', name: 'ostia', kind: 'agent', workDir: '/o', state: 'working' }],
     panes: [{ paneId: 'p-agent', sessionId: 's-ostia', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: mockConv.agentState }],

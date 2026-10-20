@@ -35,6 +35,7 @@ export function ChatComposer({
   workspaces,
   bottomInset,
   tools,
+  allowEmpty,
 }: {
   value: string;
   onChangeText: (text: string) => void;
@@ -47,6 +48,7 @@ export function ChatComposer({
   workspaces: Session[];
   bottomInset: number;
   tools?: React.ReactNode;
+  allowEmpty?: boolean;
 }) {
   const [reviewing, setReviewing] = useState<Shortcut | null>(null);
   const [holes, setHoles] = useState<string[]>([]);
@@ -91,7 +93,7 @@ export function ChatComposer({
       {blocked.length > 0 ? <Warning text={`Fill in ${blocked.join(', ')} first.`} /> : null}
       <View style={[styles.bar, { paddingBottom: space.sm + bottomInset }]}>
         {tools}
-        <MessageField value={value} onChangeText={edit} onSend={send} placeholder={placeholder} editable={editable} sending={sending} autoFocus={autoFocus} />
+        <MessageField value={value} onChangeText={edit} onSend={send} placeholder={placeholder} editable={editable} sending={sending} autoFocus={autoFocus} allowEmpty={allowEmpty} />
       </View>
       <Sheet visible={reviewing !== null} onClose={() => setReviewing(null)}>
         <Text style={[type.captionStrong, styles.sheetTitle]}>Review which workspace?</Text>

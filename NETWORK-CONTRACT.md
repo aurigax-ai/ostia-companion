@@ -116,7 +116,7 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
   { "jsonrpc": "2.0", "id": 1, "method": "hello",
     "params": { "deviceToken": "OPAQUE-BEARER", "client": "ostia-companion/1.0" } }
   ```
-  - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","notify"], "desktop": { "name": "...", "version": "..." } } }`. From v1.9 the result also carries `phoneWorkspace: { set, agent }` when the desktop has a Phone workspace setting: `set` is true while its folder is set, opening new phone sessions there is on, and the folder passes the desktop's check; `agent` is the default agent (`"claude"`\|`"codex"`).
+  - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","notify"], "desktop": { "name": "...", "version": "..." } } }`. From v1.9 the result also carries `phoneWorkspace: { set, agent }` when the desktop has a Phone workspace setting: `set` is true while its folder is set, opening new phone sessions there is on, and the folder passes the desktop's check; `agent` is the default agent (`"claude"`\|`"codex"`). The result carries `features: ["prompt-image"]` when the desktop takes an image with `agent.prompt` and frames up to 16 MiB; without it the desktop closes any frame over 1 MiB, so the phone offers no image and says "This desktop can't take images yet".
   - Any method before a successful `hello` → error `-32001 unauthenticated`, connection closed.
 - The connection's capability set is derived from the device's grants (server-side). The client must treat `caps` as authoritative and hide/disable UI it lacks caps for.
 
@@ -409,7 +409,7 @@ interface CommandDescriptor {
 - **`screen.decline { requestId, reason: "off"|"unsupported"|"denied"|"busy" }`** (`notify`), the phone's answer when it will not share; `screen.start` gains `requestId?`.
 - **`turn.list`, `turn.output`** (`read`): an agent's conversation as short turns; **`snippet.list`** (`read`): the human's own snippets.
 - **Phone workspace** (agreed in ostia #1246, not merged yet): `hello` gains `phoneWorkspace { set, agent }`, `session.list` marks it `phone: true`, `agent.start` takes no `sessionId` or `agent` and answers `phone-workspace-unavailable`.
-- **`agent.prompt`** takes `image?: { mime, data }` and answers `image: "pasted"` when the desktop took it (ostia #1259); the phone shows "This desktop can't take images yet" when the answer lacks it, and the refusals `image-type`, `image-too-large` and `rate-limited` as plain messages.
+- **`agent.prompt`** takes `image?: { mime, data }` and answers `image: "pasted"` when the desktop took it (ostia #1259); the phone offers an image only when `hello` carried `features: ["prompt-image"]`, and shows the refusals `image-type`, `image-too-large` and `rate-limited` as plain messages.
 - Additive: a v1.8 phone ignores the new fields and never declines.
 
 ### v1.8 — 2026-10-19 (phone screen)

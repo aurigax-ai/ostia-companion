@@ -8,7 +8,7 @@ import { AskSheet } from '../components/AskSheet';
 import { ChatComposer } from '../components/ChatComposer';
 import { ComposerTools } from '../components/ComposerTools';
 import { Button, Empty, HeaderTitle, IconButton, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
-import { imageAccepted, imageRefusal, NO_IMAGES } from '../model/attachment';
+import { ATTACH_FAILED, imageRefusal } from '../model/attachment';
 import { Step, StepKind, stepFailed, stepLine, Turn, TurnList, turnRunning, turnSummary } from '../model/turns';
 import { paneTitle } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
@@ -17,8 +17,8 @@ import { useDictation } from '../services/dictation';
 import { PickedImage, pickImage } from '../services/images';
 import { OstiaRpc } from '../services/rpc';
 import { loadStepOutput, loadTurns } from '../services/turns';
-import { useCaps, useWorkspaces } from '../services/workspaceStore';
-import { colors, font, radius, space, type } from '../theme';
+import { useCaps, useFeatures, useWorkspaces } from '../services/workspaceStore';
+import { colors, font, radius, space, touch, type } from '../theme';
 
 const POLL_MS = 3000;
 const EVENT_DELAY_MS = 300;
@@ -51,7 +51,7 @@ function StepRow({ step, onOpen }: { step: Step; onOpen: (step: Step) => void })
   );
   if (!step.output) return <View style={styles.step}>{body}</View>;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${stepLine(step)}, show output`} onPress={() => onOpen(step)} style={styles.step}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${stepLine(step)}, show output`} onPress={() => onOpen(step)} style={[styles.step, styles.stepOpen]}>
       {body}
     </Pressable>
   );
@@ -100,6 +100,7 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const canRespond = useCaps().includes('respond');
+  const images = useFeatures().includes('prompt-image');
   const { sessions, panes } = useWorkspaces();
   const asks = useAsks();
   const pane = panes.find((p) => p.paneId === paneId);
@@ -169,23 +170,33 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
 
   const attach = async (source: 'gallery' | 'camera') => {
     setPickProblem(null);
-    const result = await pickImage(source);
-    if (!result) return;
-    if ('problem' in result) setPickProblem(result.problem);
-    else setAttached(result.picked);
+    try {
+      const result = await pickImage(source);
+      if (!result) return;
+      if ('problem' in result) setPickProblem(result.problem);
+      else setAttached(result.picked);
+    } catch {
+      setPickProblem(ATTACH_FAILED);
+    }
+  };
+
+  const edit = (next: string) => {
+    dictation.abort();
+    setText(next);
   };
 
   const send = async () => {
     const prompt = text.trim();
-    if (!prompt) return;
+    if (!prompt && !attached) return;
+    dictation.abort();
     setSending(true);
     setSendProblem(null);
     try {
-      const answer = await (attached ? promptAgent(paneId, prompt, attached.image) : promptAgent(paneId, prompt));
+      await (attached ? promptAgent(paneId, prompt, attached.image) : promptAgent(paneId, prompt));
       setText('');
       setAttached(null);
-      if (attached && !imageAccepted(answer)) setSendProblem(NO_IMAGES);
     } catch (err: any) {
+      if (err?.message === 'not-submitted') setAttached(null);
       setSendProblem(
         imageRefusal(err?.message) ??
           (err?.message === 'not-submitted' ? `${agent} did not start a turn. Your message is still in its prompt on the desktop.` : err?.message || 'Could not send.'),
@@ -246,8 +257,9 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
       ) : null}
       <ChatComposer
         value={text}
-        onChangeText={setText}
+        onChangeText={edit}
         onSend={() => void send()}
+        allowEmpty={!!attached}
         placeholder={canRespond ? `Message ${agent}` : 'Turn on Respond in Settings › Remote'}
         editable={canRespond}
         sending={sending}
@@ -259,6 +271,7 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
             listening={dictation.listening}
             onMic={dictation.toggle}
             onPick={(source) => void attach(source)}
+            images={images}
             imageUri={attached?.uri ?? null}
             onRemoveImage={() => setAttached(null)}
             disabled={!canRespond || sending}
@@ -318,6 +331,7 @@ const styles = StyleSheet.create({
   },
   steps: { gap: 2 },
   step: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 28 },
+  stepOpen: { minHeight: touch },
   stepText: { flex: 1 },
   failed: { color: colors.attn },
   answer: { gap: space.xs },

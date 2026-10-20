@@ -105,10 +105,34 @@ describe('agent control (contract v1.6)', () => {
     expect((await client.call('agent.prompt', { paneId: 'p-agent', text: 'n7', image })).error).toEqual(expect.objectContaining({ code: -32007, message: 'rate-limited' }));
   });
 
-  it('AGT-C9 an older desktop types the text and answers without image', async () => {
-    const client = await phone(['read', 'notify', 'respond'], { imagesUnsupported: true });
-    const image = { mime: 'image/png', data: Buffer.alloc(16).toString('base64') };
-    expect((await client.call('agent.prompt', { paneId: 'p-agent', text: 'look', image })).result).toEqual({ ok: true });
-    expect(gateway!.pasted('p-agent')).toEqual([]);
+  it('AGT-C9 an older desktop advertises no image feature and closes a frame over 1 MiB, so a photo drops the socket', async () => {
+    const older = await phone(['read', 'notify', 'respond'], { imagesUnsupported: true });
+    const photo = { mime: 'image/jpeg', data: Buffer.alloc(2 * 1024 * 1024).toString('base64') };
+    older.call('agent.prompt', { paneId: 'p-agent', text: 'look', image: photo });
+    expect(await older.closed).toBe(1009);
+    expect(gateway!.typed('p-agent')).toEqual([]);
+  });
+
+  it('AGT-C9 a desktop with prompt-image advertises it in hello and takes a photo of several MiB', async () => {
+    gateway = await startMockGateway({ caps: ['read', 'notify', 'respond'] });
+    const { result: paired } = await pair(gateway);
+    const client = connect(gateway);
+    expect((await client.call('hello', { deviceToken: paired.deviceToken })).result.features).toEqual(['prompt-image']);
+    const photo = { mime: 'image/jpeg', data: Buffer.alloc(3 * 1024 * 1024).toString('base64') };
+    expect((await client.call('agent.prompt', { paneId: 'p-agent', text: 'look', image: photo })).result).toEqual({ ok: true, image: 'pasted' });
+  });
+
+  it('AGT-C9 an older desktop sends no features in hello', async () => {
+    gateway = await startMockGateway({ caps: ['read', 'notify', 'respond'], imagesUnsupported: true });
+    const { result: paired } = await pair(gateway);
+    const client = connect(gateway);
+    expect((await client.call('hello', { deviceToken: paired.deviceToken })).result.features).toBeUndefined();
+  });
+
+  it('AGT-C9 a frame over 1 MiB before hello closes the socket', async () => {
+    gateway = await startMockGateway({ caps: ['read', 'notify', 'respond'] });
+    const client = connect(gateway);
+    client.call('hello', { deviceToken: 'x'.repeat(2 * 1024 * 1024) });
+    expect(await client.closed).toBe(1009);
   });
 });

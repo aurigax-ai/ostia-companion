@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodedBytes, fitImage, imageAccepted, imageRefusal, MAX_IMAGE_BYTES } from './attachment';
+import { decodedBytes, fitImage, imageRefusal, MAX_IMAGE_BYTES } from './attachment';
 
 const base64Of = (bytes: number) => Buffer.alloc(bytes, 7).toString('base64');
 
@@ -38,11 +38,5 @@ describe('image attachments', () => {
     expect(imageRefusal('rate-limited')).toMatch(/Too many images/);
     expect(imageRefusal('not-submitted')).toBeNull();
     expect(imageRefusal(undefined)).toBeNull();
-  });
-
-  it('reads image: pasted as the desktop taking the image', () => {
-    expect(imageAccepted({ ok: true, image: 'pasted' })).toBe(true);
-    expect(imageAccepted({ ok: true })).toBe(false);
-    expect(imageAccepted(null)).toBe(false);
   });
 });

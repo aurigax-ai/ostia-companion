@@ -41,11 +41,8 @@ const REFUSALS: Record<string, string> = {
 };
 
 export const NO_IMAGES = "This desktop can't take images yet";
+export const ATTACH_FAILED = "Couldn't attach that image.";
 
 export function imageRefusal(message: unknown): string | null {
   return typeof message === 'string' ? (REFUSALS[message] ?? null) : null;
-}
-
-export function imageAccepted(answer: unknown): boolean {
-  return typeof answer === 'object' && answer !== null && (answer as { image?: unknown }).image === 'pasted';
 }

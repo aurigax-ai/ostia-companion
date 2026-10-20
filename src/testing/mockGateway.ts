@@ -167,6 +167,9 @@ const PROMPT_LIMIT = 4000;
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp'];
 const IMAGE_LIMIT_BYTES = 10 * 1024 * 1024;
 const IMAGES_PER_MINUTE = 6;
+const FRAME_BYTES = 1024 * 1024;
+const IMAGE_FRAME_BYTES = 16 * 1024 * 1024;
+const CLOSE_TOO_BIG = 1009;
 const REFUSED_KINDS = ['scratch', 'manager'];
 const SCREEN_GRACE_MS = 5000;
 const CLOSE_TIME_LIMIT = 4005;
@@ -396,6 +399,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     };
 
     socket.on('message', (data: Buffer, isBinary: boolean) => {
+      if (!connection.screen && data.length > (connection.device && !options.imagesUnsupported ? IMAGE_FRAME_BYTES : FRAME_BYTES)) return socket.close(CLOSE_TOO_BIG, 'frame too large');
       if (isBinary && connection.screen) {
         if (data[0] !== 0x10) return;
         const frame = parseScreenFrame(data);
@@ -442,7 +446,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         }
         clearTimeout(helloTimer);
         connection.device = device;
-        return respond(id, { deviceId: device.deviceId, caps: device.caps, desktop: { name, version: 'mock' }, ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
+        return respond(id, { deviceId: device.deviceId, caps: device.caps, ...(options.imagesUnsupported ? {} : { features: ['prompt-image'] }), desktop: { name, version: 'mock' }, ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
       }
       if (!connection.device) {
         fail(id, UNAUTHENTICATED, 'unauthenticated');
