@@ -65,6 +65,7 @@ export interface MockDevice {
 export interface MockGateway {
   port: number;
   fingerprint: string;
+  certificate: string;
   name: string;
   pairCode: string;
   checkCodes: string[];
@@ -652,6 +653,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const gateway: MockGateway = {
     port,
     fingerprint,
+    certificate: cert.toString(),
     name,
     get pairCode() {
       return pairCode;
