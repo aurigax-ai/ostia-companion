@@ -31,12 +31,3 @@ describe('terminalFit', () => {
     expect(clampZoom(0.2)).toBe(1);
   });
 });
-
-describe('sideways mapping', () => {
-  it('CRD-V12 turns a screen drag into the drag on the rotated grid', async () => {
-    const { toGridDelta, toGridSpace } = await import('./terminalFit');
-    expect(toGridDelta({ x: 10, y: 30 }, false)).toEqual({ x: 10, y: 30 });
-    expect(toGridDelta({ x: 10, y: 30 }, true)).toEqual({ x: 30, y: -10 });
-    expect(toGridSpace({ x: 20, y: 70 }, true, { width: 360, height: 800 })).toEqual({ x: 70, y: 340 });
-  });
-});

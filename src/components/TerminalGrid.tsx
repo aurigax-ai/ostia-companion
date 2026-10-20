@@ -12,14 +12,14 @@ import {
   fitToBox,
   fitToWidth,
   gridBox,
-  toGridDelta,
-  toGridSpace,
+  zoomAbout,
 } from '../model/terminalFit';
 import { colors, font } from '../theme';
 
 const ORIGIN: Offset = { x: 0, y: 0 };
+const ROW_SLACK = 6;
 
-export function TerminalGrid({ copy, version, sideways }: { copy: TerminalCopy; version: number; sideways?: boolean }) {
+export function TerminalGrid({ copy, version, fit: fitMode = 'width' }: { copy: TerminalCopy; version: number; fit?: 'width' | 'box' }) {
   const [view, setView] = useState<Box>({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState<Offset>(ORIGIN);
@@ -31,7 +31,7 @@ export function TerminalGrid({ copy, version, sideways }: { copy: TerminalCopy; 
     setView({ width, height });
   };
 
-  const fit = sideways ? fitToBox(copy.cols, copy.rows, view) : fitToWidth(copy.cols, view.width);
+  const fit = fitMode === 'box' ? fitToBox(copy.cols, copy.rows, view) : fitToWidth(copy.cols, view.width);
   const fontSize = fit * zoom;
   const content = gridBox(copy.cols, copy.rows, fontSize);
   const shown = clampOffset(offset, content, view);
@@ -41,8 +41,7 @@ export function TerminalGrid({ copy, version, sideways }: { copy: TerminalCopy; 
     .minDistance(8)
     .onBegin(() => (start.current.offset = shown))
     .onUpdate((event) => {
-      const delta = toGridDelta({ x: event.translationX, y: event.translationY }, !!sideways);
-      setOffset(clampOffset({ x: start.current.offset.x + delta.x, y: start.current.offset.y + delta.y }, content, view));
+      setOffset(clampOffset({ x: start.current.offset.x + event.translationX, y: start.current.offset.y + event.translationY }, content, view));
     });
 
   const pinch = Gesture.Pinch()
@@ -51,11 +50,7 @@ export function TerminalGrid({ copy, version, sideways }: { copy: TerminalCopy; 
     .onUpdate((event) => {
       const next = clampZoom(start.current.zoom * event.scale);
       const ratio = next / start.current.zoom;
-      const focal = toGridSpace({ x: event.focalX, y: event.focalY }, !!sideways, view);
-      const moved = {
-        x: focal.x - (focal.x - start.current.offset.x) * ratio,
-        y: focal.y - (focal.y - start.current.offset.y) * ratio,
-      };
+      const moved = zoomAbout(start.current.offset, { x: event.focalX, y: event.focalY }, ratio);
       setZoom(next);
       setOffset(clampOffset(moved, gridBox(copy.cols, copy.rows, fit * next), view));
     });
@@ -70,7 +65,7 @@ export function TerminalGrid({ copy, version, sideways }: { copy: TerminalCopy; 
       <View style={styles.fill} onLayout={onLayout} testID="terminal-grid">
         <Animated.View style={[styles.grid, { width: content.width, height: content.height, transform: [{ translateX: shown.x }, { translateY: shown.y }] }]}>
           {lines.map((line, y) => (
-            <Row key={y} line={line} fontSize={fontSize * scale} lineHeight={cell.height * scale} />
+            <Row key={y} line={line} fontSize={fontSize * scale} lineHeight={cell.height * scale} width={content.width + ROW_SLACK} />
           ))}
           <View
             pointerEvents="none"
@@ -82,9 +77,9 @@ export function TerminalGrid({ copy, version, sideways }: { copy: TerminalCopy; 
   );
 }
 
-function Row({ line, fontSize, lineHeight }: { line: Line; fontSize: number; lineHeight: number }) {
+function Row({ line, fontSize, lineHeight, width }: { line: Line; fontSize: number; lineHeight: number; width: number }) {
   return (
-    <Text testID="grid-row" numberOfLines={1} style={{ fontFamily: font.mono, fontSize, lineHeight, color: DEFAULT_FG }}>
+    <Text testID="grid-row" numberOfLines={1} ellipsizeMode="clip" style={{ width, fontFamily: font.mono, fontSize, lineHeight, color: DEFAULT_FG }}>
       {line.length === 0 ? ' ' : null}
       {line.map((span, i) => (
         <Text

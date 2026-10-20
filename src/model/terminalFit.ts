@@ -42,11 +42,3 @@ export function zoomAbout(offset: Offset, focal: Offset, ratio: number): Offset 
 export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(1, zoom));
 }
-
-export function toGridSpace(point: Offset, sideways: boolean, view: Box): Offset {
-  return sideways ? { x: point.y, y: view.width - point.x } : point;
-}
-
-export function toGridDelta(delta: Offset, sideways: boolean): Offset {
-  return sideways ? { x: delta.y, y: -delta.x } : delta;
-}

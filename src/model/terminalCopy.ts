@@ -1,3 +1,4 @@
+import './xtermShim';
 import { IBufferCell, IBufferLine, IMarker, Terminal } from '@xterm/headless';
 
 export interface Span {
@@ -208,7 +209,7 @@ export class TerminalCopy {
   }
 
   private logical(startLine: number, startX: number, endLine: number, endX: number, keepBlank = false): Line[] {
-    const buffer = this.term.buffer.active;
+    const buffer = this.term.buffer.normal;
     const lines: Line[] = [];
     for (let y = startLine; y <= endLine && y < buffer.length; y++) {
       const line = buffer.getLine(y);
@@ -249,7 +250,7 @@ export class TerminalCopy {
   }
 
   private lastContentLine(): number {
-    const buffer = this.term.buffer.active;
+    const buffer = this.term.buffer.normal;
     for (let y = buffer.length - 1; y >= 0; y--) {
       if (buffer.getLine(y)?.translateToString(true).trim()) return y;
     }
@@ -257,7 +258,7 @@ export class TerminalCopy {
   }
 
   runs(): CommandRun[] {
-    const buffer = this.term.buffer.active;
+    const buffer = this.term.buffer.normal;
     if (!this.marksSeen) {
       const output = this.logical(0, 0, Math.max(buffer.length - 1, 0), this.cols);
       return output.length === 0 ? [] : [{ id: 0, command: '', exitCode: null, running: false, fullscreen: false, output }];

@@ -15,3 +15,4 @@ jest.mock('../services/dictation', () => ({
   useDictation: () => ({ listening: false, problem: null, abort: () => {}, toggle: () => {} }),
 }));
 jest.mock('../services/images', () => ({ pickImage: jest.fn(async () => null) }));
+jest.mock('../services/orientation', () => ({ lockLandscape: jest.fn(async () => {}), lockPortrait: jest.fn(async () => {}) }));
