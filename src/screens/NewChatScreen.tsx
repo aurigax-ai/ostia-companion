@@ -112,7 +112,7 @@ export function NewChatScreen({ navigation, route }: ScreenProps<'NewChat'>) {
       </Sheet>
       <Sheet visible={picking === 'workspace'} onClose={() => setPicking(null)}>
         <Text style={[type.captionStrong, styles.sheetTitle]}>Start the chat in</Text>
-        <ScrollView {...NO_SCROLL_BARS} style={styles.sheetList}>
+        <ScrollView {...NO_SCROLL_BARS} nestedScrollEnabled style={styles.sheetList}>
           <Group>
             {phone?.set ? (
               <ListRow
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   hint: { marginTop: space.xs },
   warning: { marginTop: space.lg },
   to: { flexShrink: 1 },
-  toRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  toRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 24 },
   sheetTitle: { paddingHorizontal: space.xs, paddingBottom: space.md },
   sheetList: { maxHeight: 420 },
 });

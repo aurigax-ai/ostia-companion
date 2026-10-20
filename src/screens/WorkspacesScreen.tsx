@@ -145,7 +145,7 @@ export function WorkspacesScreen({ navigation }: TabProps<'Workspaces'>) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  header: { paddingTop: space.sm },
+  header: { paddingTop: space.sm, paddingBottom: space.md },
   search: { paddingTop: space.md },
   content: { paddingBottom: space.xxl, flexGrow: 1 },
 });

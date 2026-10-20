@@ -1,11 +1,11 @@
 import React, { useContext, useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bot, Check, ChevronDown, ChevronRight, LucideIcon, Search, SquareTerminal, TriangleAlert, X } from 'lucide-react-native';
 import { Pane, Status } from '../model/workspaces';
-import { haptic, pillFade, prefersReducedMotion } from '../services/motion';
+import { pillFade, prefersReducedMotion } from '../services/motion';
 import { hideSnackbar, useSnackbar } from '../services/snackbar';
-import { colors, font, radius, space, type } from '../theme';
+import { colors, font, radius, space, touch, type } from '../theme';
 
 export const NO_SCROLL_BARS = { showsVerticalScrollIndicator: false, showsHorizontalScrollIndicator: false } as const;
 
@@ -18,8 +18,8 @@ export function useTabBarInset(): number {
   return TAB_BAR + (useContext(SafeAreaInsetsContext)?.bottom ?? 0);
 }
 
-export function tap() {
-  haptic('tap');
+function useLines(scaled: number): number | undefined {
+  return useWindowDimensions().fontScale > 1 ? scaled : 1;
 }
 
 function Marked({ text, range }: { text: string; range: [number, number] }) {
@@ -57,13 +57,15 @@ export function ListRow({
   mark?: [number, number] | null;
   label?: string;
 }) {
+  const titleLines = useLines(2);
+  const subtitleLines = useLines(3);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={label}
       accessibilityState={disabled ? { disabled } : undefined}
       disabled={disabled}
-      onPress={onPress ? () => (tap(), onPress()) : undefined}
+      onPress={onPress}
       android_ripple={onPress ? { color: colors.ripple } : undefined}
       style={({ pressed }) => [
         styles.row,
@@ -73,11 +75,11 @@ export function ListRow({
     >
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.rowText}>
-        <Text style={[type.body, disabled && styles.dim]} numberOfLines={1}>
+        <Text style={[type.body, disabled && styles.dim]} numberOfLines={titleLines}>
           {mark ? <Marked text={title} range={mark} /> : title}
         </Text>
         {subtitle ? (
-          <Text style={[mono ? type.mono : type.caption, styles.subtitle, attention && styles.attention, disabled && styles.dim]} numberOfLines={1}>
+          <Text style={[mono ? type.mono : type.caption, styles.subtitle, attention && styles.attention, disabled && styles.dim]} numberOfLines={subtitleLines}>
             {subtitle}
           </Text>
         ) : null}
@@ -149,7 +151,7 @@ export function SectionHeader({
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ expanded: !!open }}
-      onPress={() => (tap(), onToggle())}
+      onPress={onToggle}
       style={styles.section}
     >
       {heading}
@@ -191,6 +193,7 @@ export function SearchField({
         autoFocus={autoFocus}
         autoCorrect={false}
         autoCapitalize="none"
+        numberOfLines={1}
         returnKeyType="search"
         accessibilityLabel={placeholder}
       />
@@ -207,7 +210,7 @@ export function Fab({ label, icon: Icon, onPress, bottom = 0 }: { label: string;
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      onPress={() => (tap(), onPress())}
+      onPress={onPress}
       android_ripple={{ color: colors.ripple, foreground: true }}
       style={({ pressed }) => [styles.fab, { bottom: space.gutter + bottom + lifted }, pressed && Platform.OS === 'ios' && { opacity: 0.85 }]}
     >
@@ -219,13 +222,16 @@ export function Fab({ label, icon: Icon, onPress, bottom = 0 }: { label: string;
 
 export function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
       {visible ? (
-        <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom }]}>
+        <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom, maxHeight: height - insets.top - touch }]}>
           <View style={styles.handle} />
-          {children}
+          <ScrollView {...NO_SCROLL_BARS} bounces={false} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
         </View>
       ) : null}
     </Modal>
@@ -268,7 +274,7 @@ export function Segmented<T extends string | number>({
             accessibilityRole="radio"
             accessibilityLabel={option.label}
             accessibilityState={{ checked: selected }}
-            onPress={() => (tap(), onChange(option.value))}
+            onPress={() => onChange(option.value)}
             style={[styles.segment, index > 0 && styles.segmentLine, selected && styles.segmentOn]}
           >
             {selected ? <Check size={14} color={colors.fg} strokeWidth={2.5} /> : null}
@@ -382,8 +388,9 @@ export function Button({
       accessibilityRole="button"
       accessibilityState={loading ? { busy: true, disabled: true } : disabled ? { disabled: true } : undefined}
       disabled={disabled || loading}
-      onPress={() => (tap(), onPress())}
+      onPress={onPress}
       android_ripple={{ color: colors.ripple, foreground: true }}
+      hitSlop={compact ? { top: (touch - styles.buttonCompact.minHeight) / 2, bottom: (touch - styles.buttonCompact.minHeight) / 2 } : undefined}
       style={({ pressed }) => [
         styles.button,
         compact && styles.buttonCompact,
@@ -397,7 +404,7 @@ export function Button({
       ) : (
         <>
           {Icon ? <Icon size={compact ? 16 : 18} color={palette.fg} strokeWidth={2.25} /> : null}
-          <Text style={[compact ? type.label : type.headline, { color: palette.fg }]} numberOfLines={1}>
+          <Text style={[compact ? type.label : type.headline, styles.buttonLabel, { color: palette.fg }]}>
             {label}
           </Text>
         </>
@@ -434,9 +441,9 @@ export function IconButton({
       accessibilityLabel={label}
       accessibilityState={disabled ? { disabled } : undefined}
       disabled={disabled}
-      onPress={() => (tap(), onPress())}
+      onPress={onPress}
       android_ripple={{ color: colors.ripple, borderless: variant === 'plain', radius: look.size / 2, foreground: true }}
-      hitSlop={(48 - look.size) / 2}
+      hitSlop={(touch - look.size) / 2}
       style={({ pressed }) => [
         styles.iconButton,
         { width: look.size, height: look.size, backgroundColor: look.bg },
@@ -556,7 +563,7 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, justifyContent: 'center' },
   subtitle: { marginTop: 2 },
   dim: { color: colors.dim },
-  trailing: { marginLeft: space.md, alignItems: 'flex-end' },
+  trailing: { marginLeft: space.md, alignItems: 'flex-end', flexShrink: 1 },
   chevron: { marginLeft: space.sm, marginRight: -space.xs },
   group: {
     marginHorizontal: space.gutter,
@@ -595,11 +602,11 @@ const styles = StyleSheet.create({
     gap: space.sm,
     marginHorizontal: space.gutter,
     paddingLeft: space.lg,
-    minHeight: 48,
+    minHeight: touch,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
   },
-  searchInput: { flex: 1, paddingVertical: space.sm, color: colors.fg, fontFamily: font.regular, fontSize: 16 },
+  searchInput: { flex: 1, paddingVertical: space.sm, textAlignVertical: 'center', color: colors.fg, fontFamily: font.regular, fontSize: 16 },
   fab: {
     position: 'absolute',
     right: space.gutter,
@@ -621,7 +628,7 @@ const styles = StyleSheet.create({
     borderColor: colors.lineStrong,
     overflow: 'hidden',
   },
-  segment: { flex: 1, minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  segment: { flex: 1, minHeight: touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   segmentLine: { borderLeftWidth: 1, borderLeftColor: colors.lineStrong },
   segmentOn: { backgroundColor: colors.surfaceHigh },
   snackbar: {
@@ -629,7 +636,7 @@ const styles = StyleSheet.create({
     left: space.gutter,
     right: space.gutter,
     bottom: space.sm,
-    minHeight: 48,
+    minHeight: touch,
     paddingLeft: space.lg,
     paddingRight: space.xs,
     flexDirection: 'row',
@@ -666,11 +673,11 @@ const styles = StyleSheet.create({
   tileLarge: { width: 64, height: 64, borderRadius: radius.xl },
   tileDot: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.attn, borderWidth: 2, borderColor: colors.surface },
   tileGhost: { borderWidth: 1, borderColor: colors.lineStrong, borderStyle: 'dashed' },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 24 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 24 },
   pillAttn: { backgroundColor: colors.attnSoft, borderRadius: radius.full, paddingHorizontal: space.sm },
   pillDot: { width: 6, height: 6, borderRadius: 3 },
   button: {
-    minHeight: 48,
+    minHeight: touch,
     borderRadius: radius.full,
     paddingHorizontal: space.xl,
     flexDirection: 'row',
@@ -681,6 +688,7 @@ const styles = StyleSheet.create({
   },
   buttonCompact: { minHeight: 36, paddingHorizontal: space.lg, gap: 6 },
   buttonText: { paddingHorizontal: space.md },
+  buttonLabel: { flexShrink: 1, textAlign: 'center' },
   iconButton: { borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   warning: { flexDirection: 'row', paddingHorizontal: space.gutter, paddingTop: space.md },
   warningIcon: { marginTop: 2, marginRight: space.sm },
