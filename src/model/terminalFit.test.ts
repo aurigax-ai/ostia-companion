@@ -31,3 +31,15 @@ describe('terminalFit', () => {
     expect(clampZoom(0.2)).toBe(1);
   });
 });
+
+describe('phoneGrid', () => {
+  it('CRD-V14 counts the columns and rows that fit the view at a readable size', async () => {
+    const { phoneGrid, sameGrid } = await import('./terminalFit');
+    expect(phoneGrid({ width: 360, height: 600 }, 12)).toEqual({ cols: 50, rows: 38 });
+    expect(phoneGrid({ width: 800, height: 360 }, 12)).toEqual({ cols: 111, rows: 23 });
+    expect(phoneGrid(null, 12)).toBeNull();
+    expect(phoneGrid({ width: 0, height: 600 }, 12)).toBeNull();
+    expect(sameGrid({ cols: 50, rows: 38 }, { cols: 50, rows: 38 })).toBe(true);
+    expect(sameGrid({ cols: 50, rows: 38 }, null)).toBe(false);
+  });
+});

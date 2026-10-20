@@ -19,7 +19,17 @@ import { colors, font } from '../theme';
 const ORIGIN: Offset = { x: 0, y: 0 };
 const ROW_SLACK = 6;
 
-export function TerminalGrid({ copy, version, fit: fitMode = 'width' }: { copy: TerminalCopy; version: number; fit?: 'width' | 'box' }) {
+export function TerminalGrid({
+  copy,
+  version,
+  fit: fitMode = 'width',
+  onMeasure,
+}: {
+  copy: TerminalCopy;
+  version: number;
+  fit?: 'width' | 'box';
+  onMeasure?: (box: Box) => void;
+}) {
   const [view, setView] = useState<Box>({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState<Offset>(ORIGIN);
@@ -29,6 +39,7 @@ export function TerminalGrid({ copy, version, fit: fitMode = 'width' }: { copy: 
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setView({ width, height });
+    onMeasure?.({ width, height });
   };
 
   const fit = fitMode === 'box' ? fitToBox(copy.cols, copy.rows, view) : fitToWidth(copy.cols, view.width);

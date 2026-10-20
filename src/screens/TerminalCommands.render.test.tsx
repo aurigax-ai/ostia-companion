@@ -1,5 +1,6 @@
 import { expect, jest, test } from '@jest/globals';
 import React from 'react';
+import { AppState } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { lockLandscape, lockPortrait } from '../services/orientation';
@@ -9,6 +10,9 @@ const rpc = {
   pty: (_base64: string) => {},
   event: (_type: string, _payload: object) => {},
   sent: [] as string[],
+  caps: ['read', 'notify', 'input'],
+  held: [] as string[],
+  released: 0,
   attach: (_paneId: string, role: string) => {
     rpc.event('pty.attached', { role, cols: 40, rows: 8, cursor: 0, dropped: false });
     return Promise.resolve({ role });
@@ -17,8 +21,9 @@ const rpc = {
 
 jest.mock('../services/rpc', () => ({
   OstiaRpc: {
-    hasCap: () => true,
+    hasCap: (cap: string) => rpc.caps.includes(cap),
     addStatusListener: () => () => {},
+    getStatus: () => 'connected',
     addPtyListener: (listener: (base64: string) => void) => {
       rpc.pty = listener;
       return () => {};
@@ -31,10 +36,18 @@ jest.mock('../services/rpc', () => ({
     detachPty: () => Promise.resolve(),
     sendInput: (base64: string) => rpc.sent.push(atob(base64)),
     sendKeystroke: (text: string) => rpc.sent.push(text),
+    holdPty: (paneId: string, cols: number, rows: number) => {
+      rpc.held.push(`${paneId} ${cols}x${rows}`);
+      return Promise.resolve({ ok: true, cols, rows });
+    },
+    releasePty: () => {
+      rpc.released += 1;
+      return Promise.resolve({ ok: true });
+    },
   },
 }));
 jest.mock('../services/workspaceStore', () => ({
-  useCaps: () => ['read', 'notify', 'input'],
+  useCaps: () => rpc.caps,
   useWorkspaces: () => ({
     sessions: [{ sessionId: 's', name: 'api', kind: 'project', workDir: '/w', state: 'idle' }],
     panes: [{ paneId: 'p-zsh', sessionId: 's', kind: 'terminal', title: 'zsh', running: false, blockCount: 0 }],
@@ -120,4 +133,65 @@ test('CRD-C44 a full-screen program is one row in Commands and opens the landsca
   expect(screen.queryByTestId('fullscreen-terminal')).toBeNull();
   expect(header().headerShown).toBe(true);
   expect(lockPortrait).toHaveBeenCalled();
+});
+
+const layout = (width: number, height: number) => fireEvent(screen.getByTestId('terminal-grid'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width, height } } });
+
+async function openTerminal() {
+  rpc.held.length = 0;
+  rpc.released = 0;
+  const { header } = await open();
+  await act(async () => header().headerRight().props.onChange('terminal'));
+  await act(async () => layout(360, 600));
+  return { header };
+}
+
+test('CRD-C46 the Terminal view holds the pane at the phone grid, and Commands lets it go', async () => {
+  rpc.caps = ['read', 'notify', 'input'];
+  const { header } = await openTerminal();
+  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  expect(screen.getByText('Sized to this phone')).toBeTruthy();
+  await act(async () => header().headerRight().props.onChange('commands'));
+  expect(rpc.released).toBe(1);
+});
+
+test('CRD-C47 when the desktop takes the size back the phone does not hold again until asked', async () => {
+  rpc.caps = ['read', 'notify', 'input'];
+  await openTerminal();
+  await act(async () => rpc.event('pty.size', { paneId: 'p-zsh', cols: 120, rows: 40 }));
+  expect(screen.getByText('The desktop took its size back')).toBeTruthy();
+  await act(async () => layout(360, 580));
+  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  await fireEvent.press(screen.getByText('Size to this phone'));
+  expect(rpc.held).toEqual(['p-zsh 50x38', 'p-zsh 50x37']);
+  expect(screen.getByText('Sized to this phone')).toBeTruthy();
+});
+
+test('CRD-C48 locking or backgrounding the phone releases the hold, and coming back holds again', async () => {
+  rpc.caps = ['read', 'notify', 'input'];
+  let change: (state: string) => void = () => {};
+  const spy = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_type: string, listener: (state: string) => void) => {
+    change = listener;
+    return { remove: () => {} };
+  }) as never);
+  await openTerminal();
+  await act(async () => change('background'));
+  expect(rpc.released).toBe(1);
+  await act(async () => change('active'));
+  expect(rpc.held).toEqual(['p-zsh 50x38', 'p-zsh 50x38']);
+  spy.mockImplementation((() => ({ remove: () => {} })) as never);
+});
+
+test('CRD-C49 the landscape full-screen view holds the landscape grid, and a phone that cannot type never holds', async () => {
+  rpc.caps = ['read', 'notify', 'input'];
+  rpc.held.length = 0;
+  await open();
+  await feed(`${prompt}vim\r\n\x1b]133;C\x07\x1b[?1049hINSERT`);
+  await fireEvent.press(screen.getByLabelText('vim, open full screen'));
+  await act(async () => layout(800, 360));
+  expect(rpc.held).toEqual(['p-zsh 111x23']);
+  rpc.caps = ['read', 'notify'];
+  rpc.held.length = 0;
+  await openTerminal();
+  expect(rpc.held).toEqual([]);
 });

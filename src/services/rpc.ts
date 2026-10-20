@@ -317,6 +317,14 @@ class OstiaRpcClient {
     if (this.status === 'connected') await this.call('pty.detach', { paneId });
   }
 
+  public holdPty(paneId: string, cols: number, rows: number): Promise<{ ok: true; cols: number; rows: number }> {
+    return this.call('pty.hold', { paneId, cols, rows });
+  }
+
+  public releasePty(paneId: string): Promise<{ ok: true }> {
+    return this.call('pty.release', { paneId });
+  }
+
   public sendKeystroke(text: string) {
     this.sendInput(btoa(encodeUtf8(text)));
   }

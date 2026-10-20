@@ -18,6 +18,7 @@ import { Button, Empty, Loading } from '../components/ui';
 import { attentionRank, byAttention } from '../model/order';
 import { acceptsSwipe, afterClose, EDGE_PT, step } from '../model/terminalPager';
 import { TerminalCopy } from '../model/terminalCopy';
+import { Box, phoneGrid } from '../model/terminalFit';
 import { Pane, paneTitle } from '../model/workspaces';
 import { slideMs } from '../services/motion';
 import { ScreenProps } from '../navigation';
@@ -25,6 +26,7 @@ import { AttachResult, OstiaRpc, Role } from '../services/rpc';
 import { useCaps, useWorkspaces } from '../services/workspaceStore';
 import { KeyRowEvent, KeyRowState, pressKeyRow } from '../model/terminalKeys';
 import { usePrefs } from '../services/prefsStore';
+import { HoldStatus, useTerminalHold } from '../services/terminalHold';
 import { colors, radius, space, touch, type } from '../theme';
 
 const RPC_NEEDS_ELEVATION = -32003;
@@ -75,6 +77,8 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const wantsOwner = useRef(true);
   const [copy, setCopy] = useState(() => new TerminalCopy(INITIAL_COLS, INITIAL_ROWS));
   const [version, setVersion] = useState(0);
+  const [gridBox, setGridBox] = useState<Box | null>(null);
+  const noteSize = useRef<(cols: number, rows: number) => void>(() => {});
 
   const show = (pane: Pane) => navigation.setParams({ paneId: pane.paneId, title: paneTitle(pane) });
 
@@ -170,7 +174,10 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     const unsubscribePty = OstiaRpc.addPtyListener((base64) => void next.write(atob(base64)));
     const unsubscribeEvents = OstiaRpc.addEventListener((type, payload) => {
       if (type === 'pty.attached') applyAttach(next, payload);
-      else if (type === 'pty.size' && payload?.paneId === paneId) next.resize(payload.cols, payload.rows);
+      else if (type === 'pty.size' && payload?.paneId === paneId) {
+        noteSize.current(payload.cols, payload.rows);
+        next.resize(payload.cols, payload.rows);
+      }
       else if (type === 'rpc.error' && payload?.code === RPC_NEEDS_ELEVATION) explainInput();
     });
     attach(OstiaRpc.hasCap('input') ? 'owner' : 'observer');
@@ -239,6 +246,14 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
 
   const canType = role === 'owner';
   const showControls = (!isAgent || raw) && !attaching && !error;
+  const gridShown = mode === 'terminal' || fullscreen;
+  useEffect(() => setGridBox(null), [gridShown, fullscreen, paneId]);
+  const hold = useTerminalHold({
+    paneId,
+    active: canType && !attaching && !error && gridShown,
+    grid: phoneGrid(gridBox, prefs.fontSize),
+  });
+  noteSize.current = hold.noteSize;
 
   return (
     <KeyboardAvoidingView
@@ -256,7 +271,8 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           )
         ) : (
           <View style={styles.inset}>
-            <TerminalGrid copy={copy} version={version} />
+            <HoldNote status={hold.status} onAgain={hold.holdAgain} />
+            <TerminalGrid copy={copy} version={version} onMeasure={setGridBox} />
           </View>
         )}
         {attaching ? (
@@ -342,6 +358,8 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           version={version}
           title={fullscreenRun.command.split(' ')[0] || title}
           keyState={keyRow}
+          holdStatus={hold.status}
+          onMeasure={setGridBox}
           canType={canType}
           keyboardOpen={keyboardOpen}
           onKey={pressKey}
@@ -356,7 +374,18 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   );
 }
 
+function HoldNote({ status, onAgain }: { status: HoldStatus; onAgain: () => void }) {
+  if (status !== 'held' && status !== 'taken') return null;
+  return (
+    <View style={styles.holdNote}>
+      <Text style={[type.caption, { flex: 1 }]}>{status === 'held' ? 'Sized to this phone' : 'The desktop took its size back'}</Text>
+      {status === 'taken' ? <Button label="Size to this phone" variant="text" compact onPress={onAgain} /> : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  holdNote: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, minHeight: 24 },
   inset: { flex: 1, backgroundColor: colors.bg },
   headerTitle: { flexShrink: 1, minHeight: touch, justifyContent: 'center' },
   headerSub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

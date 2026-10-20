@@ -231,6 +231,20 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const lineBuffers = new Map<string, string>();
   const vimPanes = new Set<string>();
   const sizeOf = (paneId: string) => sizes.get(paneId) ?? { cols: 64, rows: 30 };
+  const holds = new Map<string, { holder: Connection; desktop: { cols: number; rows: number } }>();
+  const setSize = (paneId: string, cols: number, rows: number) => {
+    const before = sizeOf(paneId);
+    if (before.cols === cols && before.rows === rows) return;
+    sizes.set(paneId, { cols, rows });
+    const frame = JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'pty.size', payload: { paneId, cols, rows } } });
+    connections.forEach((c) => c.attached === paneId && c.socket.send(frame));
+  };
+  const release = (connection: Connection, paneId: string) => {
+    const hold = holds.get(paneId);
+    if (hold?.holder !== connection) return;
+    holds.delete(paneId);
+    setSize(paneId, hold.desktop.cols, hold.desktop.rows);
+  };
   const typed = new Map<string, string[]>();
   const opened: string[] = [];
   const agentStarts = new Map<string, number[]>();
@@ -656,7 +670,23 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         if (replay) socket.send(Buffer.concat([Buffer.from([0x01]), Buffer.from(replay, 'utf8')]));
         return respond(id, { cursor: history.length, dropped: false, ...sizeOf(pane.paneId), role: connection.role });
       }
+      if (method === 'pty.hold' || method === 'pty.release') {
+        if (!has('input')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'input' });
+        if (connection.attached !== params.paneId) return fail(id, INVALID_PARAMS, 'not-attached');
+        if (method === 'pty.release') {
+          release(connection, params.paneId);
+          return respond(id, { ok: true });
+        }
+        const valid = (n: unknown) => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 1000;
+        if (!valid(params.cols) || !valid(params.rows)) return fail(id, INVALID_PARAMS, 'bad-size');
+        const current = holds.get(params.paneId);
+        if (current && current.holder !== connection) return fail(id, INVALID_PARAMS, 'held-by-other');
+        holds.set(params.paneId, { holder: connection, desktop: current?.desktop ?? sizeOf(params.paneId) });
+        setSize(params.paneId, params.cols, params.rows);
+        return respond(id, { ok: true, cols: params.cols, rows: params.rows });
+      }
       if (method === 'pty.detach') {
+        if (connection.attached) release(connection, connection.attached);
         connection.attached = null;
         return respond(id, {});
       }
@@ -664,6 +694,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     });
 
     socket.on('close', () => {
+      if (connection.attached) release(connection, connection.attached);
       clearTimeout(helloTimer);
       connections.delete(connection);
       if (connection.screen) {
@@ -698,11 +729,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       connections.forEach((c) => c.device === device && c.socket.close(CLOSE_REVOKED, 'revoked'));
     },
     resizePane: (paneId, cols, rows) => {
-      const before = sizeOf(paneId);
-      if (before.cols === cols && before.rows === rows) return;
-      sizes.set(paneId, { cols, rows });
-      const frame = JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'pty.size', payload: { paneId, cols, rows } } });
-      connections.forEach((c) => c.attached === paneId && c.socket.send(frame));
+      holds.delete(paneId);
+      setSize(paneId, cols, rows);
     },
     setCaps: (deviceId, next) => {
       const device = devices.find((d) => d.deviceId === deviceId);
