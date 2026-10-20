@@ -42,3 +42,20 @@ export function zoomAbout(offset: Offset, focal: Offset, ratio: number): Offset 
 export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(1, zoom));
 }
+
+export interface Grid {
+  cols: number;
+  rows: number;
+}
+
+export function phoneGrid(box: Box | null, fontSize: number): Grid | null {
+  if (!box || box.width <= 0 || box.height <= 0) return null;
+  return {
+    cols: Math.max(1, Math.floor(box.width / (MONO_ADVANCE * fontSize))),
+    rows: Math.max(1, Math.floor(box.height / (LINE_HEIGHT * fontSize))),
+  };
+}
+
+export function sameGrid(a: Grid | null, b: Grid | null): boolean {
+  return !!a && !!b && a.cols === b.cols && a.rows === b.rows;
+}

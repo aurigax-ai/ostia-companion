@@ -4,7 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { TerminalCopy } from '../model/terminalCopy';
 import { KeyRowEvent, KeyRowState } from '../model/terminalKeys';
+import { Box } from '../model/terminalFit';
 import { lockLandscape, lockPortrait } from '../services/orientation';
+import { HoldStatus } from '../services/terminalHold';
 import { colors, space, touch, type } from '../theme';
 import { KeyBar, RawKeyboard } from './TerminalKeys';
 import { TerminalGrid } from './TerminalGrid';
@@ -14,6 +16,8 @@ export function FullscreenTerminal({
   version,
   title,
   keyState,
+  holdStatus,
+  onMeasure,
   canType,
   keyboardOpen,
   onKey,
@@ -27,6 +31,8 @@ export function FullscreenTerminal({
   version: number;
   title: string;
   keyState: KeyRowState;
+  holdStatus: HoldStatus;
+  onMeasure: (box: Box) => void;
   canType: boolean;
   keyboardOpen: boolean;
   onKey: (event: KeyRowEvent) => void;
@@ -52,10 +58,10 @@ export function FullscreenTerminal({
             {title}
           </Text>
           <Text style={[type.caption, { flex: 1 }]} numberOfLines={1}>
-            {`desktop sized to this phone`}
+            {holdStatus === 'held' ? 'desktop sized to this phone' : 'at the desktop size'}
           </Text>
         </View>
-        <TerminalGrid copy={copy} version={version} fit="box" />
+        <TerminalGrid copy={copy} version={version} fit="box" onMeasure={onMeasure} />
         {canType ? (
           <>
             {keyboardOpen ? <RawKeyboard onText={onText} onBackspace={onBackspace} onEnter={onEnter} /> : null}

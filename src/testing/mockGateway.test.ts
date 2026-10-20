@@ -145,6 +145,42 @@ describe('mock gateway: connection (contract §4–§7)', () => {
     ]);
   });
 
+  it('holds a pane at the phone grid and gives the desktop size back on release, detach and a desktop resize', async () => {
+    const gw = await start({ caps: ['read', 'notify', 'input'] });
+    const { result } = await pair(gw);
+    const client = connect(gw);
+    await client.call('hello', { deviceToken: result.deviceToken });
+    expect((await client.call('pty.hold', { paneId: 'p-api-zsh', cols: 50, rows: 20 })).error.message).toBe('not-attached');
+    await client.call('pty.attach', { paneId: 'p-api-zsh', role: 'owner', sinceCursor: 0 });
+    expect((await client.call('pty.hold', { paneId: 'p-api-zsh', cols: 0, rows: 20 })).error.message).toBe('bad-size');
+    expect((await client.call('pty.hold', { paneId: 'p-api-zsh', cols: 50, rows: 20 })).result).toEqual({ ok: true, cols: 50, rows: 20 });
+    await client.call('pty.hold', { paneId: 'p-api-zsh', cols: 60, rows: 25 });
+    expect((await client.call('pty.release', { paneId: 'p-api-zsh' })).result).toEqual({ ok: true });
+    gw.resizePane('p-api-zsh', 70, 35);
+    await client.call('pty.hold', { paneId: 'p-api-zsh', cols: 40, rows: 10 });
+    gw.resizePane('p-api-zsh', 80, 40);
+    await client.settle();
+    const sizes = client.unsolicited.filter((m) => m.params?.type === 'pty.size').map((m) => [m.params.payload.cols, m.params.payload.rows]);
+    expect(sizes).toEqual([[50, 20], [60, 25], [64, 30], [70, 35], [40, 10], [80, 40]]);
+    const other = connect(gw);
+    await other.call('hello', { deviceToken: result.deviceToken });
+    await other.call('pty.attach', { paneId: 'p-api-zsh', role: 'owner', sinceCursor: 0 });
+    await client.call('pty.hold', { paneId: 'p-api-zsh', cols: 30, rows: 12 });
+    expect((await other.call('pty.hold', { paneId: 'p-api-zsh', cols: 20, rows: 10 })).error.message).toBe('held-by-other');
+    await client.call('pty.detach', { paneId: 'p-api-zsh' });
+    await other.settle();
+    expect((await other.call('pty.attach', { paneId: 'p-api-zsh', role: 'observer', sinceCursor: 0 })).result).toMatchObject({ cols: 80, rows: 40 });
+  });
+
+  it('refuses a hold without the input cap', async () => {
+    const gw = await start();
+    const { result } = await pair(gw);
+    const client = connect(gw);
+    await client.call('hello', { deviceToken: result.deviceToken });
+    await client.call('pty.attach', { paneId: 'p-api-zsh', role: 'observer', sinceCursor: 0 });
+    expect((await client.call('pty.hold', { paneId: 'p-api-zsh', cols: 50, rows: 20 })).error).toMatchObject({ code: -32003, data: { cap: 'input' } });
+  });
+
   it('closes 4003 on revoke and 4004 when a cap is removed', async () => {
     const gw = await start({ caps: ['read', 'notify', 'input'] });
     const first = (await pair(gw)).result;
