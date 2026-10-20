@@ -25,3 +25,12 @@ describe('terminal key row', () => {
     expect(pressKeyRow(OFF, { type: 'ctrl' })).toEqual({ state: ON, send: null });
   });
 });
+
+describe('encodeText', () => {
+  it('CRD-V40 turns newlines into returns and keeps a multi-line paste inside the bracket when the program asked for it', async () => {
+    const { encodeText } = await import('./terminalKeys');
+    expect(encodeText('ls', true)).toBe('ls');
+    expect(encodeText('a\nb', false)).toBe('a\rb');
+    expect(encodeText('a\r\nb\nc', true)).toBe('\x1b[200~a\rb\rc\x1b[201~');
+  });
+});

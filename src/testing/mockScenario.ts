@@ -228,14 +228,34 @@ export function agentTranscriptScreen(): string {
   return `${lines.join('\r\n')}\r\n`;
 }
 
+export const SHELL_PROMPT = '\x1b]133;A\x07$ \x1b]133;B\x07';
+
+export function ranCommand(command: string, output: string, exitCode: number): string {
+  return `${SHELL_PROMPT}${command}\r\n\x1b]133;C\x07${output}\x1b]133;D;${exitCode}\x07`;
+}
+
+export const VIM_SCREEN =
+  '\x1b[?1049h\x1b[2J\x1b[H' +
+  Array.from({ length: 12 }, (_, i) => `\x1b[90m${String(i + 53).padStart(3)}\x1b[0m  const row${i} = totals(month, ${i});`).join('\r\n') +
+  '\x1b[28;1H\x1b[7m src/export/csv.ts [+]                      59,20   71% \x1b[0m\x1b[29;1H-- INSERT --';
+
 export function shellScreen(pane: Pane): string {
   if (pane.paneId === 'p-codex') {
-    return `${DIM}$${RESET} pnpm build\r\n\x1b[31merror${RESET} TS2322: Type 'string' is not assignable to type 'number'.\r\n  src/pricing.ts:42:7\r\n\x1b[31mBuild failed${RESET} (exit 1)\r\n`;
+    return `${ranCommand('pnpm build', `\x1b[31merror${RESET} TS2322: Type 'string' is not assignable to type 'number'.\r\n  src/pricing.ts:42:7\r\n\x1b[31mBuild failed${RESET} (exit 1)\r\n`, 1)}${SHELL_PROMPT}`;
   }
   if (pane.paneId === 'p-dev') {
     const log = Array.from({ length: 400 }, (_, i) => `${DIM}${String(i + 1).padStart(3, '0')}${RESET} [vite] hmr update /src/components/Row${i % 17}.tsx`);
-    return `${DIM}$${RESET} pnpm dev\r\n  VITE ready in 312 ms\r\n  ➜  Local:   http://localhost:5173/\r\n${log.join('\r\n')}\r\n`;
+    return `${SHELL_PROMPT}pnpm dev\r\n\x1b]133;C\x07  VITE ready in 312 ms\r\n  ➜  Local:   http://localhost:5173/\r\n${log.join('\r\n')}\r\n`;
   }
   if (pane.paneId === 'p-agent') return agentTranscriptScreen();
-  return `\x1b[32m${(pane.cwd ?? '~').replace('/home/marco', '~')}${RESET} $ `;
+  const cwd = (pane.cwd ?? '~').replace('/home/marco', '~');
+  return (
+    ranCommand('git status -sb', `## main...origin/main\r\n\x1b[31m M\x1b[0m src/export/month.ts\r\n\x1b[32mA \x1b[0m src/export/csv.ts\r\n`, 0) +
+    ranCommand(
+      'pnpm test export',
+      `${DIM}RUN${RESET}  v2.1.0 ${cwd}\r\n\x1b[32m✓${RESET} src/export/csv.test.ts (12 tests) 31ms\r\n\x1b[31m✗${RESET} src/export/month.test.ts > repeats the totals row when the header already holds it, which is the bug under test\r\n   AssertionError: expected 62 rows to be 61 rows\r\n\r\n Test Files  1 failed | 1 passed (2)\r\n      Tests  1 failed | 61 passed (62)\r\n`,
+      1,
+    ) +
+    SHELL_PROMPT
+  );
 }

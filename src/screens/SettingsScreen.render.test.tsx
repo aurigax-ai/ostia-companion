@@ -25,7 +25,7 @@ jest.mock('../services/workspaceStore', () => ({
   useConnectionStatus: () => mockState.status,
 }));
 jest.mock('../services/prefsStore', () => ({
-  usePrefs: () => ({ fontSize: 13, fitWhenWatching: true, keyRow: true, haptics: true }),
+  usePrefs: () => ({ fontSize: 13, keyRow: true, haptics: true }),
   setPrefs: jest.fn(),
 }));
 jest.mock('../services/connectionLog', () => ({ connectionLogText: () => '' }));
@@ -46,7 +46,7 @@ test('SET-C11 shows the desktop, its connection, access, terminal options and th
   mockState.status = 'connected';
   await renderSettings();
   for (const text of ['Studio Linux', 'Connected', 'Tailscale', '100.87.12.4:8722', 'ct2Vi9f8LA9T', 'dev_abc123',
-    'Type in terminals', 'Text size', 'Key row', 'Haptics', 'Fit desktop width when watching', '1.0.0', 'Share connection log']) {
+    'Type in terminals', 'Text size', 'Key row', 'Haptics', '1.0.0', 'Share connection log']) {
     expect(screen.getByText(text)).toBeTruthy();
   }
 });

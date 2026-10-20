@@ -5,17 +5,6 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TerminalScreen } from './TerminalScreen';
 
-jest.mock('expo-libghostty', () => {
-  const ReactActual = jest.requireActual<typeof import('react')>('react');
-  const { View: NativeView } = jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    TerminalView: ReactActual.forwardRef((_props: object, ref: any) => {
-      ReactActual.useImperativeHandle(ref, () => ({ write: jest.fn(), writeText: jest.fn() }));
-      return <NativeView testID="terminal-view" />;
-    }),
-  };
-});
-
 const terminal = (paneId: string, extra: object = {}) => ({
   paneId,
   sessionId: 's-api',
@@ -39,7 +28,6 @@ jest.mock('../services/rpc', () => ({
     attachPty: () => new Promise(() => {}),
     detachPty: () => Promise.resolve(),
     sendInput: jest.fn(),
-    sendResize: jest.fn(),
   },
 }));
 jest.mock('../services/workspaceStore', () => {
@@ -61,7 +49,7 @@ jest.mock('../services/workspaceStore', () => {
   };
 });
 jest.mock('../services/prefsStore', () => {
-  const prefs = { fontSize: 13, fitWhenWatching: true, keyRow: true, haptics: false };
+  const prefs = { fontSize: 13, keyRow: true, haptics: false };
   return { usePrefs: () => prefs, getPrefs: () => prefs };
 });
 
@@ -91,7 +79,7 @@ async function setPanes(panes: object[]) {
 test('NAV-C10 shows one terminal at full screen with no tab strip', async () => {
   await setPanes([terminal('claude', { running: true }), terminal('zsh'), terminal('logs')]);
   await render(<Harness paneId="zsh" />);
-  expect(screen.getAllByTestId('terminal-view')).toHaveLength(1);
+  expect(screen.getAllByTestId('commands-view')).toHaveLength(1);
   expect(screen.queryByRole('tablist')).toBeNull();
 });
 
