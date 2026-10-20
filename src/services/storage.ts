@@ -54,11 +54,17 @@ async function saveDesktops(previous: DesktopList, next: DesktopList): Promise<v
   else await SecureStore.deleteItemAsync(ACTIVE);
 }
 
-async function update(change: (list: DesktopList) => DesktopList): Promise<DesktopList> {
-  const previous = await loadDesktops();
-  const next = change(previous);
-  await saveDesktops(previous, next);
-  return next;
+let queue: Promise<unknown> = Promise.resolve();
+
+function update(change: (list: DesktopList) => DesktopList): Promise<DesktopList> {
+  const run = queue.then(async () => {
+    const previous = await loadDesktops();
+    const next = change(previous);
+    await saveDesktops(previous, next);
+    return next;
+  });
+  queue = run.catch(() => {});
+  return run;
 }
 
 export async function savePairingData(data: PairingData): Promise<void> {

@@ -10,8 +10,11 @@ export interface WebSocketEventMap {
   onError: (event: { message: string }) => void;
 }
 
+let nextSocketId = 1;
+
 export class PinnedWebSocket {
   private subscriptions: any[] = [];
+  private id = nextSocketId++;
 
   constructor(
     private url: string,
@@ -19,21 +22,29 @@ export class PinnedWebSocket {
     private listeners: Partial<WebSocketEventMap>
   ) {
     this.setupListeners();
-    WebSocketPinning.connect(this.url, this.fingerprint);
+    WebSocketPinning.connect(this.url, this.fingerprint, this.id);
+  }
+
+  private listen(name: string, handler: (event: any) => void) {
+    this.subscriptions.push(
+      emitter.addListener(name, (event: any) => {
+        if (event?.id === this.id) handler(event);
+      })
+    );
   }
 
   private setupListeners() {
     if (this.listeners.onOpen) {
-      this.subscriptions.push(emitter.addListener('onOpen', this.listeners.onOpen));
+      this.listen('onOpen', this.listeners.onOpen);
     }
     if (this.listeners.onMessage) {
-      this.subscriptions.push(emitter.addListener('onMessage', this.listeners.onMessage));
+      this.listen('onMessage', this.listeners.onMessage);
     }
     if (this.listeners.onClose) {
-      this.subscriptions.push(emitter.addListener('onClose', this.listeners.onClose));
+      this.listen('onClose', this.listeners.onClose);
     }
     if (this.listeners.onError) {
-      this.subscriptions.push(emitter.addListener('onError', this.listeners.onError));
+      this.listen('onError', this.listeners.onError);
     }
   }
 
@@ -47,7 +58,7 @@ export class PinnedWebSocket {
 
   close() {
     try {
-      WebSocketPinning.close();
+      WebSocketPinning.close(this.id);
     } catch (e) {
       console.warn('Error closing native websocket:', e);
     }
