@@ -326,12 +326,6 @@ class OstiaRpcClient {
     this.socket.sendBinary(btoa(String.fromCharCode(0x02) + atob(base64)));
   }
 
-  public sendResize(paneId: string, cols: number, rows: number) {
-    if (!this.socket || this.status !== 'connected') return;
-    const frame = String.fromCharCode(0x03) + JSON.stringify({ paneId, cols, rows });
-    this.socket.sendBinary(btoa(frame));
-  }
-
   public addEventListener(listener: EventListener) {
     this.eventListeners.add(listener);
     return () => {

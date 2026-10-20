@@ -1,18 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_WATCH_FONT_SIZE, TERMINAL_FONT_SIZE, watchFontSize } from './terminalFit';
+import { clampOffset, clampZoom, fitToBox, fitToWidth, gridBox, MAX_ZOOM, MIN_FIT_SIZE, zoomAbout } from './terminalFit';
 
-describe('watchFontSize', () => {
-  it('shrinks the font so the desktop width fits on the phone', () => {
-    expect(watchFontSize({ cols: 48, fontSize: 13 }, 96)).toBe(6.5);
-    expect(watchFontSize({ cols: 60, fontSize: 10 }, 80)).toBe(7.5);
+describe('terminalFit', () => {
+  it('CRD-V8 sizes the font so the desktop columns fill the phone width', () => {
+    const size = fitToWidth(120, 360);
+    expect(gridBox(120, 40, size).width).toBeLessThanOrEqual(360);
+    expect(gridBox(120, 40, size).width).toBeGreaterThan(355);
+    expect(fitToWidth(40, 360)).toBe(15);
   });
 
-  it('never grows past the normal size or below the smallest readable size', () => {
-    expect(watchFontSize({ cols: 48, fontSize: 13 }, 40)).toBe(TERMINAL_FONT_SIZE);
-    expect(watchFontSize({ cols: 48, fontSize: 13 }, 400)).toBe(MIN_WATCH_FONT_SIZE);
+  it('CRD-V9 never goes below the smallest drawable size, and fits both axes in a box', () => {
+    expect(fitToWidth(900, 360)).toBe(MIN_FIT_SIZE);
+    expect(fitToWidth(0, 360)).toBe(MIN_FIT_SIZE);
+    const size = fitToBox(100, 50, { width: 800, height: 360 });
+    expect(gridBox(100, 50, size).height).toBeLessThanOrEqual(360);
+    expect(gridBox(100, 50, size).width).toBeLessThanOrEqual(800);
   });
 
-  it('keeps the normal size before anything is measured', () => {
-    expect(watchFontSize({ cols: 0, fontSize: 13 }, 120)).toBe(TERMINAL_FONT_SIZE);
+  it('CRD-V10 keeps a panned grid inside its view, and centres nothing when it fits', () => {
+    const content = { width: 600, height: 900 };
+    const view = { width: 360, height: 500 };
+    expect(clampOffset({ x: 40, y: 40 }, content, view)).toEqual({ x: 0, y: 0 });
+    expect(clampOffset({ x: -900, y: -900 }, content, view)).toEqual({ x: -240, y: -400 });
+    expect(clampOffset({ x: -50, y: -50 }, { width: 300, height: 400 }, view)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('CRD-V11 zooms about the pinch point and clamps the zoom', () => {
+    expect(zoomAbout({ x: 0, y: 0 }, { x: 100, y: 100 }, 2)).toEqual({ x: -100, y: -100 });
+    expect(clampZoom(9)).toBe(MAX_ZOOM);
+    expect(clampZoom(0.2)).toBe(1);
+  });
+});
+
+describe('sideways mapping', () => {
+  it('CRD-V12 turns a screen drag into the drag on the rotated grid', async () => {
+    const { toGridDelta, toGridSpace } = await import('./terminalFit');
+    expect(toGridDelta({ x: 10, y: 30 }, false)).toEqual({ x: 10, y: 30 });
+    expect(toGridDelta({ x: 10, y: 30 }, true)).toEqual({ x: 30, y: -10 });
+    expect(toGridSpace({ x: 20, y: 70 }, true, { width: 360, height: 800 })).toEqual({ x: 70, y: 340 });
   });
 });

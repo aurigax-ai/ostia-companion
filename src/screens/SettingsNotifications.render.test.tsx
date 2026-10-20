@@ -7,7 +7,7 @@ import { SettingsScreen } from './SettingsScreen';
 jest.mock('../services/rpc', () => ({ OstiaRpc: { getPairing: () => null } }));
 jest.mock('../services/workspaceStore', () => ({ useCaps: () => [], useConnectionStatus: () => 'connected' }));
 jest.mock('../services/prefsStore', () => ({
-  usePrefs: () => ({ fontSize: 13, fitWhenWatching: true, keyRow: true, haptics: true }),
+  usePrefs: () => ({ fontSize: 13, keyRow: true, haptics: true }),
   setPrefs: jest.fn(),
 }));
 jest.mock('../services/alertPrefsStore', () => ({

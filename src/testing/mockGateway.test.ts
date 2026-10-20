@@ -115,6 +115,36 @@ describe('mock gateway: connection (contract §4–§7)', () => {
     );
   });
 
+  it('answers a resize frame with resize-not-supported, even from an owner, and keeps the socket open', async () => {
+    const gw = await start({ caps: ['read', 'notify', 'input'] });
+    const { result } = await pair(gw);
+    const client = connect(gw);
+    await client.call('hello', { deviceToken: result.deviceToken });
+    await client.call('pty.attach', { paneId: 'p-claude', role: 'owner', sinceCursor: 0 });
+    client.resize(100, 30);
+    await client.settle();
+    expect(client.unsolicited).toContainEqual(
+      expect.objectContaining({ id: null, error: expect.objectContaining({ code: -32602, message: 'resize-not-supported' }) }),
+    );
+    expect((await client.call('pane.list', {})).result.panes.length).toBeGreaterThan(0);
+  });
+
+  it('returns the pane size on attach and tells an attached phone when the desktop resizes it', async () => {
+    const gw = await start();
+    const { result } = await pair(gw);
+    const client = connect(gw);
+    await client.call('hello', { deviceToken: result.deviceToken });
+    gw.resizePane('p-claude', 120, 40);
+    const attach = await client.call('pty.attach', { paneId: 'p-claude', role: 'observer', sinceCursor: 0 });
+    expect(attach.result).toMatchObject({ cols: 120, rows: 40 });
+    gw.resizePane('p-claude', 100, 30);
+    gw.resizePane('p-claude', 100, 30);
+    await client.settle();
+    expect(client.unsolicited.filter((m) => m.params?.type === 'pty.size')).toEqual([
+      { jsonrpc: '2.0', method: 'event', params: { type: 'pty.size', payload: { paneId: 'p-claude', cols: 100, rows: 30 } } },
+    ]);
+  });
+
   it('closes 4003 on revoke and 4004 when a cap is removed', async () => {
     const gw = await start({ caps: ['read', 'notify', 'input'] });
     const first = (await pair(gw)).result;

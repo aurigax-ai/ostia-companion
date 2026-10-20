@@ -227,7 +227,7 @@ export function Sheet({ visible, onClose, children }: { visible: boolean; onClos
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
       {visible ? (
-        <View style={[styles.sheet, { paddingBottom: space.xl + insets.bottom, maxHeight: height - insets.top - touch }]}>
+        <View style={[styles.sheet, { paddingBottom: space.lg + insets.bottom, maxHeight: height - insets.top - touch }]}>
           <View style={styles.handle} />
           <ScrollView {...NO_SCROLL_BARS} bounces={false} keyboardShouldPersistTaps="handled">
             {children}
@@ -275,10 +275,11 @@ export function Segmented<T extends string | number>({
             accessibilityLabel={option.label}
             accessibilityState={{ checked: selected }}
             onPress={() => onChange(option.value)}
+            hitSlop={{ top: (touch - 34) / 2, bottom: (touch - 34) / 2 }}
             style={[styles.segment, index > 0 && styles.segmentLine, selected && styles.segmentOn]}
           >
             {selected ? <Check size={14} color={colors.fg} strokeWidth={2.5} /> : null}
-            <Text style={[type.label, !selected && { color: colors.muted }]}>{option.label}</Text>
+            <Text style={[type.captionStrong, selected && { color: colors.fg }]}>{option.label}</Text>
           </Pressable>
         );
       })}
@@ -383,6 +384,7 @@ export function Button({
   style?: ViewStyle;
 }) {
   const palette = BUTTON_PALETTE[variant];
+  const height = compact ? styles.buttonCompact.minHeight : styles.button.minHeight;
   return (
     <Pressable
       accessibilityRole="button"
@@ -390,7 +392,7 @@ export function Button({
       disabled={disabled || loading}
       onPress={onPress}
       android_ripple={{ color: colors.ripple, foreground: true }}
-      hitSlop={compact ? { top: (touch - styles.buttonCompact.minHeight) / 2, bottom: (touch - styles.buttonCompact.minHeight) / 2 } : undefined}
+      hitSlop={{ top: (touch - height) / 2, bottom: (touch - height) / 2 }}
       style={({ pressed }) => [
         styles.button,
         compact && styles.buttonCompact,
@@ -403,8 +405,8 @@ export function Button({
         <ActivityIndicator color={palette.fg} />
       ) : (
         <>
-          {Icon ? <Icon size={compact ? 16 : 18} color={palette.fg} strokeWidth={2.25} /> : null}
-          <Text style={[compact ? type.label : type.headline, styles.buttonLabel, { color: palette.fg }]}>
+          {Icon ? <Icon size={compact ? 14 : 16} color={palette.fg} strokeWidth={2.25} /> : null}
+          <Text style={[compact ? type.captionStrong : type.label, styles.buttonLabel, { color: palette.fg }]}>
             {label}
           </Text>
         </>
@@ -414,9 +416,9 @@ export function Button({
 }
 
 const ICON_BUTTON = {
-  plain: { bg: 'transparent', fg: colors.fg, size: 44 },
-  tonal: { bg: colors.surfaceHigh, fg: colors.fg, size: 36 },
-  filled: { bg: colors.brand, fg: colors.onBrand, size: 40 },
+  plain: { bg: 'transparent', fg: colors.fg, size: 36 },
+  tonal: { bg: colors.surfaceHigh, fg: colors.fg, size: 32 },
+  filled: { bg: colors.brand, fg: colors.onBrand, size: 34 },
 };
 
 export function IconButton({
@@ -450,7 +452,7 @@ export function IconButton({
         pressed && Platform.OS === 'ios' && { opacity: 0.7 },
       ]}
     >
-      <Icon size={variant === 'plain' ? 22 : 18} color={color ?? look.fg} strokeWidth={2.25} />
+      <Icon size={variant === 'plain' ? 20 : 16} color={color ?? look.fg} strokeWidth={2.25} />
     </Pressable>
   );
 }
@@ -551,13 +553,13 @@ export function Skeleton({ rows = 4 }: { rows?: number }) {
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 52,
+    minHeight: touch,
     paddingHorizontal: space.lg,
-    paddingVertical: space.md,
+    paddingVertical: space.sm,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  rowTall: { minHeight: 64 },
+  rowTall: { minHeight: 56 },
   rowPressed: { backgroundColor: colors.surfacePressed },
   leading: { marginRight: space.md },
   rowText: { flex: 1, justifyContent: 'center' },
@@ -602,16 +604,16 @@ const styles = StyleSheet.create({
     gap: space.sm,
     marginHorizontal: space.gutter,
     paddingLeft: space.lg,
-    minHeight: touch,
+    minHeight: 40,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
   },
-  searchInput: { flex: 1, paddingVertical: space.sm, textAlignVertical: 'center', color: colors.fg, fontFamily: font.regular, fontSize: 16 },
+  searchInput: { flex: 1, paddingVertical: space.sm, textAlignVertical: 'center', color: colors.fg, fontFamily: font.regular, fontSize: 14 },
   fab: {
     position: 'absolute',
     right: space.gutter,
     bottom: space.gutter,
-    minHeight: 56,
+    minHeight: 44,
     paddingHorizontal: space.lg,
     flexDirection: 'row',
     alignItems: 'center',
@@ -628,7 +630,7 @@ const styles = StyleSheet.create({
     borderColor: colors.lineStrong,
     overflow: 'hidden',
   },
-  segment: { flex: 1, minHeight: touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  segment: { flex: 1, minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   segmentLine: { borderLeftWidth: 1, borderLeftColor: colors.lineStrong },
   segmentOn: { backgroundColor: colors.surfaceHigh },
   snackbar: {
@@ -670,23 +672,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tileLarge: { width: 64, height: 64, borderRadius: radius.xl },
+  tileLarge: { width: 52, height: 52, borderRadius: radius.xl },
   tileDot: { position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.attn, borderWidth: 2, borderColor: colors.surface },
   tileGhost: { borderWidth: 1, borderColor: colors.lineStrong, borderStyle: 'dashed' },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 24 },
   pillAttn: { backgroundColor: colors.attnSoft, borderRadius: radius.full, paddingHorizontal: space.sm },
   pillDot: { width: 6, height: 6, borderRadius: 3 },
   button: {
-    minHeight: touch,
+    minHeight: 36,
     borderRadius: radius.full,
-    paddingHorizontal: space.xl,
+    paddingHorizontal: space.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
     overflow: 'hidden',
   },
-  buttonCompact: { minHeight: 36, paddingHorizontal: space.lg, gap: 6 },
+  buttonCompact: { minHeight: 30, paddingHorizontal: space.md, gap: 4 },
   buttonText: { paddingHorizontal: space.md },
   buttonLabel: { flexShrink: 1, textAlign: 'center' },
   iconButton: { borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },

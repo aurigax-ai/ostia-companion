@@ -1,61 +1,36 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Alert, Animated, KeyboardAvoidingView, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Eye, Keyboard } from 'lucide-react-native';
-import { TerminalTheme, TerminalView, TerminalViewRef } from 'expo-libghostty';
 import { AskHeadsUp } from '../components/AskHeadsUp';
 import { AskSheet } from '../components/AskSheet';
+import { CommandComposer, CommandRuns } from '../components/CommandRuns';
+import { FullscreenTerminal } from '../components/FullscreenTerminal';
+import { ModeSwitch, TerminalMode } from '../components/ModeSwitch';
 import { PromptComposer } from '../components/PromptComposer';
+import { TerminalGrid } from '../components/TerminalGrid';
+import { KeyBar, RawKeyboard } from '../components/TerminalKeys';
 import { TerminalSheet } from '../components/TerminalSheet';
 import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/askStore';
 import { Button, Empty, Loading } from '../components/ui';
 import { attentionRank, byAttention } from '../model/order';
 import { acceptsSwipe, afterClose, EDGE_PT, step } from '../model/terminalPager';
+import { TerminalCopy } from '../model/terminalCopy';
 import { Pane, paneTitle } from '../model/workspaces';
 import { slideMs } from '../services/motion';
 import { ScreenProps } from '../navigation';
 import { AttachResult, OstiaRpc, Role } from '../services/rpc';
 import { useCaps, useWorkspaces } from '../services/workspaceStore';
-import { KeyRowEvent, KeyRowState, RowKey, pressKeyRow } from '../model/terminalKeys';
-import { terminalFontSize } from '../model/prefs';
-import { getPrefs, usePrefs } from '../services/prefsStore';
+import { KeyRowEvent, KeyRowState, pressKeyRow } from '../model/terminalKeys';
+import { usePrefs } from '../services/prefsStore';
 import { colors, radius, space, touch, type } from '../theme';
 
-const RESIZE_DEBOUNCE_MS = 150;
-const SETTLE_FALLBACK_MS = 400;
-const FULL_RESET = '\x1bc';
 const RPC_NEEDS_ELEVATION = -32003;
-const TERMINAL_THEME: TerminalTheme = {
-  background: '#161616',
-  foreground: '#f2f4f8',
-  cursorColor: colors.brand,
-  palette: [
-    '#161616', '#00dfdb', '#00b4ff', '#ff4297', '#00c15a', '#c693ff', '#ff74b8', '#f2f4f8',
-    '#585858', '#00dfdb', '#00b4ff', '#ff4297', '#00c15a', '#c693ff', '#ff74b8', '#f2f4f8',
-  ],
-};
-
-const ROW_KEYS: { key: RowKey; label: string }[] = [
-  { key: 'esc', label: 'esc' },
-  { key: 'tab', label: 'tab' },
-  { key: 'up', label: '↑' },
-  { key: 'down', label: '↓' },
-  { key: 'left', label: '←' },
-  { key: 'right', label: '→' },
-  { key: 'enter', label: '⏎' },
-];
+const RENDER_MS = 100;
+const INITIAL_COLS = 80;
+const INITIAL_ROWS = 24;
 
 export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const { paneId, title } = route.params;
@@ -74,6 +49,10 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const currentPane = panes.find((pane) => pane.paneId === paneId);
   const isAgent = !!currentPane?.agent && currentPane.agent !== 'other';
   const [raw, setRaw] = useState(false);
+  const [shellMode, setShellMode] = useState<TerminalMode>('commands');
+  const mode: TerminalMode = isAgent ? 'terminal' : shellMode;
+  const [fullscreen, setFullscreen] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const asks = useAsks();
   const paneAsk = asks.asks.find((ask) => ask.paneId === paneId);
   const [askOpen, setAskOpen] = useState(false);
@@ -84,7 +63,6 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const keyRowRef = useRef<KeyRowState>({ ctrl: false });
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const terminalRef = useRef<TerminalViewRef>(null);
   const caps = useCaps();
   const canInput = caps.includes('input');
   const canRespond = caps.includes('respond');
@@ -92,18 +70,11 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const [attaching, setAttaching] = useState(true);
   const attachingRef = useRef(false);
   const prefs = usePrefs();
-  const [fontSize, setFontSize] = useState(getPrefs().fontSize);
-  const fontSizeRef = useRef(getPrefs().fontSize);
-  const desktopCols = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const roleRef = useRef<Role>('observer');
   const wantsOwner = useRef(true);
-  const explained = useRef(false);
-  const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const gridSize = useRef<{ cols: number; rows: number } | null>(null);
-  const held = useRef<string[] | null>([]);
-  const fontChanging = useRef(false);
-  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copy, setCopy] = useState(() => new TerminalCopy(INITIAL_COLS, INITIAL_ROWS));
+  const [version, setVersion] = useState(0);
 
   const show = (pane: Pane) => navigation.setParams({ paneId: pane.paneId, title: paneTitle(pane) });
 
@@ -132,7 +103,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
 
   const pager = Gesture.Pan()
     .runOnJS(true)
-    .enabled(ids.length > 1)
+    .enabled(ids.length > 1 && mode === 'commands')
     .hitSlop({ left: -EDGE_PT, right: -EDGE_PT })
     .activeOffsetX([-EDGE_PT, EDGE_PT])
     .failOffsetY([-EDGE_PT, EDGE_PT])
@@ -148,6 +119,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerShown: !fullscreen,
       headerTitle: () => (
         <Pressable
           accessibilityRole="button"
@@ -173,31 +145,42 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         </Pressable>
       ),
       headerRight: () =>
-        role === 'owner' && (!isAgent || raw) ? (
-          <Button label="Done" variant="text" compact onPress={() => (setRaw(false), watch())} />
-        ) : null,
+        isAgent ? (
+          raw ? <Button label="Done" variant="text" compact onPress={() => (setRaw(false), setKeyboardOpen(false))} /> : null
+        ) : (
+          <ModeSwitch value={shellMode} onChange={setShellMode} />
+        ),
     });
-  }, [navigation, role, title, workspace, index, ids.join('|'), isAgent, raw]);
+  }, [navigation, title, workspace, index, ids.join('|'), isAgent, raw, shellMode, fullscreen]);
 
   useEffect(() => {
-    const unsubscribePty = OstiaRpc.addPtyListener((base64) => {
-      if (held.current) held.current.push(base64);
-      else terminalRef.current?.write(base64);
+    const next = new TerminalCopy(INITIAL_COLS, INITIAL_ROWS);
+    setCopy(next);
+    setShellMode('commands');
+    setFullscreen(false);
+    setKeyboardOpen(false);
+    setRaw(false);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribeCopy = next.subscribe(() => {
+      timer ??= setTimeout(() => {
+        timer = null;
+        setVersion((n) => n + 1);
+      }, RENDER_MS);
     });
+    const unsubscribePty = OstiaRpc.addPtyListener((base64) => void next.write(atob(base64)));
     const unsubscribeEvents = OstiaRpc.addEventListener((type, payload) => {
-      if (type === 'pty.attached') applyAttach(payload);
+      if (type === 'pty.attached') applyAttach(next, payload);
+      else if (type === 'pty.size' && payload?.paneId === paneId) next.resize(payload.cols, payload.rows);
       else if (type === 'rpc.error' && payload?.code === RPC_NEEDS_ELEVATION) explainInput();
     });
-    terminalRef.current?.writeText(FULL_RESET);
-    setRaw(false);
-    held.current = [];
     attach(OstiaRpc.hasCap('input') ? 'owner' : 'observer');
     return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribeCopy();
       unsubscribePty();
       unsubscribeEvents();
-      if (resizeTimer.current) clearTimeout(resizeTimer.current);
-      if (settleTimer.current) clearTimeout(settleTimer.current);
       OstiaRpc.detachPty(paneId).catch(() => {});
+      next.dispose();
     };
   }, [paneId]);
 
@@ -205,20 +188,11 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     if (canInput && wantsOwner.current && roleRef.current === 'observer' && !attachingRef.current) attach('owner');
   }, [canInput]);
 
-  useEffect(() => {
-    if (gridSize.current) settle();
-  }, [prefs.fontSize, prefs.fitWhenWatching]);
-
-  const applyAttach = (result: AttachResult) => {
-    if (result.dropped) terminalRef.current?.writeText(FULL_RESET);
+  const applyAttach = (target: TerminalCopy, result: AttachResult) => {
+    target.resize(result.cols, result.rows);
+    if (result.dropped) target.reset();
     roleRef.current = result.role;
     setRole(result.role);
-    desktopCols.current = result.cols;
-    held.current ??= [];
-    settle();
-    if (result.role === 'owner' && gridSize.current) {
-      OstiaRpc.sendResize(paneId, gridSize.current.cols, gridSize.current.rows);
-    }
   };
 
   const attach = async (target: Role) => {
@@ -248,11 +222,6 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     else explainInput();
   }
 
-  function watch() {
-    wantsOwner.current = false;
-    attach('observer');
-  }
-
   const pressKey = (event: KeyRowEvent) => {
     const result = pressKeyRow(keyRowRef.current, event);
     keyRowRef.current = result.state;
@@ -260,50 +229,16 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     if (result.send) OstiaRpc.sendInput(btoa(result.send));
   };
 
-  const handleInput = (base64: string) => {
-    if (roleRef.current === 'owner') {
-      if (!keyRowRef.current.ctrl) return OstiaRpc.sendInput(base64);
-      return pressKey({ type: 'text', text: atob(base64) });
-    }
-    if (explained.current) return;
-    explained.current = true;
-    if (OstiaRpc.hasCap('input')) takeControl();
-    else explainInput();
-  };
+  const typeText = (text: string) => pressKey({ type: 'text', text: text.replace(/\n/g, '\r') });
+  const runs = useMemo(() => copy.runs(), [copy, version]);
+  const fullscreenRun = runs.find((run) => run.fullscreen);
 
-  const flush = () => {
-    if (settleTimer.current) clearTimeout(settleTimer.current);
-    fontChanging.current = false;
-    const frames = held.current;
-    held.current = null;
-    frames?.forEach((frame) => terminalRef.current?.write(frame));
-  };
+  useEffect(() => {
+    if (fullscreen && !fullscreenRun) setFullscreen(false);
+  }, [fullscreen, fullscreenRun]);
 
-  const settle = () => {
-    const measured = gridSize.current;
-    if (!measured) return;
-    const next = terminalFontSize(
-      roleRef.current,
-      getPrefs(),
-      { cols: measured.cols, fontSize: fontSizeRef.current },
-      desktopCols.current,
-    );
-    if (next === fontSizeRef.current) return flush();
-    fontSizeRef.current = next;
-    fontChanging.current = true;
-    setFontSize(next);
-    if (settleTimer.current) clearTimeout(settleTimer.current);
-    settleTimer.current = setTimeout(flush, SETTLE_FALLBACK_MS);
-  };
-
-  const handleResize = (cols: number, rows: number) => {
-    gridSize.current = { cols, rows };
-    if (fontChanging.current) flush();
-    else if (held.current && desktopCols.current > 0) settle();
-    if (roleRef.current !== 'owner') return;
-    if (resizeTimer.current) clearTimeout(resizeTimer.current);
-    resizeTimer.current = setTimeout(() => OstiaRpc.sendResize(paneId, cols, rows), RESIZE_DEBOUNCE_MS);
-  };
+  const canType = role === 'owner';
+  const showControls = (!isAgent || raw) && !attaching && !error;
 
   return (
     <KeyboardAvoidingView
@@ -313,16 +248,17 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     >
       <GestureDetector gesture={pager}>
       <Animated.View style={[styles.fill, { transform: [{ translateX: slide }] }]}>
-        <View style={styles.inset}>
-          <TerminalView
-            ref={terminalRef}
-            style={styles.fill}
-            theme={TERMINAL_THEME}
-            fontSize={fontSize}
-            onInput={({ nativeEvent }) => handleInput(nativeEvent.data)}
-            onResize={({ nativeEvent }) => handleResize(nativeEvent.cols, nativeEvent.rows)}
-          />
-        </View>
+        {mode === 'commands' ? (
+          runs.length > 0 ? (
+            <CommandRuns runs={runs} fontSize={prefs.fontSize} onOpenFullscreen={() => setFullscreen(true)} />
+          ) : (
+            <View style={styles.fill} testID="commands-view" />
+          )
+        ) : (
+          <View style={styles.inset}>
+            <TerminalGrid copy={copy} version={version} />
+          </View>
+        )}
         {attaching ? (
           <View style={styles.overlay}>
             <Loading label={`Attaching to ${title}…`} />
@@ -375,85 +311,73 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           />
         </>
       ) : null}
-      {(!isAgent || raw) && role === 'owner' && prefs.keyRow && !attaching && !error ? (
-        <View style={[styles.keyRow, { paddingBottom: space.sm + insets.bottom }]}>
-          <RowButton label="esc" onPress={() => pressKey({ type: 'key', key: 'esc' })} />
-          <RowButton label="tab" onPress={() => pressKey({ type: 'key', key: 'tab' })} />
-          <RowButton label="ctrl" active={keyRow.ctrl} onPress={() => pressKey({ type: 'ctrl' })} />
-          {ROW_KEYS.slice(2).map(({ key, label }) => (
-            <RowButton key={key} label={label} onPress={() => pressKey({ type: 'key', key })} />
-          ))}
+      {showControls && canType ? (
+        <View style={styles.controls}>
+          {mode === 'commands' && !isAgent ? <CommandComposer editable onRun={(command) => OstiaRpc.sendKeystroke(`${command}\r`)} /> : null}
+          {keyboardOpen && (mode === 'terminal' || isAgent) ? (
+            <RawKeyboard onText={typeText} onBackspace={() => OstiaRpc.sendInput(btoa('\x7f'))} onEnter={() => pressKey({ type: 'key', key: 'enter' })} />
+          ) : null}
+          {prefs.keyRow ? (
+            <KeyBar
+              state={keyRow}
+              onEvent={pressKey}
+              onKeyboard={mode === 'terminal' || isAgent ? () => setKeyboardOpen((open) => !open) : undefined}
+              bottomInset={insets.bottom}
+            />
+          ) : (
+            <View style={{ height: insets.bottom }} />
+          )}
         </View>
       ) : null}
-      {(!isAgent || raw) && role === 'observer' && !attaching && !error ? (
-        <View style={[styles.watchBar, { paddingBottom: space.md + insets.bottom }]}>
-          <Eye size={18} color={colors.muted} strokeWidth={2.25} />
+      {showControls && !canType ? (
+        <View style={[styles.watchBar, { paddingBottom: space.sm + insets.bottom }]}>
+          <Eye size={16} color={colors.muted} strokeWidth={2.25} />
           <Text style={[type.bodyMuted, { flex: 1, marginLeft: space.sm }]}>Watching</Text>
           <Button label="Type" icon={Keyboard} compact onPress={takeControl} />
         </View>
+      ) : null}
+      {fullscreen && fullscreenRun ? (
+        <FullscreenTerminal
+          copy={copy}
+          version={version}
+          title={fullscreenRun.command.split(' ')[0] || title}
+          keyState={keyRow}
+          canType={canType}
+          keyboardOpen={keyboardOpen}
+          onKey={pressKey}
+          onKeyboard={() => setKeyboardOpen((open) => !open)}
+          onText={typeText}
+          onBackspace={() => OstiaRpc.sendInput(btoa('\x7f'))}
+          onEnter={() => pressKey({ type: 'key', key: 'enter' })}
+          onBack={() => (setFullscreen(false), setKeyboardOpen(false))}
+        />
       ) : null}
     </KeyboardAvoidingView>
   );
 }
 
-function RowButton({ label, active, onPress }: { label: string; active?: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={active === undefined ? undefined : { selected: active }}
-      onPress={onPress}
-      android_ripple={{ color: colors.ripple }}
-      style={({ pressed }) => [styles.rowKey, pressed && Platform.OS === 'ios' && styles.rowKeyPressed, active && styles.rowKeyActive]}
-    >
-      <Text style={[styles.rowKeyLabel, active && { color: colors.brand }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  inset: { flex: 1, paddingHorizontal: space.gutter, backgroundColor: TERMINAL_THEME.background },
+  inset: { flex: 1, backgroundColor: colors.bg },
   headerTitle: { flexShrink: 1, minHeight: touch, justifyContent: 'center' },
   headerSub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dots: { flexDirection: 'row', gap: space.xs },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.lineStrong },
   dotOn: { width: 14, backgroundColor: colors.fg },
-  fill: { flex: 1, backgroundColor: TERMINAL_THEME.background },
+  fill: { flex: 1, backgroundColor: colors.bg },
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: TERMINAL_THEME.background,
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  controls: { backgroundColor: colors.surface, paddingTop: space.xs },
   watchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: space.gutter,
-    paddingTop: space.md,
+    paddingTop: space.sm,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
   },
-  keyRow: {
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: space.gutter,
-    paddingTop: space.sm,
-    backgroundColor: colors.surface,
-  },
-  rowKey: {
-    flex: 1,
-    minHeight: touch,
-    borderRadius: radius.sm + 2,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceHigh,
-    overflow: 'hidden',
-  },
-  rowKeyPressed: { backgroundColor: colors.surfacePressed },
-  rowKeyActive: { backgroundColor: colors.brandSoft },
-  rowKeyLabel: { ...type.monoLabel },
 });

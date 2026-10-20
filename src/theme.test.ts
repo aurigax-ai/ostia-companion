@@ -9,9 +9,9 @@ function rgb(color: string): [number, number, number] | null {
 }
 
 describe('theme', () => {
-  it('CRD-C27 uses four text sizes and two weights', () => {
+  it('CRD-C27 uses three text sizes and two weights, none above 18', () => {
     for (const style of Object.values(type)) {
-      expect([12, 14, 16, 22]).toContain(style.fontSize);
+      expect([12, 14, 18]).toContain(style.fontSize);
       expect([undefined, '400', '600']).toContain('fontWeight' in style ? style.fontWeight : undefined);
     }
   });
