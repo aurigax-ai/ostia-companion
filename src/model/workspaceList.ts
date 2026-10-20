@@ -1,6 +1,6 @@
 import type { Ask } from './asks';
 import { ago, changedAt, DAY_MS, isAgent, Seen } from './now';
-import { failedExit, Pane, paneTitle, Session, shortPath } from './workspaces';
+import { failedExit, isOpenable, Pane, paneTitle, Session, shortPath } from './workspaces';
 
 export const SLEEP_AFTER_MS = 3 * DAY_MS;
 
@@ -45,7 +45,7 @@ export function isSleeping(panes: Pane[], seen: Seen, now: number): boolean {
 export function workspaceSummary(panes: Pane[], seen: Seen, now: number): string {
   const failed = panes.filter((pane) => pane.agentState === 'error' || failedExit(pane) !== null);
   if (failed.length > 0) return `Failed ${ago(lastActive(failed, seen), now)}`.trim();
-  const terminals = panes.filter((pane) => pane.kind === 'terminal');
+  const terminals = panes.filter(isOpenable);
   const hibernated = terminals.filter((pane) => pane.hibernated).length;
   if (hibernated > 0) return `${terminals.length - hibernated} active · ${hibernated} hibernated`;
   const working = terminals.filter((pane) => pane.agentState === 'working').length;
@@ -119,7 +119,7 @@ export function search(query: string, sessions: Session[], panes: Pane[], seen: 
       summary: workspaceSummary(panes.filter((pane) => pane.sessionId === session.sessionId), seen, now),
     }));
   const found = panes
-    .filter((pane) => pane.kind === 'terminal')
+    .filter(isOpenable)
     .filter((pane) => [names.get(pane.sessionId), paneTitle(pane), pane.agent, pane.agentMessage].some((text) => text?.toLowerCase().includes(needle)))
     .map((pane): SearchHit => ({ kind: 'pane', pane, workspace: names.get(pane.sessionId) ?? '', line: pane.agentMessage ?? shortPath(pane.cwd) }));
   return [...workspaces, ...found];
@@ -138,7 +138,7 @@ export interface PaneSections {
 }
 
 export function paneSections(panes: Pane[], seen: Seen): PaneSections {
-  const terminals = panes.filter((pane) => pane.kind === 'terminal');
+  const terminals = panes.filter(isOpenable);
   const newest = (list: Pane[]) => [...list].sort((a, b) => (changedAt(b, seen) ?? -Infinity) - (changedAt(a, seen) ?? -Infinity));
   const awake = terminals.filter((pane) => !pane.hibernated);
   const active = awake.filter((pane) => busy(pane) || pane.agentState === 'error' || failedExit(pane) !== null);

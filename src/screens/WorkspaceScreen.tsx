@@ -9,7 +9,7 @@ import { Badge, Divider, Empty, Fab, GroupItem, HeaderTitle, IconTile, ListRow, 
 import { Ask } from '../model/asks';
 import { attentionRank, byAttention } from '../model/order';
 import { paneSections } from '../model/workspaceList';
-import { Pane, groupPanes, paneScreen, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
+import { Pane, groupPanes, isOpenable, paneScreen, paneStatus, paneSubtitle, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { useArtifacts } from '../services/artifactStore';
 import { answerAsk, useAsks } from '../services/askStore';
@@ -156,7 +156,7 @@ export function WorkspaceScreen({ navigation, route }: ScreenProps<'Workspace'>)
                   mono
                   disabled
                 />
-              ) : row.pane.kind === 'terminal' ? (
+              ) : isOpenable(row.pane) ? (
                 <ListRow
                   leading={<IconTile icon={terminalIcon(row.pane)} tone={paneStatus(row.pane).tone === 'attn' ? 'attn' : 'neutral'} />}
                   title={paneTitle(row.pane)}
