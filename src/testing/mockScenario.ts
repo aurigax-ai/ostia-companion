@@ -59,6 +59,7 @@ export function demoScenario(): Scenario {
       { paneId: 'p-api-zsh', sessionId: 's-api', kind: 'terminal', title: 'zsh', cwd: '/home/marco/work/api-server', running: false, blockCount: 9, lastExitCode: 0 },
       { paneId: 'p-codex', sessionId: 's-web', kind: 'terminal', title: 'codex', cwd: '/home/marco/Personal/site', running: false, blockCount: 3, lastExitCode: 1, agent: 'codex', agentState: 'error', agentMessage: 'Stopped: build failed (exit 1)' },
       { paneId: 'p-agent', sessionId: 's-ostia', kind: 'terminal', title: 'claude', cwd: '/home/marco/Personal/ostia', running: true, blockCount: 2, agent: 'claude', agentState: 'working' },
+      { paneId: 'p-pi', sessionId: 's-ostia', kind: 'agent', title: 'pi', running: true, blockCount: 0 },
       { paneId: 'p-dev', sessionId: 's-ostia', kind: 'terminal', title: 'pnpm dev', cwd: '/home/marco/Personal/ostia/web', running: true, blockCount: 1 },
       { paneId: 'p-browser', sessionId: 's-ostia', kind: 'browser', title: 'localhost:5173', running: false, blockCount: 0 },
       { paneId: 'p-editor', sessionId: 's-ostia', kind: 'editor', title: 'theme.ts', running: false, blockCount: 0 },
@@ -117,6 +118,14 @@ export function demoScenario(): Scenario {
         { type: 'tool', turn: 1, id: 'tl-2', kind: 'edit', name: 'Write', target: 'db/migrations/0042.sql' },
         { type: 'edit', turn: 1, id: 'tl-2', path: 'db/migrations/0042.sql', change: 'add', diff: '@@ -0,0 +1,2 @@\n+ALTER TABLE users\n+  ADD COLUMN last_seen timestamptz;\n' },
         { type: 'text', turn: 1, id: 'tx-1', text: 'The migration is written. Applying it to the dev database next.' },
+      ],
+      'p-pi': [
+        { type: 'turn.started', turn: 1 },
+        { type: 'prompt', turn: 1, id: 'pr-1', text: 'What changed in the export module this week?' },
+        { type: 'tool', turn: 1, id: 'tl-1', kind: 'command', name: 'bash', target: 'git log --since=1.week src/export', input: 'git log --since=1.week src/export' },
+        { type: 'tool.result', turn: 1, id: 'tl-1', output: 'a1b2c3 guard the totals row\n9f8e7d split the ledger export\n', exitCode: 0 },
+        { type: 'text', turn: 1, id: 'tx-1', text: 'Two commits touched it: the ledger export now splits by month, and the totals row is guarded against a repeat.' },
+        { type: 'turn.ended', turn: 1, status: 'done' },
       ],
       'p-codex': [
         { type: 'turn.started', turn: 1 },

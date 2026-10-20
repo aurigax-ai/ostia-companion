@@ -1,5 +1,5 @@
 import type { Ask } from './asks';
-import type { Pane, Session } from './workspaces';
+import { isPiPane, type Pane, type Session } from './workspaces';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -17,7 +17,7 @@ export interface Now {
 }
 
 export function isAgent(pane: Pane): boolean {
-  return pane.kind === 'terminal' && !!pane.agent;
+  return isPiPane(pane) || (pane.kind === 'terminal' && !!pane.agent);
 }
 
 export function changedAt(pane: Pane, seen: Seen): number | null {

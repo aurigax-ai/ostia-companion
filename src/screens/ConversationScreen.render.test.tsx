@@ -18,6 +18,7 @@ const mockConv = {
   asks: [] as object[],
   caps: ['read', 'notify', 'respond'],
   agentState: 'done' as string,
+  paneKind: 'terminal' as string,
   app: [] as ((state: string) => void)[],
 };
 
@@ -43,7 +44,7 @@ jest.mock('../services/workspaceStore', () => ({
   useFeatures: () => ['prompt-image'],
   useWorkspaces: () => ({
     sessions: [{ sessionId: 's-ostia', name: 'ostia', kind: 'agent', workDir: '/home/m/ostia', state: 'working' }],
-    panes: [{ paneId: 'p-agent', sessionId: 's-ostia', kind: 'terminal', title: 'claude', cwd: '/home/m/ostia', running: true, blockCount: 1, agent: 'claude', agentState: mockConv.agentState }],
+    panes: [{ paneId: 'p-agent', sessionId: 's-ostia', kind: mockConv.paneKind, title: 'claude', cwd: '/home/m/ostia', running: true, blockCount: 1, ...(mockConv.paneKind === 'terminal' ? { agent: 'claude' } : {}), agentState: mockConv.agentState }],
   }),
 }));
 jest.mock('../services/snippets', () => ({
@@ -118,6 +119,7 @@ beforeEach(() => {
   mockConv.asks = [];
   mockConv.caps = ['read', 'notify', 'respond'];
   mockConv.agentState = 'done';
+  mockConv.paneKind = 'terminal';
   mockConv.prompt.mockClear();
   mockConv.interrupt.mockClear();
   mockConv.answer.mockClear();
@@ -252,6 +254,22 @@ test('PHC-C27 the header says the folder, and switches Chat and Terminal', async
   expect(screen.getByLabelText('Chat').props.accessibilityState).toEqual({ checked: true });
   await fireEvent.press(screen.getByLabelText('Terminal'));
   expect(navigation.navigate).toHaveBeenCalledWith('Terminal', { paneId: 'p-agent', title: 'claude' });
+});
+
+test('PHP-C1 the pi Agent pane is chat only: no Chat or Terminal switch', async () => {
+  mockConv.paneKind = 'agent';
+  await renderConversation();
+  await waitFor(() => expect(opens()).toHaveLength(1));
+  expect(screen.queryByLabelText('Terminal')).toBeNull();
+  expect(screen.queryByLabelText('Chat')).toBeNull();
+});
+
+test('PHP-C2 a pi pane the desktop cannot stream says so instead of opening a terminal it does not have', async () => {
+  mockConv.paneKind = 'agent';
+  mockConv.openResult = async () => Promise.reject({ code: -32602, message: 'not-an-agent' });
+  await renderConversation();
+  expect(await screen.findByText('This agent is no longer on the desktop.')).toBeTruthy();
+  expect(navigation.replace).not.toHaveBeenCalled();
 });
 
 test('PHC-C28 a permission prompt rises as a compact sheet with the exact command and small buttons', async () => {
