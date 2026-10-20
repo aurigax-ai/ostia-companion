@@ -43,7 +43,18 @@ jest.mock('../services/dictation', () => ({
   },
 }));
 
-const navigation = { navigate: jest.fn(), replace: jest.fn(), setOptions: jest.fn() };
+const navListeners: Record<string, () => void> = {};
+const navigation = {
+  navigate: jest.fn(),
+  replace: jest.fn(),
+  setOptions: jest.fn(),
+  addListener: (event: string, listener: () => void) => {
+    navListeners[event] = listener;
+    return () => {
+      delete navListeners[event];
+    };
+  },
+};
 
 async function renderConversation() {
   await render(

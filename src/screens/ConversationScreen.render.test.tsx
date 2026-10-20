@@ -54,7 +54,18 @@ jest.mock('../services/snippets', () => ({
 }));
 jest.mock('../services/phoneSession', () => ({ phoneControlSupported: () => true }));
 
-const navigation = { navigate: jest.fn(), replace: jest.fn(), setOptions: jest.fn() };
+const navListeners: Record<string, () => void> = {};
+const navigation = {
+  navigate: jest.fn(),
+  replace: jest.fn(),
+  setOptions: jest.fn(),
+  addListener: (event: string, listener: () => void) => {
+    navListeners[event] = listener;
+    return () => {
+      delete navListeners[event];
+    };
+  },
+};
 
 function WithHeader() {
   const [options, setOptions] = useState<{ headerRight?: () => React.ReactElement; headerTitle?: () => React.ReactElement }>({});
@@ -80,6 +91,7 @@ let seq = 0;
 async function stream(events: object[], backfill = false) {
   await act(async () => {
     mockConv.listeners.forEach((listener) => listener('agent.stream', { paneId: 'p-agent', seq: ++seq, backfill, events }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
   });
 }
 
@@ -162,11 +174,54 @@ test('PHC-C23 the stream is closed when the human leaves, and when the app goes 
   await waitFor(() => expect(closes()).toHaveLength(1));
   expect(closes()[0].params).toEqual({ paneId: 'p-agent' });
   await act(async () => {
+    mockConv.app.forEach((handler) => handler('inactive'));
     mockConv.app.forEach((handler) => handler('active'));
   });
   await waitFor(() => expect(opens()).toHaveLength(2));
+  expect(closes()).toHaveLength(1);
   await view.unmount();
   await waitFor(() => expect(closes()).toHaveLength(2));
+});
+
+test('PHC-C29 the stream closes when another screen (the terminal) is pushed above, and reopens when the human comes back', async () => {
+  await renderConversation();
+  await waitFor(() => expect(opens()).toHaveLength(1));
+  await act(async () => navListeners.blur());
+  await waitFor(() => expect(closes()).toHaveLength(1));
+  await act(async () => navListeners.focus());
+  await waitFor(() => expect(opens()).toHaveLength(2));
+});
+
+test('PHC-C30 frames that arrive in one tick are queued and both drawn, in order, on the next animation frame', async () => {
+  await renderConversation();
+  await waitFor(() => expect(opens()).toHaveLength(1));
+  await act(async () => {
+    mockConv.listeners.forEach((listener) => listener('agent.stream', { paneId: 'p-agent', seq: 1, backfill: true, events: [{ type: 'turn.started', turn: 1 }, { type: 'text', turn: 1, id: 'a', text: 'one ' }] }));
+    mockConv.listeners.forEach((listener) => listener('agent.stream', { paneId: 'p-agent', seq: 2, backfill: false, events: [{ type: 'text', turn: 1, id: 'a', text: 'two', append: true }] }));
+    expect(screen.queryByText('one two')).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  });
+  expect(screen.getByText('one two')).toBeTruthy();
+});
+
+test('PHC-C31 a tool detail that is open follows the output as it streams', async () => {
+  await renderConversation();
+  await waitFor(() => expect(opens()).toHaveLength(1));
+  await stream([{ type: 'turn.started', turn: 1 }, { type: 'tool', turn: 1, id: 't', kind: 'command', name: 'Bash', target: 'pnpm build', input: 'pnpm build' }, { type: 'tool.result', turn: 1, id: 't', output: 'first line' }, { type: 'live' }], true);
+  await fireEvent.press(await screen.findByLabelText('Ran pnpm build, show details'));
+  expect(await screen.findByText(/first line/)).toBeTruthy();
+  await stream([{ type: 'tool.result', turn: 1, id: 't', output: '\nsecond line', append: true }]);
+  expect(await screen.findByText(/second line/)).toBeTruthy();
+});
+
+test('PHC-C32 a different ask opens with an empty reply box', async () => {
+  const ask = (askId: string) => ({ askId, sessionId: 's-ostia', paneId: 'p-agent', kind: 'question', agent: 'claude', title: `Question ${askId}`, choices: [], allowText: true, since: 1 });
+  mockConv.asks = [ask('a1')];
+  const view = await renderConversation();
+  await fireEvent.changeText(await screen.findByLabelText('Reply to Question a1'), 'half typed');
+  mockConv.asks = [ask('a2')];
+  await view.rerender(<SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 412, height: 915 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}><WithHeader /></SafeAreaProvider>);
+  expect((await screen.findByLabelText('Reply to Question a2')).props.value).toBe('');
 });
 
 test('PHC-C24 a pane with no agent hooks (not-an-agent) opens the terminal instead', async () => {

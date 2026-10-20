@@ -6,15 +6,7 @@ import { Button, NO_SCROLL_BARS, Sheet } from './ui';
 
 const VARIANT = { approve: 'filled', neutral: 'tonal', deny: 'danger' } as const;
 
-export function PermissionSheet({
-  ask,
-  where,
-  canRespond,
-  pending,
-  error,
-  onAnswer,
-  onClose,
-}: {
+type Props = {
   ask: Ask | null;
   where: string;
   canRespond: boolean;
@@ -22,7 +14,24 @@ export function PermissionSheet({
   error?: string;
   onAnswer: (answer: { choiceId?: string; text?: string }) => void;
   onClose: () => void;
-}) {
+};
+
+export function PermissionSheet(props: Props) {
+  return (
+    <Sheet visible={props.ask !== null} onClose={props.onClose}>
+      {props.ask ? <AskBody key={props.ask.askId} {...props} ask={props.ask} /> : null}
+    </Sheet>
+  );
+}
+
+function AskBody({
+  ask,
+  where,
+  canRespond,
+  pending,
+  error,
+  onAnswer,
+}: Props & { ask: Ask }) {
   const [reply, setReply] = useState('');
   const disabled = !canRespond || pending !== undefined;
 
@@ -35,44 +44,40 @@ export function PermissionSheet({
   };
 
   return (
-    <Sheet visible={ask !== null} onClose={onClose}>
-      {ask ? (
-        <View style={styles.body}>
-          <Text style={type.headline}>{ask.title}</Text>
-          {where ? <Text style={type.caption}>{where}</Text> : null}
-          {ask.detail ? (
-            <ScrollView {...NO_SCROLL_BARS} style={styles.detail} nestedScrollEnabled>
-              <Text style={styles.detailText} selectable>
-                {ask.detail}
-              </Text>
-            </ScrollView>
-          ) : null}
-          {ask.allowText ? (
-            <View style={styles.replyRow}>
-              <TextInput
-                style={styles.reply}
-                placeholder="Reply"
-                placeholderTextColor={colors.dim}
-                value={reply}
-                onChangeText={setReply}
-                editable={!disabled}
-                cursorColor={colors.brand}
-                selectionColor={colors.brandSoft}
-                accessibilityLabel={`Reply to ${ask.title}`}
-              />
-              <Button label="Send" compact disabled={disabled || !reply.trim()} onPress={() => (onAnswer({ text: reply.trim() }), setReply(''))} />
-            </View>
-          ) : null}
-          <View style={styles.choices}>
-            {[...ask.choices].sort((a, b) => ORDER[a.tone] - ORDER[b.tone]).map((choice) => (
-              <Button key={choice.id} label={choice.label} compact variant={VARIANT[choice.tone]} loading={pending === choice.id} disabled={disabled} onPress={() => choose(ask, choice)} />
-            ))}
-          </View>
-          {!canRespond ? <Text style={type.caption}>Turn on Respond for this phone in Settings › Remote.</Text> : null}
-          {error ? <Text style={[type.caption, styles.error]}>{error}</Text> : null}
+    <View style={styles.body}>
+      <Text style={type.headline}>{ask.title}</Text>
+      {where ? <Text style={type.caption}>{where}</Text> : null}
+      {ask.detail ? (
+        <ScrollView {...NO_SCROLL_BARS} style={styles.detail} nestedScrollEnabled>
+          <Text style={styles.detailText} selectable>
+            {ask.detail}
+          </Text>
+        </ScrollView>
+      ) : null}
+      {ask.allowText ? (
+        <View style={styles.replyRow}>
+          <TextInput
+            style={styles.reply}
+            placeholder="Reply"
+            placeholderTextColor={colors.dim}
+            value={reply}
+            onChangeText={setReply}
+            editable={!disabled}
+            cursorColor={colors.brand}
+            selectionColor={colors.brandSoft}
+            accessibilityLabel={`Reply to ${ask.title}`}
+          />
+          <Button label="Send" compact disabled={disabled || !reply.trim()} onPress={() => (onAnswer({ text: reply.trim() }), setReply(''))} />
         </View>
       ) : null}
-    </Sheet>
+      <View style={styles.choices}>
+        {[...ask.choices].sort((a, b) => ORDER[a.tone] - ORDER[b.tone]).map((choice) => (
+          <Button key={choice.id} label={choice.label} compact variant={VARIANT[choice.tone]} loading={pending === choice.id} disabled={disabled} onPress={() => choose(ask, choice)} />
+        ))}
+      </View>
+      {!canRespond ? <Text style={type.caption}>Turn on Respond for this phone in Settings › Remote.</Text> : null}
+      {error ? <Text style={[type.caption, styles.error]}>{error}</Text> : null}
+    </View>
   );
 }
 
