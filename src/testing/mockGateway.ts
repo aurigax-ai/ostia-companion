@@ -571,14 +571,15 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         const turns = params.turns === undefined ? 5 : params.turns;
         if (!Number.isInteger(turns) || turns < 1 || turns > 50) return fail(id, INVALID_PARAMS, 'bad-params');
         const pane = scenario.panes.find((p) => p.paneId === params.paneId);
-        if (!pane || (pane.agent !== 'claude' && pane.agent !== 'codex') || hooksOff.includes(pane.paneId)) return fail(id, INVALID_PARAMS, 'not-an-agent');
+        const agent = pane?.kind === 'agent' ? 'pi' : pane?.agent;
+        if (!pane || (agent !== 'claude' && agent !== 'codex' && agent !== 'pi') || hooksOff.includes(pane.paneId)) return fail(id, INVALID_PARAMS, 'not-an-agent');
         if (!connection.streams.has(pane.paneId) && connection.streams.size >= STREAMS_PER_SOCKET) return fail(id, INVALID_PARAMS, 'too-many-streams');
         const events = scenario.streams[pane.paneId] ?? [];
         const kept = new Set([...new Set(events.map((e) => e.turn).filter((turn) => turn !== undefined))].slice(-turns));
         const backfill = events.filter((e) => e.turn === undefined || kept.has(e.turn));
         const asks = scenario.asks.filter((a) => a.paneId === pane.paneId).map((a) => ({ type: 'ask', askId: a.askId, kind: a.kind }));
         connection.streams.set(pane.paneId, 0);
-        respond(id, { ok: true, paneId: pane.paneId, agent: pane.agent, session: `sess-${pane.paneId}`, truncated: kept.size < new Set(events.map((e) => e.turn)).size });
+        respond(id, { ok: true, paneId: pane.paneId, agent, session: `sess-${pane.paneId}`, truncated: kept.size < new Set(events.map((e) => e.turn)).size });
         streamTo(connection, pane.paneId, [...backfill, ...asks, { type: 'live' }], true);
         return;
       }
@@ -665,7 +666,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       }
       if (method === 'agent.prompt' || method === 'agent.interrupt') {
         const pane = scenario.panes.find((p) => p.paneId === params.paneId);
-        if (!pane?.agent || pane.agent === 'other') return fail(id, INVALID_PARAMS, 'not-an-agent');
+        if (pane?.kind !== 'agent' && (!pane?.agent || pane.agent === 'other')) return fail(id, INVALID_PARAMS, 'not-an-agent');
         const sentImage = method === 'agent.prompt' && params.image !== undefined && !options.imagesUnsupported;
         if (sentImage) {
           const { mime, data } = params.image ?? {};

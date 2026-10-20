@@ -330,7 +330,7 @@ export function IconTile({
 }
 
 export function terminalIcon(pane: Pane): LucideIcon {
-  return pane.agent && pane.agent !== 'other' ? Bot : SquareTerminal;
+  return pane.kind === 'agent' || (pane.agent && pane.agent !== 'other') ? Bot : SquareTerminal;
 }
 
 const PILL_TONES = {

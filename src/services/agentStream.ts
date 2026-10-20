@@ -20,7 +20,7 @@ export function streamFailure(err: any, firstOpen: boolean): { status: 'terminal
   return { status: 'error', text: err?.message || 'Could not read the conversation.' };
 }
 
-export function useAgentStream(paneId: string, active = true) {
+export function useAgentStream(paneId: string, active = true, hasTerminal = true) {
   const [state, setState] = useState<StreamState>(EMPTY_STREAM);
   const [status, setStatus] = useState<StreamStatus>('opening');
   const [problem, setProblem] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export function useAgentStream(paneId: string, active = true) {
       } catch (err: any) {
         if (mine !== generation) return;
         streaming = false;
-        const failure = streamFailure(err, !opened.current);
+        const failure = streamFailure(err, !opened.current && hasTerminal);
         setStatus(failure.status);
         setProblem(failure.status === 'error' ? failure.text : null);
       }
@@ -120,7 +120,7 @@ export function useAgentStream(paneId: string, active = true) {
       removeApp.remove();
       close();
     };
-  }, [paneId, active]);
+  }, [paneId, active, hasTerminal]);
 
   return { state, status, problem };
 }

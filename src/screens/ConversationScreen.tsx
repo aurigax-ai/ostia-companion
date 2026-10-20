@@ -11,7 +11,7 @@ import { AskSheet } from '../components/AskSheet';
 import { Button, Empty, HeaderTitle, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
 import { Block, clipTail, toolTarget, toolVerb, Turn, turnRunning } from '../model/agentStream';
 import { ATTACH_FAILED, imageRefusal } from '../model/attachment';
-import { paneTitle, shortPath } from '../model/workspaces';
+import { isPiPane, paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/askStore';
 import { useAgentStream } from '../services/agentStream';
@@ -40,8 +40,9 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const { sessions, panes } = useWorkspaces();
   const asks = useAsks();
   const [focused, setFocused] = useState(true);
-  const { state, status, problem } = useAgentStream(paneId, focused);
   const pane = panes.find((p) => p.paneId === paneId);
+  const pi = pane ? isPiPane(pane) : false;
+  const { state, status, problem } = useAgentStream(paneId, focused, !pi);
   const workspace = sessions.find((s) => s.sessionId === pane?.sessionId);
   const agent = pane?.agent && pane.agent !== 'other' ? pane.agent : title;
   const heading = pane ? paneTitle(pane) : title;
@@ -65,9 +66,9 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   useLayoutEffect(() => {
     navigation.setOptions({
       headerTitle: () => <HeaderTitle title={heading} subtitle={[heading === agent ? null : agent, shortPath(pane?.cwd ?? workspace?.workDir)].filter(Boolean).join(' · ')} />,
-      headerRight: () => <ChatSwitch value="chat" onChange={openTerminal} />,
+      headerRight: () => (pi ? null : <ChatSwitch value="chat" onChange={openTerminal} />),
     });
-  }, [navigation, heading, agent, pane?.cwd, workspace?.workDir, openTerminal]);
+  }, [navigation, heading, agent, pi, pane?.cwd, workspace?.workDir, openTerminal]);
 
   useEffect(() => {
     if (status === 'terminal') navigation.replace('Terminal', { paneId, title });
