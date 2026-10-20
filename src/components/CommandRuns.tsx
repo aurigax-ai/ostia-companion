@@ -1,11 +1,12 @@
-import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, NativeScrollEvent, NativeSyntheticEvent, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowUp, ChevronRight } from 'lucide-react-native';
 import { CommandRun, DEFAULT_FG, Line } from '../model/terminalCopy';
 import { colors, font, radius, space, type } from '../theme';
 import { IconButton, NO_SCROLL_BARS } from './ui';
 
-const COLLAPSED_LINES = 12;
+export const PAGE_LINES = 200;
+const BOTTOM_SLACK = 32;
 
 export function CommandRuns({
   runs,
@@ -16,27 +17,64 @@ export function CommandRuns({
   fontSize: number;
   onOpenFullscreen: () => void;
 }) {
-  const scroller = useRef<ScrollView>(null);
+  const list = useRef<FlatList<CommandRun>>(null);
+  const atBottom = useRef(true);
+  const offset = useRef(0);
+  const height = useRef(0);
+  const expanding = useRef(false);
+  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    offset.current = contentOffset.y;
+    atBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - BOTTOM_SLACK;
+  }, []);
+  const onContentSizeChange = useCallback((_: number, next: number) => {
+    const grew = next - height.current;
+    height.current = next;
+    if (expanding.current) {
+      expanding.current = false;
+      list.current?.scrollToOffset({ offset: offset.current + grew, animated: false });
+    } else if (atBottom.current) list.current?.scrollToEnd({ animated: false });
+  }, []);
+  const onExpand = useCallback(() => {
+    expanding.current = true;
+  }, []);
+  const renderItem = useCallback(
+    ({ item }: { item: CommandRun }) => <RunCard run={item} fontSize={fontSize} onOpenFullscreen={onOpenFullscreen} onExpand={onExpand} />,
+    [fontSize, onOpenFullscreen, onExpand],
+  );
   return (
-    <ScrollView
-      ref={scroller}
+    <FlatList
       {...NO_SCROLL_BARS}
+      ref={list}
       testID="commands-view"
       style={styles.list}
       contentContainerStyle={styles.content}
-      onContentSizeChange={() => scroller.current?.scrollToEnd({ animated: false })}
-    >
-      {runs.map((run) => (
-        <RunCard key={run.id} run={run} fontSize={fontSize} onOpenFullscreen={onOpenFullscreen} />
-      ))}
-    </ScrollView>
+      data={runs}
+      keyExtractor={(run) => String(run.id)}
+      renderItem={renderItem}
+      onScroll={onScroll}
+      scrollEventThrottle={32}
+      onContentSizeChange={onContentSizeChange}
+      initialNumToRender={12}
+      windowSize={9}
+    />
   );
 }
 
-function RunCard({ run, fontSize, onOpenFullscreen }: { run: CommandRun; fontSize: number; onOpenFullscreen: () => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const hidden = expanded ? 0 : Math.max(0, run.output.length - COLLAPSED_LINES);
-  const shown = hidden > 0 ? run.output.slice(hidden) : run.output;
+const RunCard = memo(function RunCard({
+  run,
+  fontSize,
+  onOpenFullscreen,
+  onExpand,
+}: {
+  run: CommandRun;
+  fontSize: number;
+  onOpenFullscreen: () => void;
+  onExpand: () => void;
+}) {
+  const [limit, setLimit] = useState(PAGE_LINES);
+  const hidden = Math.max(0, run.output.length - limit);
+  const shown = useMemo(() => (hidden > 0 ? run.output.slice(hidden) : run.output), [run.output, hidden]);
   const failed = run.exitCode !== null && run.exitCode !== 0;
   const header = (
     <View style={styles.head}>
@@ -64,13 +102,21 @@ function RunCard({ run, fontSize, onOpenFullscreen }: { run: CommandRun; fontSiz
       ) : (
         header
       )}
-      {shown.length > 0 ? (
+      {shown.length > 0 || run.trimmed ? (
         <View style={styles.output}>
           {hidden > 0 ? (
-            <Pressable accessibilityRole="button" hitSlop={space.md} onPress={() => setExpanded(true)}>
-              <Text style={[type.caption, styles.more]}>{`Show ${hidden} earlier lines`}</Text>
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={space.md}
+              onPress={() => {
+                onExpand();
+                setLimit((n) => n + PAGE_LINES);
+              }}
+            >
+              <Text style={[type.caption, styles.more]}>{`Show ${Math.min(hidden, PAGE_LINES)} earlier lines`}</Text>
             </Pressable>
           ) : null}
+          {hidden === 0 && run.trimmed ? <Text style={type.caption}>Earlier output trimmed</Text> : null}
           <Text selectable style={{ fontFamily: font.mono, fontSize, lineHeight: Math.round(fontSize * 1.35), color: DEFAULT_FG }}>
             {shown.map((line, i) => (
               <Text key={i}>
@@ -83,7 +129,7 @@ function RunCard({ run, fontSize, onOpenFullscreen }: { run: CommandRun; fontSiz
       ) : null}
     </View>
   );
-}
+});
 
 function LineText({ line }: { line: Line }) {
   return (
@@ -97,7 +143,7 @@ function LineText({ line }: { line: Line }) {
             fontFamily: span.bold ? font.monoSemibold : font.mono,
             opacity: span.dim ? 0.6 : 1,
             fontStyle: span.italic ? 'italic' : 'normal',
-            textDecorationLine: span.underline ? 'underline' : 'none',
+            textDecorationLine: span.underline && span.strike ? 'underline line-through' : span.underline ? 'underline' : span.strike ? 'line-through' : 'none',
           }}
         >
           {span.text}

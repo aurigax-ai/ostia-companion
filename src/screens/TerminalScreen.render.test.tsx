@@ -18,9 +18,9 @@ jest.mock('../services/rpc', () => ({
       mockRpc.emit = listener;
       return () => {};
     },
-    attachPty: (_paneId: string, role: string) => {
+    attachPty: (paneId: string, role: string) => {
       if (mockRpc.attach === 'hang') return new Promise(() => {});
-      mockRpc.emit('pty.attached', { role, cols: 80, rows: 24, cursor: 0, dropped: false });
+      mockRpc.emit('pty.attached', { paneId, role, cols: 80, rows: 24, cursor: 0, dropped: false });
       return Promise.resolve({ role });
     },
     detachPty: () => Promise.resolve(),

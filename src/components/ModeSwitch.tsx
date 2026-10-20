@@ -3,18 +3,32 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, touch, type } from '../theme';
 
 export type TerminalMode = 'commands' | 'terminal';
+export type SwitchValue = 'chat' | TerminalMode;
 
-const OPTIONS: { value: TerminalMode; label: string }[] = [
+export const SHELL_MODES: { value: SwitchValue; label: string }[] = [
   { value: 'commands', label: 'Commands' },
+  { value: 'terminal', label: 'Terminal' },
+];
+
+export const AGENT_MODES: { value: SwitchValue; label: string }[] = [
+  { value: 'chat', label: 'Chat' },
   { value: 'terminal', label: 'Terminal' },
 ];
 
 const HEIGHT = 28;
 
-export function ModeSwitch({ value, onChange }: { value: TerminalMode; onChange: (mode: TerminalMode) => void }) {
+export function ModeSwitch({
+  value,
+  options,
+  onChange,
+}: {
+  value: SwitchValue;
+  options: { value: SwitchValue; label: string }[];
+  onChange: (mode: SwitchValue) => void;
+}) {
   return (
     <View style={styles.track} accessibilityRole="radiogroup" accessibilityLabel="View">
-      {OPTIONS.map((option) => {
+      {options.map((option) => {
         const selected = option.value === value;
         return (
           <Pressable

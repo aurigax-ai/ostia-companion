@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, KeyboardAvoidingView, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, BackHandler, Keyboard as RNKeyboard, KeyboardAvoidingView, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -8,7 +8,7 @@ import { AskHeadsUp } from '../components/AskHeadsUp';
 import { AskSheet } from '../components/AskSheet';
 import { CommandComposer, CommandRuns } from '../components/CommandRuns';
 import { FullscreenTerminal } from '../components/FullscreenTerminal';
-import { ModeSwitch, TerminalMode } from '../components/ModeSwitch';
+import { AGENT_MODES, ModeSwitch, SHELL_MODES, SwitchValue, TerminalMode } from '../components/ModeSwitch';
 import { PromptComposer } from '../components/PromptComposer';
 import { TerminalGrid } from '../components/TerminalGrid';
 import { KeyBar, RawKeyboard } from '../components/TerminalKeys';
@@ -17,14 +17,14 @@ import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/ask
 import { Button, Empty, Loading } from '../components/ui';
 import { attentionRank, byAttention } from '../model/order';
 import { acceptsSwipe, afterClose, EDGE_PT, step } from '../model/terminalPager';
-import { TerminalCopy } from '../model/terminalCopy';
-import { Box, phoneGrid } from '../model/terminalFit';
-import { Pane, paneTitle } from '../model/workspaces';
+import { CommandRun, TerminalCopy } from '../model/terminalCopy';
+import { Box, Grid, phoneGrid } from '../model/terminalFit';
+import { Pane, paneScreen, paneTitle } from '../model/workspaces';
 import { slideMs } from '../services/motion';
 import { ScreenProps } from '../navigation';
 import { AttachResult, OstiaRpc, Role } from '../services/rpc';
 import { useCaps, useWorkspaces } from '../services/workspaceStore';
-import { KeyRowEvent, KeyRowState, pressKeyRow } from '../model/terminalKeys';
+import { KeyRowEvent, KeyRowState, encodeText, pressKeyRow } from '../model/terminalKeys';
 import { usePrefs } from '../services/prefsStore';
 import { HoldStatus, useTerminalHold } from '../services/terminalHold';
 import { colors, radius, space, touch, type } from '../theme';
@@ -33,6 +33,7 @@ const RPC_NEEDS_ELEVATION = -32003;
 const RENDER_MS = 100;
 const INITIAL_COLS = 80;
 const INITIAL_ROWS = 24;
+const NO_RUNS: CommandRun[] = [];
 
 export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const { paneId, title } = route.params;
@@ -75,10 +76,16 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   const [error, setError] = useState<string | null>(null);
   const roleRef = useRef<Role>('observer');
   const wantsOwner = useRef(true);
-  const [copy, setCopy] = useState(() => new TerminalCopy(INITIAL_COLS, INITIAL_ROWS));
+  const copy = useMemo(() => new TerminalCopy(INITIAL_COLS, INITIAL_ROWS), [paneId]);
+  const [attachCount, setAttachCount] = useState(0);
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  const lastGrid = useRef<Grid | null>(null);
   const [version, setVersion] = useState(0);
   const [gridBox, setGridBox] = useState<Box | null>(null);
   const noteSize = useRef<(cols: number, rows: number) => void>(() => {});
+
+  const chatAvailable = !!currentPane && paneScreen(currentPane) === 'Conversation';
+  const openChat = (next: SwitchValue) => next === 'chat' && navigation.replace('Conversation', { paneId, title });
 
   const show = (pane: Pane) => navigation.setParams({ paneId: pane.paneId, title: paneTitle(pane) });
 
@@ -150,16 +157,19 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
       ),
       headerRight: () =>
         isAgent ? (
-          raw ? <Button label="Done" variant="text" compact onPress={() => (setRaw(false), setKeyboardOpen(false))} /> : null
+          <View style={styles.headerRight}>
+            {chatAvailable ? <ModeSwitch value="terminal" options={AGENT_MODES} onChange={openChat} /> : null}
+            {raw ? <Button label="Done" variant="text" compact onPress={() => (setRaw(false), setKeyboardOpen(false))} /> : null}
+          </View>
         ) : (
-          <ModeSwitch value={shellMode} onChange={setShellMode} />
+          <ModeSwitch value={shellMode} options={SHELL_MODES} onChange={(next) => setShellMode(next as TerminalMode)} />
         ),
     });
-  }, [navigation, title, workspace, index, ids.join('|'), isAgent, raw, shellMode, fullscreen]);
+  }, [navigation, title, workspace, index, ids.join('|'), isAgent, chatAvailable, raw, shellMode, fullscreen]);
 
   useEffect(() => {
-    const next = new TerminalCopy(INITIAL_COLS, INITIAL_ROWS);
-    setCopy(next);
+    const next = copy;
+    setAttachCount(0);
     setShellMode('commands');
     setFullscreen(false);
     setKeyboardOpen(false);
@@ -173,8 +183,9 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     });
     const unsubscribePty = OstiaRpc.addPtyListener((base64) => void next.write(atob(base64)));
     const unsubscribeEvents = OstiaRpc.addEventListener((type, payload) => {
-      if (type === 'pty.attached') applyAttach(next, payload);
-      else if (type === 'pty.size' && payload?.paneId === paneId) {
+      if (type === 'pty.attached') {
+        if (payload?.paneId === paneId) applyAttach(next, payload);
+      } else if (type === 'pty.size' && payload?.paneId === paneId) {
         noteSize.current(payload.cols, payload.rows);
         next.resize(payload.cols, payload.rows);
       }
@@ -196,10 +207,11 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
   }, [canInput]);
 
   const applyAttach = (target: TerminalCopy, result: AttachResult) => {
-    target.resize(result.cols, result.rows);
-    if (result.dropped) target.reset();
+    void target.resize(result.cols, result.rows);
+    if (result.dropped) void target.reset();
     roleRef.current = result.role;
     setRole(result.role);
+    setAttachCount((n) => n + 1);
   };
 
   const attach = async (target: Role) => {
@@ -233,25 +245,52 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
     const result = pressKeyRow(keyRowRef.current, event);
     keyRowRef.current = result.state;
     setKeyRow(result.state);
-    if (result.send) OstiaRpc.sendInput(btoa(result.send));
+    if (result.send) OstiaRpc.sendKeystroke(result.send);
   };
 
-  const typeText = (text: string) => pressKey({ type: 'text', text: text.replace(/\n/g, '\r') });
-  const runs = useMemo(() => copy.runs(), [copy, version]);
-  const fullscreenRun = runs.find((run) => run.fullscreen);
+  const typeText = (text: string) => pressKey({ type: 'text', text: encodeText(text, copy.bracketedPaste) });
+  const backspace = () => OstiaRpc.sendKeystroke('\x7f');
+  const runs = useMemo(() => (mode === 'commands' && !isAgent ? copy.runs() : NO_RUNS), [copy, version, mode, isAgent]);
+  const fullscreenCommand = useMemo(() => copy.fullscreenCommand(), [copy, version]);
 
   useEffect(() => {
-    if (fullscreen && !fullscreenRun) setFullscreen(false);
-  }, [fullscreen, fullscreenRun]);
+    if (fullscreen && fullscreenCommand === null) setFullscreen(false);
+  }, [fullscreen, fullscreenCommand]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setFullscreen(false);
+      setKeyboardOpen(false);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [fullscreen]);
+
+  useEffect(() => {
+    const show = RNKeyboard.addListener('keyboardDidShow', () => setKeyboardUp(true));
+    const hide = RNKeyboard.addListener('keyboardDidHide', () => setKeyboardUp(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const canType = role === 'owner';
   const showControls = (!isAgent || raw) && !attaching && !error;
   const gridShown = mode === 'terminal' || fullscreen;
-  useEffect(() => setGridBox(null), [gridShown, fullscreen, paneId]);
+  useEffect(() => {
+    setGridBox(null);
+    lastGrid.current = null;
+  }, [gridShown, fullscreen, paneId]);
+  const sideways = !fullscreen || (gridBox !== null && gridBox.width > gridBox.height);
+  const measured = sideways ? phoneGrid(gridBox, prefs.fontSize) : null;
+  if (!keyboardUp && measured) lastGrid.current = measured;
   const hold = useTerminalHold({
     paneId,
     active: canType && !attaching && !error && gridShown,
-    grid: phoneGrid(gridBox, prefs.fontSize),
+    grid: keyboardUp ? lastGrid.current : measured,
+    attachCount,
   });
   noteSize.current = hold.noteSize;
 
@@ -331,7 +370,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
         <View style={styles.controls}>
           {mode === 'commands' && !isAgent ? <CommandComposer editable onRun={(command) => OstiaRpc.sendKeystroke(`${command}\r`)} /> : null}
           {keyboardOpen && (mode === 'terminal' || isAgent) ? (
-            <RawKeyboard onText={typeText} onBackspace={() => OstiaRpc.sendInput(btoa('\x7f'))} onEnter={() => pressKey({ type: 'key', key: 'enter' })} />
+            <RawKeyboard onText={typeText} onBackspace={backspace} onEnter={() => pressKey({ type: 'key', key: 'enter' })} />
           ) : null}
           {prefs.keyRow ? (
             <KeyBar
@@ -352,11 +391,11 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           <Button label="Type" icon={Keyboard} compact onPress={takeControl} />
         </View>
       ) : null}
-      {fullscreen && fullscreenRun ? (
+      {fullscreen && fullscreenCommand !== null ? (
         <FullscreenTerminal
           copy={copy}
           version={version}
-          title={fullscreenRun.command.split(' ')[0] || title}
+          title={fullscreenCommand.split(' ')[0] || title}
           keyState={keyRow}
           holdStatus={hold.status}
           onMeasure={setGridBox}
@@ -365,7 +404,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           onKey={pressKey}
           onKeyboard={() => setKeyboardOpen((open) => !open)}
           onText={typeText}
-          onBackspace={() => OstiaRpc.sendInput(btoa('\x7f'))}
+          onBackspace={backspace}
           onEnter={() => pressKey({ type: 'key', key: 'enter' })}
           onBack={() => (setFullscreen(false), setKeyboardOpen(false))}
         />
@@ -375,17 +414,17 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
 }
 
 function HoldNote({ status, onAgain }: { status: HoldStatus; onAgain: () => void }) {
-  if (status !== 'held' && status !== 'taken') return null;
   return (
-    <View style={styles.holdNote}>
-      <Text style={[type.caption, { flex: 1 }]}>{status === 'held' ? 'Sized to this phone' : 'The desktop took its size back'}</Text>
+    <View style={styles.holdNote} testID="hold-note">
+      <Text style={[type.caption, { flex: 1 }]}>{status === 'held' ? 'Sized to this phone' : status === 'taken' ? 'The desktop took its size back' : ''}</Text>
       {status === 'taken' ? <Button label="Size to this phone" variant="text" compact onPress={onAgain} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  holdNote: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, minHeight: 24 },
+  holdNote: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.gutter, height: 32 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   inset: { flex: 1, backgroundColor: colors.bg },
   headerTitle: { flexShrink: 1, minHeight: touch, justifyContent: 'center' },
   headerSub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
