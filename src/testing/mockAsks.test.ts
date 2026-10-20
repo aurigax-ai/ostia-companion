@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { connect, pair } from './contractClient';
-import { MockCap, MockGateway, startMockGateway } from './mockGateway';
+import { MockCap, MockGateway, MockGatewayOptions, startMockGateway } from './mockGateway';
 
 let gateway: MockGateway | null = null;
 
@@ -9,8 +9,8 @@ afterEach(async () => {
   gateway = null;
 });
 
-async function phone(caps: MockCap[]) {
-  gateway = await startMockGateway({ caps });
+async function phone(caps: MockCap[], options: MockGatewayOptions = {}) {
+  gateway = await startMockGateway({ caps, ...options });
   const { result } = await pair(gateway);
   const client = connect(gateway);
   await client.call('hello', { deviceToken: result.deviceToken });
@@ -75,5 +75,64 @@ describe('agent control (contract v1.6)', () => {
       expect(reply.error).toEqual(expect.objectContaining({ code: -32602, message: 'not-an-agent' }));
     }
     expect(gateway!.typed('p-api-zsh')).toEqual([]);
+  });
+
+  it('AGT-C6 a prompt with an image answers image: pasted and the desktop keeps the image', async () => {
+    const client = await phone(['read', 'notify', 'respond']);
+    const data = Buffer.alloc(2048, 1).toString('base64');
+    expect((await client.call('agent.prompt', { paneId: 'p-agent', text: 'what is this', image: { mime: 'image/png', data } })).result).toEqual({ ok: true, image: 'pasted' });
+    expect(gateway!.pasted('p-agent')).toEqual([{ mime: 'image/png', bytes: 2048 }]);
+    expect(gateway!.typed('p-agent')).toEqual(['what is this\r']);
+  });
+
+  it('AGT-C7 an image that is not PNG, JPEG or WebP, or over 10 MiB, is refused and nothing is typed', async () => {
+    const client = await phone(['read', 'notify', 'respond']);
+    const small = Buffer.alloc(16).toString('base64');
+    const huge = Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64');
+    const refused = [
+      await client.call('agent.prompt', { paneId: 'p-agent', text: 'a', image: { mime: 'image/gif', data: small } }),
+      await client.call('agent.prompt', { paneId: 'p-agent', text: 'b', image: { mime: 'image/jpeg', data: huge } }),
+    ];
+    expect(refused.map((reply) => reply.error?.message)).toEqual(['image-type', 'image-too-large']);
+    expect(gateway!.typed('p-agent')).toEqual([]);
+    expect(gateway!.pasted('p-agent')).toEqual([]);
+  });
+
+  it('AGT-C8 the seventh image in a minute is rate-limited', async () => {
+    const client = await phone(['read', 'notify', 'respond']);
+    const image = { mime: 'image/webp', data: Buffer.alloc(16).toString('base64') };
+    for (let i = 0; i < 6; i++) expect((await client.call('agent.prompt', { paneId: 'p-agent', text: `n${i}`, image })).result).toEqual({ ok: true, image: 'pasted' });
+    expect((await client.call('agent.prompt', { paneId: 'p-agent', text: 'n7', image })).error).toEqual(expect.objectContaining({ code: -32007, message: 'rate-limited' }));
+  });
+
+  it('AGT-C9 an older desktop advertises no image feature and closes a frame over 1 MiB, so a photo drops the socket', async () => {
+    const older = await phone(['read', 'notify', 'respond'], { imagesUnsupported: true });
+    const photo = { mime: 'image/jpeg', data: Buffer.alloc(2 * 1024 * 1024).toString('base64') };
+    older.call('agent.prompt', { paneId: 'p-agent', text: 'look', image: photo });
+    expect(await older.closed).toBe(1009);
+    expect(gateway!.typed('p-agent')).toEqual([]);
+  });
+
+  it('AGT-C9 a desktop with prompt-image advertises it in hello and takes a photo of several MiB', async () => {
+    gateway = await startMockGateway({ caps: ['read', 'notify', 'respond'] });
+    const { result: paired } = await pair(gateway);
+    const client = connect(gateway);
+    expect((await client.call('hello', { deviceToken: paired.deviceToken })).result.features).toEqual(['prompt-image']);
+    const photo = { mime: 'image/jpeg', data: Buffer.alloc(3 * 1024 * 1024).toString('base64') };
+    expect((await client.call('agent.prompt', { paneId: 'p-agent', text: 'look', image: photo })).result).toEqual({ ok: true, image: 'pasted' });
+  });
+
+  it('AGT-C9 an older desktop sends no features in hello', async () => {
+    gateway = await startMockGateway({ caps: ['read', 'notify', 'respond'], imagesUnsupported: true });
+    const { result: paired } = await pair(gateway);
+    const client = connect(gateway);
+    expect((await client.call('hello', { deviceToken: paired.deviceToken })).result.features).toBeUndefined();
+  });
+
+  it('AGT-C9 a frame over 1 MiB before hello closes the socket', async () => {
+    gateway = await startMockGateway({ caps: ['read', 'notify', 'respond'] });
+    const client = connect(gateway);
+    client.call('hello', { deviceToken: 'x'.repeat(2 * 1024 * 1024) });
+    expect(await client.closed).toBe(1009);
   });
 });

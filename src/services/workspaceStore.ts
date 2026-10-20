@@ -92,6 +92,13 @@ export function useConnectionStatus() {
   );
 }
 
+export function useFeatures() {
+  return useSyncExternalStore(
+    (listener) => OstiaRpc.addFeaturesListener(listener),
+    () => OstiaRpc.getFeatures(),
+  );
+}
+
 export function useCaps() {
   return useSyncExternalStore(
     (listener) => OstiaRpc.addCapsListener(listener),

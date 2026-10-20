@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Check, Monitor, Plus, X } from 'lucide-react-native';
-import { Group, IconTile, ListRow, TILE_INSET, tap, NO_SCROLL_BARS } from '../components/ui';
+import { Group, IconTile, ListRow, TILE_INSET, NO_SCROLL_BARS } from '../components/ui';
 import { DesktopList, EMPTY_DESKTOPS } from '../model/desktops';
 import { routeLabel } from '../model/connectionInfo';
 import { ScreenProps } from '../navigation';
@@ -54,7 +54,7 @@ export function DesktopsScreen({ navigation, onEmpty }: ScreenProps<'Desktops'> 
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${desktop.desktopName}`}
                   hitSlop={8}
-                  onPress={() => (tap(), remove(desktop.deviceId, desktop.desktopName))}
+                  onPress={() => remove(desktop.deviceId, desktop.desktopName)}
                   style={styles.remove}
                 >
                   <X size={16} color={colors.dim} strokeWidth={2.25} />
