@@ -118,11 +118,11 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 40,
-    maxHeight: 140,
-    paddingVertical: 9,
+    minHeight: 34,
+    maxHeight: 120,
+    paddingVertical: 6,
     color: colors.fg,
     fontFamily: font.regular,
-    fontSize: 16,
+    fontSize: 14,
   },
 });

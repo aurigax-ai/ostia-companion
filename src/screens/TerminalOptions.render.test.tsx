@@ -4,18 +4,7 @@ import { render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TerminalScreen } from './TerminalScreen';
 
-jest.mock('expo-libghostty', () => {
-  const ReactActual = jest.requireActual<typeof import('react')>('react');
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    TerminalView: ReactActual.forwardRef((_props: object, ref: any) => {
-      ReactActual.useImperativeHandle(ref, () => ({ write: jest.fn(), writeText: jest.fn() }));
-      return <View />;
-    }),
-  };
-});
-
-const mockPrefs = { fontSize: 13, fitWhenWatching: true, keyRow: false, haptics: true };
+const mockPrefs = { fontSize: 13, keyRow: false, haptics: true };
 
 const mockRpc = {
   canInput: false,
@@ -31,14 +20,13 @@ jest.mock('../services/rpc', () => ({
       mockRpc.emit = listener;
       return () => {};
     },
-    attachPty: (_paneId: string, role: string) => {
+    attachPty: (paneId: string, role: string) => {
       if (mockRpc.attach === 'hang') return new Promise(() => {});
-      mockRpc.emit('pty.attached', { role, cols: 80, rows: 24, cursor: 0, dropped: false });
+      mockRpc.emit('pty.attached', { paneId, role, cols: 80, rows: 24, cursor: 0, dropped: false });
       return Promise.resolve({ role });
     },
     detachPty: () => Promise.resolve(),
     sendInput: jest.fn(),
-    sendResize: jest.fn(),
   },
 }));
 
@@ -74,7 +62,6 @@ async function renderTerminal() {
 test('SET-C8 a typing terminal shows no key row when the key row is off', async () => {
   mockRpc.canInput = true;
   mockRpc.attach = 'answer';
-  const { headerRight } = await renderTerminal();
-  expect(headerRight?.props.label).toBe('Done');
+  await renderTerminal();
   ['esc', 'tab', 'ctrl', '⏎'].forEach((key) => expect(screen.queryByText(key)).toBeNull());
 });

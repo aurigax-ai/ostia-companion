@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   boxes: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: space.xxl },
   box: {
     width: 34,
-    height: 52,
+    height: 44,
     borderRadius: radius.md,
     borderCurve: 'continuous',
     backgroundColor: colors.surface,
@@ -100,8 +100,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   boxCurrent: { borderColor: colors.brand, backgroundColor: colors.surfaceHigh },
-  char: { fontFamily: font.monoSemibold, fontSize: 22, lineHeight: 28, color: colors.fg },
-  dash: { fontFamily: font.mono, fontSize: 22, color: colors.dim },
+  char: { fontFamily: font.monoSemibold, fontSize: 18, lineHeight: 24, color: colors.fg },
+  dash: { fontFamily: font.mono, fontSize: 18, color: colors.dim },
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, color: 'transparent', opacity: 0.02 },
   hint: { textAlign: 'center', marginTop: space.lg },
 });

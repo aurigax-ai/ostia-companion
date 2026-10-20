@@ -42,7 +42,6 @@ const ALERTS: { key: keyof AlertPrefs; title: string }[] = [
 ];
 
 const TOGGLES: { key: keyof TerminalPrefs; title: string; subtitle?: string }[] = [
-  { key: 'fitWhenWatching', title: 'Fit desktop width when watching' },
   { key: 'keyRow', title: 'Key row' },
   { key: 'haptics', title: 'Haptics', subtitle: 'Buzz when pairing is approved or fails' },
 ];

@@ -22,9 +22,3 @@ minimumReleaseAgeExclude:
 
 overrides:
   react-dom: 19.2.3
-
-allowBuilds:
-  expo-libghostty: true
-
-patchedDependencies:
-  expo-libghostty@0.8.1: patches/expo-libghostty@0.8.1.patch

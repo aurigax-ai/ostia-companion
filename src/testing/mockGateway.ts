@@ -8,7 +8,7 @@ import { join, posix } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { Pane, SessionState } from '../model/workspaces.ts';
 import { checkCode } from '../services/pairCheck.ts';
-import { agentPromptScreen, demoScenario, PROMPT_OPTIONS, type Scenario, shellScreen } from './mockScenario.ts';
+import { agentPromptScreen, demoScenario, PROMPT_OPTIONS, type Scenario, SHELL_PROMPT, shellScreen, VIM_SCREEN } from './mockScenario.ts';
 
 export type MockCap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
 export type MockDecision = 'approve' | 'deny' | 'never';
@@ -77,6 +77,7 @@ export interface MockGateway {
   setCaps: (deviceId: string, caps: MockCap[]) => void;
   updatePane: (paneId: string, patch: Partial<Pane>) => void;
   setSessionState: (sessionId: string, state: SessionState) => void;
+  resizePane: (paneId: string, cols: number, rows: number) => void;
   typed: (paneId: string) => string[];
   pasted: (paneId: string) => { mime: string; bytes: number }[];
   opened: string[];
@@ -238,6 +239,24 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const checkCodes: string[] = [];
   const connections = new Set<Connection>();
   const output = new Map<string, string>();
+  const sizes = new Map<string, { cols: number; rows: number }>();
+  const lineBuffers = new Map<string, string>();
+  const vimPanes = new Set<string>();
+  const sizeOf = (paneId: string) => sizes.get(paneId) ?? { cols: 64, rows: 30 };
+  const holds = new Map<string, { holder: Connection; desktop: { cols: number; rows: number } }>();
+  const setSize = (paneId: string, cols: number, rows: number) => {
+    const before = sizeOf(paneId);
+    if (before.cols === cols && before.rows === rows) return;
+    sizes.set(paneId, { cols, rows });
+    const frame = JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'pty.size', payload: { paneId, cols, rows } } });
+    connections.forEach((c) => c.attached === paneId && c.socket.send(frame));
+  };
+  const release = (connection: Connection, paneId: string) => {
+    const hold = holds.get(paneId);
+    if (hold?.holder !== connection) return;
+    holds.delete(paneId);
+    setSize(paneId, hold.desktop.cols, hold.desktop.rows);
+  };
   const typed = new Map<string, string[]>();
   const opened: string[] = [];
   const agentStarts = new Map<string, number[]>();
@@ -393,6 +412,39 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       socket.send(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message, ...(data ? { data } : {}) } }));
     const has = (cap: MockCap) => connection.device?.caps.includes(cap) ?? false;
 
+    const handleShell = (paneId: string, text: string) => {
+      if (vimPanes.has(paneId)) {
+        if (!text.includes('\r')) return;
+        vimPanes.delete(paneId);
+        return writePane(paneId, `\x1b[?1049l\x1b]133;D;0\x07${SHELL_PROMPT}`);
+      }
+      let line = lineBuffers.get(paneId) ?? '';
+      for (const char of text) {
+        if (char === '\x7f') {
+          if (line) writePane(paneId, '\b \b');
+          line = line.slice(0, -1);
+        } else if (char === '\r') {
+          lineBuffers.set(paneId, '');
+          return runShellLine(paneId, line);
+        } else if (char >= ' ') {
+          line += char;
+          writePane(paneId, char);
+        }
+      }
+      lineBuffers.set(paneId, line);
+    };
+
+    const runShellLine = (paneId: string, line: string) => {
+      const command = line.trim();
+      if (command === 'vim' || command.startsWith('vim ')) {
+        vimPanes.add(paneId);
+        return writePane(paneId, `\r\n\x1b]133;C\x07${VIM_SCREEN}`);
+      }
+      const output = command === '' ? '' : command.startsWith('echo ') ? `${command.slice(5)}\r\n` : `zsh: command not found: ${command.split(' ')[0]}\r\n`;
+      const exitCode = command === '' || command.startsWith('echo ') ? 0 : 127;
+      writePane(paneId, `\r\n\x1b]133;C\x07${output}\x1b]133;D;${exitCode}\x07${SHELL_PROMPT}`);
+    };
+
     const handleInput = (text: string) => {
       const paneId = connection.attached;
       if (!paneId) return;
@@ -406,6 +458,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         updatePane(paneId, { agentState: 'working', agentMessage: undefined });
         return setSessionState(pane.sessionId, 'working');
       }
+      if (!pane.agent) return handleShell(paneId, text);
       const echoed = text.replace(/\r/g, '\r\n').replace(/\x7f/g, '\b \b').replace(/\x03/g, '^C\r\n');
       writePane(paneId, echoed);
     };
@@ -474,7 +527,8 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       }
       if (isBinary) {
         const type = data[0];
-        if (type !== 0x02 && type !== 0x03) return;
+        if (type === 0x03) return fail(null, INVALID_PARAMS, 'resize-not-supported');
+        if (type !== 0x02) return;
         if (connection.role !== 'owner' || !has('input')) return fail(null, NEEDS_ELEVATION, 'needs-elevation', { cap: 'input' });
         if (type === 0x02) handleInput(data.subarray(1).toString('utf8'));
         return;
@@ -677,9 +731,25 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         const since = Math.max(0, Math.min(Number(params.sinceCursor) || 0, history.length));
         const replay = history.slice(since);
         if (replay) socket.send(Buffer.concat([Buffer.from([0x01]), Buffer.from(replay, 'utf8')]));
-        return respond(id, { cursor: history.length, dropped: false, cols: 64, rows: 30, role: connection.role });
+        return respond(id, { cursor: history.length, dropped: false, ...sizeOf(pane.paneId), role: connection.role });
+      }
+      if (method === 'pty.hold' || method === 'pty.release') {
+        if (!has('input')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'input' });
+        if (connection.attached !== params.paneId) return fail(id, INVALID_PARAMS, 'not-attached');
+        if (method === 'pty.release') {
+          release(connection, params.paneId);
+          return respond(id, { ok: true });
+        }
+        const valid = (n: unknown) => Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 1000;
+        if (!valid(params.cols) || !valid(params.rows)) return fail(id, INVALID_PARAMS, 'bad-size');
+        const current = holds.get(params.paneId);
+        if (current && current.holder !== connection) return fail(id, INVALID_PARAMS, 'held-by-other');
+        holds.set(params.paneId, { holder: connection, desktop: current?.desktop ?? sizeOf(params.paneId) });
+        setSize(params.paneId, params.cols, params.rows);
+        return respond(id, { ok: true, cols: params.cols, rows: params.rows });
       }
       if (method === 'pty.detach') {
+        if (connection.attached) release(connection, connection.attached);
         connection.attached = null;
         return respond(id, {});
       }
@@ -687,6 +757,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     });
 
     socket.on('close', () => {
+      if (connection.attached) release(connection, connection.attached);
       clearTimeout(helloTimer);
       connections.delete(connection);
       if (connection.screen) {
@@ -721,6 +792,10 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       const [device] = devices.splice(index, 1);
       saveDevices();
       connections.forEach((c) => c.device === device && c.socket.close(CLOSE_REVOKED, 'revoked'));
+    },
+    resizePane: (paneId, cols, rows) => {
+      holds.delete(paneId);
+      setSize(paneId, cols, rows);
     },
     setCaps: (deviceId, next) => {
       const device = devices.find((d) => d.deviceId === deviceId);

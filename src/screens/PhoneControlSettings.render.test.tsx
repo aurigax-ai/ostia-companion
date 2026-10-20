@@ -36,7 +36,7 @@ jest.mock('../services/workspaceStore', () => ({
   }),
 }));
 jest.mock('../services/prefsStore', () => {
-  const prefs = { fontSize: 13, fitWhenWatching: true, keyRow: true, haptics: false };
+  const prefs = { fontSize: 13, keyRow: true, haptics: false };
   return { usePrefs: () => prefs, getPrefs: () => prefs, setPrefs: jest.fn() };
 });
 jest.mock('../services/connectionLog', () => ({ connectionLogText: () => '' }));

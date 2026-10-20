@@ -61,8 +61,8 @@ export function RequestSheet() {
             />
           )}
           <View style={styles.actions}>
-            <Button label="Deny" variant="tonal" onPress={denyRequest} style={styles.action} />
-            <Button label="Allow" disabled={!service} onPress={() => void allowRequest({ level, limit })} style={styles.action} />
+            <Button label="Deny" variant="tonal" compact onPress={denyRequest} />
+            <Button label="Allow" compact disabled={!service} onPress={() => void allowRequest({ level, limit })} />
           </View>
         </View>
       ) : null}
@@ -72,11 +72,10 @@ export function RequestSheet() {
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: space.xs, gap: space.xs },
-  reason: { marginTop: space.lg, padding: space.md, borderRadius: radius.md, backgroundColor: colors.surfaceHigh },
+  reason: { marginTop: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: colors.surfaceHigh },
   reasonText: { marginTop: space.xs },
-  label: { marginTop: space.lg, marginBottom: space.sm, color: colors.muted },
-  note: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.lg },
+  label: { marginTop: space.md, marginBottom: space.xs, color: colors.muted },
+  note: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md },
   noteText: { flex: 1 },
-  actions: { flexDirection: 'row', gap: space.md, marginTop: space.xl },
-  action: { flex: 1 },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm, marginTop: space.lg },
 });
