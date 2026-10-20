@@ -2,18 +2,45 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopAddress } from '../model/rediscovery';
 import { pair } from '../testing/contractClient';
 import { startMockGateway, type MockGateway } from '../testing/mockGateway';
-import { attempts, trusted } from '../testing/pinnedSocketFake';
+import { attempts, behavior, lateEvent, listenerCount, nativeModule, reset, trusted, emitter } from '../testing/nativeFake';
 import type { ConnectionStatus } from './rpc';
 
 const store = vi.hoisted(() => new Map<string, string>());
+const appState = vi.hoisted(() => {
+  const handlers: ((state: string) => void)[] = [];
+  return {
+    currentState: 'active',
+    addEventListener: (_: string, handler: (state: string) => void) => void handlers.push(handler),
+    emit(state: string) {
+      appState.currentState = state;
+      handlers.forEach((handler) => handler(state));
+    },
+  };
+});
+const network = vi.hoisted(() => ({ type: 'WIFI' }));
 const discovery = vi.hoisted(() => ({ routes: [] as { host: string; port: number }[], calls: 0 }));
 vi.mock('expo-secure-store', () => ({
-  setItemAsync: async (key: string, value: string) => void store.set(key, value),
-  getItemAsync: async (key: string) => store.get(key) ?? null,
-  deleteItemAsync: async (key: string) => void store.delete(key),
+  setItemAsync: async (key: string, value: string) => {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    store.set(key, value);
+  },
+  getItemAsync: async (key: string) => {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    return store.get(key) ?? null;
+  },
+  deleteItemAsync: async (key: string) => {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    store.delete(key);
+  },
 }));
-vi.mock('websocket-pinning', async () => import('../testing/pinnedSocketFake'));
-vi.mock('./lanDiscovery', () => ({
+vi.mock('expo-modules-core', async () => {
+  const fake = await import('../testing/nativeFake');
+  return { requireNativeModule: () => fake.nativeModule, EventEmitter: function () { return fake.emitter; } };
+});
+vi.mock('react-native', () => ({ AppState: appState }));
+vi.mock('expo-network', () => ({ getNetworkStateAsync: async () => ({ type: network.type }), NetworkStateType: { WIFI: 'WIFI' } }));
+vi.mock('./lanDiscovery', async () => ({
+  onWifi: async () => network.type === 'WIFI',
   discoverPairedRoutes: async () => {
     discovery.calls++;
     return discovery.routes;
@@ -21,7 +48,9 @@ vi.mock('./lanDiscovery', () => ({
 }));
 
 const { OstiaRpc } = await import('./rpc');
-const { getPairingData, savePairingData } = await import('./storage');
+const { forgetDesktop, getPairingData, loadDesktops, saveRoute, savePairingData } = await import('./storage');
+const { timing } = await import('../model/reconnectPolicy');
+const defaults = { ...timing };
 
 const gateways: MockGateway[] = [];
 const seen: ConnectionStatus[] = [];
@@ -59,11 +88,13 @@ const DEAD_PORT = 9;
 
 beforeEach(() => {
   store.clear();
-  attempts.length = 0;
-  trusted.length = 0;
+  reset();
+  network.type = 'WIFI';
+  appState.currentState = 'active';
   seen.length = 0;
   discovery.routes = [];
   discovery.calls = 0;
+  Object.assign(timing, defaults);
   off = OstiaRpc.addStatusListener((status) => seen.push(status));
 });
 
@@ -203,5 +234,116 @@ describe('pairing again (contract v1.10 §4)', () => {
     await connected();
     gw.revoke(data.deviceId);
     await vi.waitFor(() => expect(OstiaRpc.getStatus()).toBe('revoked'));
+  });
+});
+
+describe('a stale native event (review 1)', () => {
+  it('RDS-S1 ignores an earlier socket\'s open, so the live candidate is not taken as opened and gets no hello', async () => {
+    const gw = await desktop();
+    behavior.silent.add(`127.0.0.1:${DEAD_PORT}`);
+    OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT }));
+    await vi.waitFor(() => expect(attempts).toHaveLength(1));
+    OstiaRpc.retry();
+    await vi.waitFor(() => expect(attempts).toHaveLength(2));
+    lateEvent('onOpen', attempts[0].id);
+    lateEvent('onClose', attempts[0].id, { code: 1006, reason: 'late' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(attempts[1].sent).toEqual([]);
+    expect(OstiaRpc.getStatus()).toBe('connecting');
+    expect(attempts).toHaveLength(2);
+  });
+});
+
+describe('a candidate that never answers (review 2)', () => {
+  it('RDS-D1 moves on when a handshake failure reports only onError', async () => {
+    const gw = await desktop();
+    behavior.errorOnly.add(`127.0.0.1:${DEAD_PORT}`);
+    OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT, addresses: [lan(gw.port)] }));
+    await connected();
+    expect(urls()).toEqual([at(DEAD_PORT), at(gw.port)]);
+  });
+
+  it('RDS-D2 gives up on a silent candidate after the deadline and tries the next', async () => {
+    timing.candidateMs = 100;
+    const gw = await desktop();
+    behavior.silent.add(`127.0.0.1:${DEAD_PORT}`);
+    OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT, addresses: [lan(gw.port)] }));
+    await connected();
+    expect(urls()).toEqual([at(DEAD_PORT), at(gw.port)]);
+  });
+});
+
+describe('saving while the list changes (review 3)', () => {
+  const route = { gatewayHost: '10.0.0.9', gatewayPort: 1, addresses: [] };
+  const later = (ms: number, run: () => Promise<unknown>) => new Promise((resolve) => setTimeout(resolve, ms)).then(run);
+
+  it('RDS-L1 does not bring back a desktop forgotten while its route is being saved', async () => {
+    const a = await desktop({ name: 'A desktop' });
+    const b = await desktop({ name: 'B desktop' });
+    for (let offset = 0; offset <= 8; offset++) {
+      store.clear();
+      const first = await pairedWith(a);
+      await pairedWith(b, { deviceId: 'dev_other' });
+      await Promise.all([forgetDesktop(first.deviceId), later(offset, () => saveRoute(first.deviceId, route))]);
+      expect((await loadDesktops()).desktops.map((d) => d.deviceId), `offset ${offset}`).toEqual(['dev_other']);
+    }
+  });
+
+  it('RDS-L2 does not drop a desktop paired while its route is being saved', async () => {
+    const a = await desktop({ name: 'A desktop' });
+    const b = await desktop({ name: 'B desktop' });
+    const { result } = await pair(b);
+    for (let offset = 0; offset <= 8; offset++) {
+      store.clear();
+      const first = await pairedWith(a);
+      const second = { ...first, deviceId: 'dev_other', deviceToken: result.deviceToken, pinnedFingerprint: b.fingerprint };
+      await Promise.all([savePairingData(second), later(offset, () => saveRoute(first.deviceId, route))]);
+      expect((await loadDesktops()).desktops.map((d) => d.deviceId).sort(), `offset ${offset}`).toEqual([first.deviceId, 'dev_other'].sort());
+    }
+  });
+});
+
+describe('retrying without wasting the battery (review 4)', () => {
+  it('RDS-B1 scans the LAN again only after its own, longer backoff', async () => {
+    const gw = await desktop();
+    OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT }));
+    await vi.waitFor(() => expect(discovery.calls).toBe(1));
+    await vi.waitFor(() => expect(attempts.length).toBeGreaterThanOrEqual(2), { timeout: 3000 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(discovery.calls).toBe(1);
+  });
+
+  it('RDS-B2 does not scan when the phone is not on Wi-Fi', async () => {
+    network.type = 'CELLULAR';
+    const gw = await desktop();
+    OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT }));
+    await vi.waitFor(() => expect(OstiaRpc.getStatus()).toBe('disconnected'));
+    expect(discovery.calls).toBe(0);
+  });
+
+  it('RDS-B3 stops retrying while the app is in the background, and tries again when it returns', async () => {
+    const gw = await desktop();
+    OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT }));
+    await vi.waitFor(() => expect(OstiaRpc.getStatus()).toBe('disconnected'));
+    appState.emit('background');
+    OstiaRpc.retry();
+    await vi.waitFor(() => expect(OstiaRpc.getStatus()).toBe('disconnected'));
+    const tried = attempts.length;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(attempts).toHaveLength(tried);
+    appState.emit('active');
+    await vi.waitFor(() => expect(attempts.length).toBeGreaterThan(tried));
+  });
+});
+
+describe('closing a socket that was open (review 6)', () => {
+  it('RDS-C1 releases the listeners of a socket that closed after it opened', async () => {
+    const gw = await desktop();
+    OstiaRpc.initialize(await pairedWith(gw));
+    await connected();
+    expect(listenerCount()).toBeGreaterThan(0);
+    await gw.move();
+    await vi.waitFor(() => expect(OstiaRpc.getStatus()).toBe('disconnected'));
+    expect(listenerCount()).toBe(0);
   });
 });
