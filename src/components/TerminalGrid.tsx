@@ -1,23 +1,53 @@
-import React, { useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, LayoutChangeEvent, PixelRatio, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { DEFAULT_BG, DEFAULT_FG, Line, TerminalCopy } from '../model/terminalCopy';
-import {
-  Box,
-  LINE_HEIGHT,
-  MONO_ADVANCE,
-  Offset,
-  clampOffset,
-  clampZoom,
-  fitToBox,
-  fitToWidth,
-  gridBox,
-  zoomAbout,
-} from '../model/terminalFit';
+import { DEFAULT_BG, DEFAULT_FG, Line, Span, TerminalCopy } from '../model/terminalCopy';
+import { Box, LINE_HEIGHT, MONO_ADVANCE, clampZoom, fitToBox, fitToWidth } from '../model/terminalFit';
 import { colors, font } from '../theme';
 
-const ORIGIN: Offset = { x: 0, y: 0 };
 const ROW_SLACK = 6;
+const BOTTOM_SLACK_LINES = 1;
+
+function spanStyle(span: Span) {
+  return {
+    color: span.fg ?? DEFAULT_FG,
+    backgroundColor: span.bg,
+    fontFamily: span.bold ? font.monoSemibold : font.mono,
+    opacity: span.dim ? 0.6 : 1,
+    fontStyle: span.italic ? ('italic' as const) : ('normal' as const),
+    textDecorationLine: span.underline && span.strike ? ('underline line-through' as const) : span.underline ? ('underline' as const) : span.strike ? ('line-through' as const) : ('none' as const),
+  };
+}
+
+const PlainRows = memo(function PlainRows({ lines, fontSize, lineHeight, width }: { lines: Line[]; fontSize: number; lineHeight: number; width: number }) {
+  return (
+    <Text selectable testID="grid-text" style={{ width, fontFamily: font.mono, fontSize, lineHeight, color: DEFAULT_FG }}>
+      {lines.map((line, y) => (
+        <Text key={y}>
+          {y > 0 ? '\n' : ''}
+          {line.length === 0 ? ' ' : line.map((span, i) => <Text key={i} style={spanStyle(span)}>{span.text}</Text>)}
+        </Text>
+      ))}
+    </Text>
+  );
+});
+
+const PlacedRow = memo(function PlacedRow({ line, fontSize, lineHeight, rowHeight, cellWidth, width }: { line: Line; fontSize: number; lineHeight: number; rowHeight: number; cellWidth: number; width: number }) {
+  return (
+    <View style={{ width, height: rowHeight }} testID="grid-row">
+      {line.map((span, i) => (
+        <Text
+          key={i}
+          selectable
+          numberOfLines={1}
+          style={[{ position: 'absolute', left: (span.col ?? 0) * cellWidth, fontSize, lineHeight }, spanStyle(span)]}
+        >
+          {span.text}
+        </Text>
+      ))}
+    </View>
+  );
+});
 
 export function TerminalGrid({
   copy,
@@ -32,8 +62,14 @@ export function TerminalGrid({
 }) {
   const [view, setView] = useState<Box>({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState<Offset>(ORIGIN);
-  const start = useRef({ zoom: 1, offset: ORIGIN });
+  const [top, setTop] = useState(0);
+  const [origin, setOrigin] = useState({ x: 0, y: 0 });
+  const scroll = useRef({ x: 0, y: 0 });
+  const follow = useRef(true);
+  const tx = useRef(new Animated.Value(0)).current;
+  const ty = useRef(new Animated.Value(0)).current;
+  const pinchScale = useRef(new Animated.Value(1)).current;
+  const gestureStart = useRef({ x: 0, y: 0, zoom: 1 });
   const scale = 1 / PixelRatio.getFontScale();
 
   const onLayout = (event: LayoutChangeEvent) => {
@@ -44,71 +80,104 @@ export function TerminalGrid({
 
   const fit = fitMode === 'box' ? fitToBox(copy.cols, copy.rows, view) : fitToWidth(copy.cols, view.width);
   const fontSize = fit * zoom;
-  const content = gridBox(copy.cols, copy.rows, fontSize);
-  const shown = clampOffset(offset, content, view);
+  const cellWidth = MONO_ADVANCE * fontSize;
+  const lineHeight = LINE_HEIGHT * fontSize;
+  const contentWidth = copy.cols * cellWidth;
+  const total = copy.lineCount;
+  const contentHeight = total * lineHeight;
+  const maxX = Math.max(0, contentWidth - view.width);
+  const maxY = Math.max(0, contentHeight - view.height);
+  const rowsShown = Math.max(0, Math.min(Math.ceil(view.height / Math.max(lineHeight, 1)) + 2, total - top));
+  const dims = useRef({ maxX, maxY, lineHeight, total });
+  dims.current = { maxX, maxY, lineHeight, total };
+
+  const apply = (x: number, y: number) => {
+    const d = dims.current;
+    scroll.current = { x: Math.min(d.maxX, Math.max(0, x)), y: Math.min(d.maxY, Math.max(0, y)) };
+    follow.current = scroll.current.y >= d.maxY - d.lineHeight * BOTTOM_SLACK_LINES;
+    const line = Math.floor(scroll.current.y / Math.max(d.lineHeight, 1));
+    tx.setValue(-scroll.current.x);
+    ty.setValue(-(scroll.current.y - line * d.lineHeight));
+    setTop((current) => (current === line ? current : line));
+  };
+
+  useEffect(() => {
+    if (follow.current) apply(scroll.current.x, maxY);
+    else apply(scroll.current.x, scroll.current.y);
+  }, [version, maxY, maxX, lineHeight]);
 
   const pan = Gesture.Pan()
+    .withTestId('grid-pan')
     .runOnJS(true)
     .minDistance(8)
-    .onBegin(() => (start.current.offset = shown))
-    .onUpdate((event) => {
-      setOffset(clampOffset({ x: start.current.offset.x + event.translationX, y: start.current.offset.y + event.translationY }, content, view));
-    });
+    .onBegin(() => (gestureStart.current = { ...scroll.current, zoom }))
+    .onUpdate((event) => apply(gestureStart.current.x - event.translationX, gestureStart.current.y - event.translationY));
 
   const pinch = Gesture.Pinch()
+    .withTestId('grid-pinch')
     .runOnJS(true)
-    .onBegin(() => (start.current = { zoom, offset: shown }))
-    .onUpdate((event) => {
-      const next = clampZoom(start.current.zoom * event.scale);
-      const ratio = next / start.current.zoom;
-      const moved = zoomAbout(start.current.offset, { x: event.focalX, y: event.focalY }, ratio);
+    .onBegin((event) => {
+      gestureStart.current = { ...scroll.current, zoom };
+      setOrigin({ x: event.focalX, y: event.focalY });
+    })
+    .onUpdate((event) => pinchScale.setValue(clampZoom(gestureStart.current.zoom * event.scale) / gestureStart.current.zoom))
+    .onEnd((event) => {
+      const next = clampZoom(gestureStart.current.zoom * event.scale);
+      const ratio = next / gestureStart.current.zoom;
+      pinchScale.setValue(1);
+      const x = (gestureStart.current.x + event.focalX) * ratio - event.focalX;
+      const y = (gestureStart.current.y + event.focalY) * ratio - event.focalY;
       setZoom(next);
-      setOffset(clampOffset(moved, gridBox(copy.cols, copy.rows, fit * next), view));
+      const nextFont = fit * next;
+      const nextLine = LINE_HEIGHT * nextFont;
+      dims.current = {
+        maxX: Math.max(0, copy.cols * MONO_ADVANCE * nextFont - view.width),
+        maxY: Math.max(0, total * nextLine - view.height),
+        lineHeight: nextLine,
+        total,
+      };
+      apply(x, y);
     });
 
+  const lines = useMemo(() => copy.window(top, rowsShown), [copy, version, top, rowsShown, gridKey(copy)]);
+  const hasWide = lines.some((line) => line.some((span) => span.wide));
   const cursor = copy.cursor();
-  const cell = { width: MONO_ADVANCE * fontSize, height: LINE_HEIGHT * fontSize };
-  const lines = copy.screen();
-  void version;
+  const cursorRow = cursor.y - top;
+  const rowWidth = contentWidth + ROW_SLACK;
 
   return (
     <GestureDetector gesture={Gesture.Simultaneous(pan, pinch)}>
       <View style={styles.fill} onLayout={onLayout} testID="terminal-grid">
-        <Animated.View style={[styles.grid, { width: content.width, height: content.height, transform: [{ translateX: shown.x }, { translateY: shown.y }] }]}>
-          {lines.map((line, y) => (
-            <Row key={y} line={line} fontSize={fontSize * scale} lineHeight={cell.height * scale} width={content.width + ROW_SLACK} />
-          ))}
-          <View
-            pointerEvents="none"
-            style={[styles.cursor, { left: cursor.x * cell.width, top: cursor.y * cell.height, width: cell.width, height: cell.height }]}
-          />
+        <Animated.View
+          style={[
+            styles.grid,
+            {
+              width: rowWidth,
+              height: rowsShown * lineHeight,
+              transformOrigin: `${origin.x}px ${origin.y}px`,
+              transform: [{ translateX: tx }, { translateY: ty }, { scale: pinchScale }],
+            },
+          ]}
+        >
+          {hasWide ? (
+            lines.map((line, y) => <PlacedRow key={top + y} line={line} fontSize={fontSize * scale} lineHeight={lineHeight * scale} rowHeight={lineHeight} cellWidth={cellWidth} width={rowWidth} />)
+          ) : (
+            <PlainRows lines={lines} fontSize={fontSize * scale} lineHeight={lineHeight * scale} width={rowWidth} />
+          )}
+          {cursorRow >= 0 && cursorRow < rowsShown ? (
+            <View
+              pointerEvents="none"
+              style={[styles.cursor, { left: cursor.x * cellWidth, top: cursorRow * lineHeight, width: cellWidth, height: lineHeight }]}
+            />
+          ) : null}
         </Animated.View>
       </View>
     </GestureDetector>
   );
 }
 
-function Row({ line, fontSize, lineHeight, width }: { line: Line; fontSize: number; lineHeight: number; width: number }) {
-  return (
-    <Text testID="grid-row" numberOfLines={1} ellipsizeMode="clip" style={{ width, fontFamily: font.mono, fontSize, lineHeight, color: DEFAULT_FG }}>
-      {line.length === 0 ? ' ' : null}
-      {line.map((span, i) => (
-        <Text
-          key={i}
-          style={{
-            color: span.fg ?? DEFAULT_FG,
-            backgroundColor: span.bg,
-            fontFamily: span.bold ? font.monoSemibold : font.mono,
-            opacity: span.dim ? 0.6 : 1,
-            fontStyle: span.italic ? 'italic' : 'normal',
-            textDecorationLine: span.underline ? 'underline' : 'none',
-          }}
-        >
-          {span.text}
-        </Text>
-      ))}
-    </Text>
-  );
+function gridKey(copy: TerminalCopy): number {
+  return copy.cols * 1000 + copy.rows;
 }
 
 const styles = StyleSheet.create({

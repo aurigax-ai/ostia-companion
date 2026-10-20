@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyRowEvent, KeyRowState, RowKey } from '../model/terminalKeys';
 import { colors, font, radius, space, touch } from '../theme';
@@ -10,6 +10,8 @@ const KEYS: { key: RowKey; label: string }[] = [
   { key: 'right', label: '→' },
   { key: 'enter', label: '⏎' },
 ];
+
+const HEIGHT = 32;
 
 export function KeyBar({
   state,
@@ -63,31 +65,49 @@ function KeyButton({
   );
 }
 
-export function RawKeyboard({ onText, onBackspace, onEnter }: { onText: (text: string) => void; onBackspace: () => void; onEnter: () => void }) {
+export function RawKeyboard({
+  onText,
+  onBackspace,
+  onEnter,
+}: {
+  onText: (text: string) => void;
+  onBackspace: () => void;
+  onEnter: () => void;
+}) {
   const [value, setValue] = useState('');
+  const latest = useRef('');
+  const commit = () => {
+    const text = latest.current;
+    latest.current = '';
+    setValue('');
+    if (text) onText(text);
+  };
   return (
     <TextInput
       autoFocus
+      multiline
       autoCapitalize="none"
       autoCorrect={false}
       value={value}
       accessibilityLabel="Type to the terminal"
-      placeholder="Type to the terminal"
+      placeholder="Type, then ⏎ to send"
       placeholderTextColor={colors.dim}
       cursorColor={colors.brand}
       style={styles.raw}
       onChangeText={(text) => {
-        if (text) onText(text);
-        setValue('');
+        latest.current = text;
+        setValue(text);
       }}
-      onKeyPress={({ nativeEvent }) => nativeEvent.key === 'Backspace' && onBackspace()}
-      onSubmitEditing={onEnter}
+      onKeyPress={({ nativeEvent }) => nativeEvent.key === 'Backspace' && latest.current === '' && onBackspace()}
+      onEndEditing={commit}
+      onSubmitEditing={() => {
+        commit();
+        onEnter();
+      }}
       submitBehavior="submit"
     />
   );
 }
-
-const HEIGHT = 32;
 
 const styles = StyleSheet.create({
   bar: {
@@ -111,10 +131,12 @@ const styles = StyleSheet.create({
   keyActive: { backgroundColor: colors.brandSoft },
   label: { fontFamily: font.monoSemibold, fontSize: 12, lineHeight: 16, color: colors.fg },
   raw: {
-    height: 36,
+    minHeight: 36,
+    maxHeight: 96,
     marginHorizontal: space.gutter,
     marginTop: space.sm,
     paddingHorizontal: space.md,
+    paddingVertical: 8,
     borderRadius: radius.sm,
     backgroundColor: colors.bgSunken,
     color: colors.fg,

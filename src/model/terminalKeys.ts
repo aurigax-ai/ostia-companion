@@ -31,3 +31,11 @@ export function pressKeyRow(state: KeyRowState, event: KeyRowEvent): { state: Ke
   const [first, ...rest] = event.text;
   return { state: off, send: (controlForm(first) ?? first) + rest.join('') };
 }
+
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+
+export function encodeText(text: string, bracketed: boolean): string {
+  const body = text.replace(/\r\n|\n/g, '\r');
+  return bracketed && body.includes('\r') ? `${PASTE_START}${body}${PASTE_END}` : body;
+}

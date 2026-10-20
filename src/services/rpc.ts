@@ -58,6 +58,7 @@ class OstiaRpcClient {
   private requestedRole: Role = 'observer';
   private lastCursor = 0;
   private awaitingAttach = false;
+  private detaching: Promise<unknown> = Promise.resolve();
   private replayFrames: string[] = [];
 
   public initialize(pairingData: PairingData) {
@@ -250,7 +251,7 @@ class OstiaRpcClient {
 
   private handleBinaryFrame(base64Data: string) {
     const binary = atob(base64Data);
-    if (binary.length === 0 || binary.charCodeAt(0) !== 0x01) return;
+    if (binary.length === 0 || binary.charCodeAt(0) !== 0x01 || !this.activePaneId) return;
     const payload = binary.substring(1);
 
     if (this.awaitingAttach) {
@@ -288,6 +289,9 @@ class OstiaRpcClient {
   }
 
   public async attachPty(paneId: string, role: Role): Promise<AttachResult> {
+    await this.detaching;
+    const previous = this.activePaneId;
+    if (previous && previous !== paneId && this.status === 'connected') await this.detachPty(previous).catch(() => {});
     const sinceCursor = paneId === this.activePaneId ? this.lastCursor : 0;
     this.activePaneId = paneId;
     this.requestedRole = role;
@@ -300,7 +304,7 @@ class OstiaRpcClient {
       this.awaitingAttach = false;
       this.replayFrames = [];
       this.lastCursor = result.cursor;
-      this.emit('pty.attached', result);
+      this.emit('pty.attached', { ...result, paneId });
       replay.forEach((frame) => this.writePty(frame));
       return result;
     } catch (err) {
@@ -314,7 +318,9 @@ class OstiaRpcClient {
     if (this.activePaneId !== paneId) return;
     this.activePaneId = null;
     this.lastCursor = 0;
-    if (this.status === 'connected') await this.call('pty.detach', { paneId });
+    if (this.status !== 'connected') return;
+    this.detaching = this.call('pty.detach', { paneId }).catch(() => {});
+    await this.detaching;
   }
 
   public holdPty(paneId: string, cols: number, rows: number): Promise<{ ok: true; cols: number; rows: number }> {
