@@ -1,5 +1,9 @@
-# Ostia Companion — Network Contract (v1.8, contract-first)
+# Ostia Companion — Network Contract (v1.10, contract-first)
 
+> **v1.10 (2026-10-20)** lets a paired phone find the desktop again after its address changes, without pairing again. `hello` carries `addresses`, the event `addresses.changed` replaces that list, and the desktop announces `_ostia._tcp` with TXT `v=1`, `mode=paired`, `port` while remote access is on with a LAN bind. The phone tries the last address that worked, then the saved list, then LAN discovery, and sends the token only on a connection whose certificate matches its pin. Additive. See §4, §7 and §11. Source: ostia #1257, #1258.
+
+> **v1.12 (2026-10-20)** adds the agent stream: `agent.stream.open {paneId, turns?}` / `agent.stream.close {paneId}` (`read`) and the `agent.stream` event `{paneId, seq, backfill, events}` with one event shape for Claude, Codex and pi (`turn.started`, `turn.ended`, `prompt`, `text`, `tool`, `tool.result`, `edit`, `plan`, `session`, `ask`, `ask.resolved`, `live`, `ended`); a large event is split with `append: true` and the phone joins the pieces by type and id. Content is sent in full. The phone's chat reads it instead of `turn.list`/`turn.output`. The full text is the vault spec `specs/phone-control/agent-stream-contract`. Additive.
+>
 > **v1.9 (2026-10-19)** lets an agent ask for the phone screen (`screen.requested` carries the request's id, the asking agent and its reason; the phone answers `screen.decline` when it will not share; `screen.start` names the request it answers), lets the phone read an agent's conversation as turns (`turn.list`, `turn.output`) and the human's own snippets (`snippet.list`), and adds the Phone workspace (`hello`'s `phoneWorkspace`, `session.list`'s `phone`, `agent.start` without a workspace). Turns and snippets are as merged on the desktop (ostia #1237, #1239); the Phone workspace follows the shapes agreed in ostia #1246, not merged yet. Additive. See §7 and §11.
 
 > **v1.8 (2026-10-19)** adds the phone screen: a phone whose human started a session opens a second socket and turns it into a **screen link** (`screen.start`); on it the desktop sends requests to the phone (`phone.capture`, `phone.stream`, `phone.tap`, …) and the phone sends screen frames (`0x10`) and `screen.state` events. The event `screen.requested` lets the desktop ask the phone's human to start one. `agent.prompt` now reads back that the agent started a turn. `agent.start` lets the phone start claude or codex with its text in a new tab of a workspace. Additive: a v1.7 phone never opens a link. See "Phone screen (v1.8)" in §7 and §11.
@@ -117,6 +121,8 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
     "params": { "deviceToken": "OPAQUE-BEARER", "client": "ostia-companion/1.0" } }
   ```
   - Success → `{ "result": { "deviceId": "dev_...", "caps": ["read","notify"], "desktop": { "name": "...", "version": "..." } } }`. From v1.9 the result also carries `phoneWorkspace: { set, agent }` when the desktop has a Phone workspace setting: `set` is true while its folder is set, opening new phone sessions there is on, and the folder passes the desktop's check; `agent` is the default agent (`"claude"`\|`"codex"`). The result carries `features: ["prompt-image"]` when the desktop takes an image with `agent.prompt` and frames up to 16 MiB; without it the desktop closes any frame over 1 MiB, so the phone offers no image and says "This desktop can't take images yet".
+  - From v1.10 the result also carries `addresses: [{ kind: "tailnet"\|"phone"\|"lan", host, port }]`, best first (tailnet name, tailnet IPv4, phone address, LAN address), `[]` on a loopback bind with no tunnel. It is sent only after the token passed. The phone saves it per desktop and keeps what it saved when a desktop sends none.
+  - **Reconnect order (v1.10):** for a paired desktop the phone tries (1) the last address that worked, (2) the saved list in order, (3) LAN discovery: browse `_ostia._tcp`, take instances with TXT `v=1` and `mode=paired` (instances with `fp` are pairing announces and are ignored), resolve each to an IPv4 and the TXT `port`. For every candidate it opens TLS and compares the leaf certificate to the pin before sending a frame; a mismatch refuses that candidate (never re-pins, never sends the token) and the phone moves on. A match gets `hello {deviceToken}`; on success the saved list is replaced by `hello`'s `addresses` and the address is remembered. While the pin matches and the token is accepted the phone never asks to pair again; `4001` and `4003` still mean pairing again. When every candidate failed the desktop is unreachable now: the phone keeps the pin and token and retries with backoff.
   - Any method before a successful `hello` → error `-32001 unauthenticated`, connection closed.
 - The connection's capability set is derived from the device's grants (server-side). The client must treat `caps` as authoritative and hide/disable UI it lacks caps for.
 
@@ -246,6 +252,7 @@ All require a prior successful `hello`. Capability-gated as noted.
 | `session.state` | `read` | `{ sessionId, state: "idle"\|"working"\|"waiting"\|"done"\|"error" }` | any session state change (also sent alongside `agent.*`) |
 | `pane.state` | `read` | `{ paneId, generation, cwd?, running, blockCount, lastExitCode? }` | a terminal pane's cwd/running/blocks/exit code changes |
 | `artifact.changed` | `read` | `{ sessionId, path, change: "added"\|"changed"\|"removed" }` — `path` as in `fs.list`/`fs.read` with `root: "artifacts"` (`report.md`, `page/index.html`, `PAD.md`) | a file in that workspace's artifact folder was added, written (newer `mtime`) or removed |
+| `addresses.changed` | — (every authenticated socket) | `{ addresses }`, same shape and order as in `hello`, replaces the saved list as a whole | the desktop's address list changed while the gateway keeps running (v1.10) |
 | `caps.changed` | — (own device only) | `{ caps }` | the desktop user granted a cap (§5.1) |
 | `screen.requested` | `notify` | `{ sessionId, by: "desktop"\|"agent", requestId?, agent?, reason?, pane? }` | the human on the desktop (`by: "desktop"`) or an agent in that workspace (`by: "agent"`, with its name, its reason as plain text of at most 300 characters and its pane) asks this phone to share its screen (v1.8; `by: "agent"`, `requestId`, `agent`, `reason`, `pane` v1.9) |
 
@@ -403,6 +410,11 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.10 — 2026-10-20 (rediscovery)
+- **`hello`** gains `addresses`; **`addresses.changed`** event replaces it.
+- **LAN announce** for paired phones: `_ostia._tcp`, TXT `v=1`, `mode=paired`, `port`; the instance name is the desktop's random `adjective-noun` name.
+- **Reconnect order** and the pin rule in §4. The Android socket's connect timeout is 5 s so a dead address does not hold up the next.
 
 ### v1.9 — 2026-10-19 (an agent asks, turns, snippets, the Phone workspace)
 - **`screen.requested`** gains `by: "agent"`, `requestId`, `agent`, `reason` and `pane`.

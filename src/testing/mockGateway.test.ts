@@ -196,3 +196,50 @@ describe('mock gateway: connection (contract §4–§7)', () => {
     expect(await narrowed.closed).toBe(4004);
   });
 });
+
+describe('mock gateway: rediscovery (contract v1.10)', () => {
+  const lan = (port: number) => ({ kind: 'lan' as const, host: '127.0.0.1', port });
+
+  it('sends the address list in hello only after the token passed, and nothing from a v1.9 desktop', async () => {
+    const gw = await start({ addresses: [lan(8722)] });
+    const { result } = await pair(gw);
+    const stranger = connect(gw);
+    expect((await stranger.call('hello', { deviceToken: 'nope' })).error.code).toBe(-32001);
+    const phone = connect(gw);
+    expect((await phone.call('hello', { deviceToken: result.deviceToken })).result.addresses).toEqual([lan(8722)]);
+
+    const old = await startMockGateway();
+    const { result: oldResult } = await pair(old);
+    const oldPhone = connect(old);
+    expect((await oldPhone.call('hello', { deviceToken: oldResult.deviceToken })).result).not.toHaveProperty('addresses');
+    await old.close();
+  });
+
+  it('sends addresses.changed to every authenticated socket, whatever its caps', async () => {
+    const gw = await start({ caps: ['notify'] });
+    const { result } = await pair(gw);
+    const phone = connect(gw);
+    await phone.call('hello', { deviceToken: result.deviceToken });
+    const stranger = connect(gw);
+    await stranger.call('hello', { deviceToken: 'nope' }).catch(() => {});
+    gw.setAddresses([lan(9000)]);
+    await phone.settle();
+    expect(phone.unsolicited).toContainEqual({
+      jsonrpc: '2.0',
+      method: 'event',
+      params: { type: 'addresses.changed', payload: { addresses: [lan(9000)] } },
+    });
+    expect(stranger.unsolicited.filter((m) => m.method === 'event')).toEqual([]);
+  });
+
+  it('moves to another port with the same certificate, so the token still works there', async () => {
+    const gw = await start();
+    const { result } = await pair(gw);
+    const before = gw.port;
+    const moved = await gw.move();
+    expect(moved).not.toBe(before);
+    expect(gw.payload('127.0.0.1')).toMatchObject({ port: moved, fingerprint: gw.fingerprint });
+    const phone = connect(gw);
+    expect((await phone.call('hello', { deviceToken: result.deviceToken })).result.deviceId).toBe(result.deviceId);
+  });
+});
