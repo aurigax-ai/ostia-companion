@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopAddress } from '../model/rediscovery';
 import { pair } from '../testing/contractClient';
 import { startMockGateway, type MockGateway } from '../testing/mockGateway';
-import { attempts } from '../testing/pinnedSocketFake';
+import { attempts, trusted } from '../testing/pinnedSocketFake';
 import type { ConnectionStatus } from './rpc';
 
 const store = vi.hoisted(() => new Map<string, string>());
@@ -30,6 +30,7 @@ let off = () => {};
 async function desktop(options: Parameters<typeof startMockGateway>[0] = {}) {
   const gw = await startMockGateway(options);
   gateways.push(gw);
+  trusted.push(gw.certificate);
   return gw;
 }
 
@@ -59,6 +60,7 @@ const DEAD_PORT = 9;
 beforeEach(() => {
   store.clear();
   attempts.length = 0;
+  trusted.length = 0;
   seen.length = 0;
   discovery.routes = [];
   discovery.calls = 0;

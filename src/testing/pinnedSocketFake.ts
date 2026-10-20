@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { TLSSocket } from 'node:tls';
+import type { PeerCertificate } from 'node:tls';
 import WebSocket from 'ws';
 
 export interface Attempt {
@@ -9,6 +9,11 @@ export interface Attempt {
 }
 
 export const attempts: Attempt[] = [];
+export const trusted: string[] = [];
+
+function fingerprintOf(der: Buffer): string {
+  return `sha256/${createHash('sha256').update(der).digest('base64')}`;
+}
 
 interface Listeners {
   onOpen?: () => void;
@@ -25,13 +30,12 @@ export class PinnedWebSocket {
   constructor(url: string, fingerprint: string, listeners: Listeners) {
     this.attempt = { url, sent: [], opened: false };
     attempts.push(this.attempt);
-    this.socket = new WebSocket(url, { rejectUnauthorized: false });
+    this.socket = new WebSocket(url, {
+      ca: trusted,
+      checkServerIdentity: (_host: string, cert: PeerCertificate) =>
+        fingerprintOf(cert.raw) === fingerprint ? undefined : new Error('Certificate fingerprint mismatch'),
+    } as unknown as WebSocket.ClientOptions);
     this.socket.on('open', () => {
-      const der = ((this.socket as any)._socket as TLSSocket).getPeerCertificate().raw;
-      if (`sha256/${createHash('sha256').update(der).digest('base64')}` !== fingerprint) {
-        this.socket.terminate();
-        return this.fail(listeners, 'Certificate fingerprint mismatch');
-      }
       this.attempt.opened = true;
       if (!this.done) listeners.onOpen?.();
     });
