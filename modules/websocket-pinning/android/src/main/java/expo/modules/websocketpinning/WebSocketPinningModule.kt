@@ -22,6 +22,7 @@ class WebSocketPinningModule : Module() {
   private var client: OkHttpClient? = null
   private val postCalls = java.util.Collections.synchronizedSet(mutableSetOf<Call>())
   private var webSocket: WebSocket? = null
+  private var currentId: Int = 0
   private var expectedFingerprint: String? = null
 
   private fun createPinnedClient(fingerprint: String): OkHttpClient {
@@ -63,9 +64,12 @@ class WebSocketPinningModule : Module() {
 
     Events("onOpen", "onMessage", "onClose", "onError")
 
-    Function("connect") { url: String, fingerprint: String ->
+    Function("connect") { url: String, fingerprint: String, id: Int ->
+      currentId = id
       expectedFingerprint = fingerprint
-      val activeClient = createPinnedClient(fingerprint)
+      val activeClient = createPinnedClient(fingerprint).newBuilder()
+        .connectTimeout(CONNECT_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
       client = activeClient
 
       val request = Request.Builder().url(url).build()
@@ -73,34 +77,34 @@ class WebSocketPinningModule : Module() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
           Log.d("WebSocketPinning", "WebSocket onOpen: Connection successfully opened!")
           Handler(Looper.getMainLooper()).post {
-            sendEvent("onOpen", mapOf<String, Any>())
+            sendEvent("onOpen", mapOf("id" to id))
           }
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
           Handler(Looper.getMainLooper()).post {
-            sendEvent("onMessage", mapOf("type" to "text", "data" to text))
+            sendEvent("onMessage", mapOf("id" to id, "type" to "text", "data" to text))
           }
         }
 
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
           Handler(Looper.getMainLooper()).post {
-            sendEvent("onMessage", mapOf("type" to "binary", "data" to bytes.base64()))
+            sendEvent("onMessage", mapOf("id" to id, "type" to "binary", "data" to bytes.base64()))
           }
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
           Log.d("WebSocketPinning", "WebSocket onClosing: code=$code, reason=$reason")
           Handler(Looper.getMainLooper()).post {
-            sendEvent("onClose", mapOf("code" to code, "reason" to reason))
+            sendEvent("onClose", mapOf("id" to id, "code" to code, "reason" to reason))
           }
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
           Log.e("WebSocketPinning", "WebSocket onFailure: error=${t.message}", t)
           Handler(Looper.getMainLooper()).post {
-            sendEvent("onError", mapOf("message" to (t.message ?: "Connection failure")))
-            sendEvent("onClose", mapOf("code" to 1006, "reason" to (t.message ?: "Abnormal closure")))
+            sendEvent("onError", mapOf("id" to id, "message" to (t.message ?: "Connection failure")))
+            sendEvent("onClose", mapOf("id" to id, "code" to 1006, "reason" to (t.message ?: "Abnormal closure")))
           }
         }
       })
@@ -157,10 +161,11 @@ class WebSocketPinningModule : Module() {
       }
     }
 
-    Function("close") {
-      webSocket?.close(1000, "Normal closure")
+    Function("close") { id: Int ->
+      if (id == currentId) webSocket?.close(1000, "Normal closure")
     }
   }
 }
 
 private const val POST_TIMEOUT_SECONDS = 130L
+private const val CONNECT_TIMEOUT_SECONDS = 5L
