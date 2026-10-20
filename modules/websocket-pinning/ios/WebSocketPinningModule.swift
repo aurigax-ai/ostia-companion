@@ -8,26 +8,29 @@ public class WebSocketPinningModule: Module {
   private var postTasks = Set<URLSessionDataTask>()
   private let postLock = NSLock()
   private var expectedFingerprint: String?
+  private var currentId: Int = 0
 
   public func definition() -> ModuleDefinition {
     Name("WebSocketPinning")
 
     Events("onOpen", "onMessage", "onClose", "onError")
 
-    AsyncFunction("connect") { (urlString: String, fingerprint: String) in
+    AsyncFunction("connect") { (urlString: String, fingerprint: String, id: Int) in
       self.expectedFingerprint = fingerprint
+      self.currentId = id
       guard let url = URL(string: urlString) else {
-        self.sendEvent("onError", ["message": "Invalid URL"])
+        self.sendEvent("onError", ["id": id, "message": "Invalid URL"])
+        self.sendEvent("onClose", ["id": id, "code": 1006, "reason": "Invalid URL"])
         return
       }
 
       let configuration = URLSessionConfiguration.default
-      let delegate = WebSocketSessionDelegate(module: self, expectedFingerprint: fingerprint)
+      let delegate = WebSocketSessionDelegate(module: self, expectedFingerprint: fingerprint, id: id)
       self.urlSession = URLSession(configuration: configuration, delegate: delegate, delegateQueue: OperationQueue.main)
       
       self.webSocketTask = self.urlSession?.webSocketTask(with: url)
       self.webSocketTask?.resume()
-      self.receiveMessage()
+      self.receiveMessage(id)
     }
 
     AsyncFunction("post") { (urlString: String, bodyString: String, fingerprint: String, promise: Promise) in
@@ -44,7 +47,7 @@ public class WebSocketPinningModule: Module {
 
       let configuration = URLSessionConfiguration.default
       configuration.timeoutIntervalForRequest = 130
-      let delegate = WebSocketSessionDelegate(module: self, expectedFingerprint: fingerprint)
+      let delegate = WebSocketSessionDelegate(module: self, expectedFingerprint: fingerprint, id: 0)
       let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: OperationQueue.main)
       
       var task: URLSessionDataTask?
@@ -85,7 +88,7 @@ public class WebSocketPinningModule: Module {
       let messageObj = URLSessionWebSocketTask.Message.string(message)
       self.webSocketTask?.send(messageObj) { error in
         if let error = error {
-          self.sendEvent("onError", ["message": error.localizedDescription])
+          self.sendEvent("onError", ["id": self.currentId, "message": error.localizedDescription])
         }
       }
     }
@@ -95,34 +98,34 @@ public class WebSocketPinningModule: Module {
       let messageObj = URLSessionWebSocketTask.Message.data(data)
       self.webSocketTask?.send(messageObj) { error in
         if let error = error {
-          self.sendEvent("onError", ["message": error.localizedDescription])
+          self.sendEvent("onError", ["id": self.currentId, "message": error.localizedDescription])
         }
       }
     }
 
-    Function("close") {
-      self.webSocketTask?.cancel(with: .normalClosure, reason: nil)
+    Function("close") { (id: Int) in
+      if id == self.currentId { self.webSocketTask?.cancel(with: .normalClosure, reason: nil) }
     }
   }
 
-  private func receiveMessage() {
+  private func receiveMessage(_ id: Int) {
     webSocketTask?.receive { [weak self] result in
-      guard let self = self else { return }
+      guard let self = self, self.currentId == id else { return }
       switch result {
       case .success(let message):
         switch message {
         case .string(let text):
-          self.sendEvent("onMessage", ["type": "text", "data": text])
+          self.sendEvent("onMessage", ["id": id, "type": "text", "data": text])
         case .data(let data):
-          self.sendEvent("onMessage", ["type": "binary", "data": data.base64EncodedString()])
+          self.sendEvent("onMessage", ["id": id, "type": "binary", "data": data.base64EncodedString()])
         @unknown default:
           break
         }
-        self.receiveMessage()
+        self.receiveMessage(id)
       case .failure(let error):
         if self.webSocketTask?.state != .completed {
-          self.sendEvent("onError", ["message": error.localizedDescription])
-          self.sendEvent("onClose", ["code": 1006, "reason": error.localizedDescription])
+          self.sendEvent("onError", ["id": id, "message": error.localizedDescription])
+          self.sendEvent("onClose", ["id": id, "code": 1006, "reason": error.localizedDescription])
         }
       }
     }
@@ -132,19 +135,21 @@ public class WebSocketPinningModule: Module {
 class WebSocketSessionDelegate: NSObject, URLSessionWebSocketDelegate {
   private weak var module: WebSocketPinningModule?
   private let expectedFingerprint: String
+  private let id: Int
 
-  init(module: WebSocketPinningModule, expectedFingerprint: String) {
+  init(module: WebSocketPinningModule, expectedFingerprint: String, id: Int) {
     self.module = module
     self.expectedFingerprint = expectedFingerprint
+    self.id = id
   }
 
   func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocolName: String?) {
-    module?.sendEvent("onOpen", [:])
+    module?.sendEvent("onOpen", ["id": id])
   }
 
   func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
     let reasonStr = reason.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-    module?.sendEvent("onClose", ["code": closeCode.rawValue, "reason": reasonStr])
+    module?.sendEvent("onClose", ["id": id, "code": closeCode.rawValue, "reason": reasonStr])
   }
 
   func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
@@ -158,7 +163,8 @@ class WebSocketSessionDelegate: NSObject, URLSessionWebSocketDelegate {
       completionHandler(.useCredential, URLCredential(trust: serverTrust))
     } else {
       completionHandler(.cancelAuthenticationChallenge, nil)
-      module?.sendEvent("onError", ["message": "SSL Certificate Fingerprint Mismatch"])
+      module?.sendEvent("onError", ["id": id, "message": "SSL Certificate Fingerprint Mismatch"])
+      module?.sendEvent("onClose", ["id": id, "code": 1006, "reason": "SSL Certificate Fingerprint Mismatch"])
     }
   }
 
