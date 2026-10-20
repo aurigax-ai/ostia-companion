@@ -18,21 +18,23 @@ export function KeyBar({
   onEvent,
   onKeyboard,
   bottomInset,
+  compact,
 }: {
   state: KeyRowState;
   onEvent: (event: KeyRowEvent) => void;
   onKeyboard?: () => void;
   bottomInset: number;
+  compact?: boolean;
 }) {
   return (
-    <View style={[styles.bar, { paddingBottom: space.sm + bottomInset }]}>
-      <KeyButton label="esc" onPress={() => onEvent({ type: 'key', key: 'esc' })} />
-      <KeyButton label="tab" onPress={() => onEvent({ type: 'key', key: 'tab' })} />
-      <KeyButton label="ctrl" active={state.ctrl} onPress={() => onEvent({ type: 'ctrl' })} />
+    <View style={[styles.bar, compact ? [styles.barCompact, { paddingBottom: space.xs + Math.min(bottomInset, space.md) }] : { paddingBottom: space.sm + bottomInset }]}>
+      <KeyButton compact={compact} label="esc" onPress={() => onEvent({ type: 'key', key: 'esc' })} />
+      <KeyButton compact={compact} label="tab" onPress={() => onEvent({ type: 'key', key: 'tab' })} />
+      <KeyButton compact={compact} label="ctrl" active={state.ctrl} onPress={() => onEvent({ type: 'ctrl' })} />
       {KEYS.map(({ key, label }) => (
-        <KeyButton key={key} label={label} onPress={() => onEvent({ type: 'key', key })} />
+        <KeyButton key={key} compact={compact} label={label} onPress={() => onEvent({ type: 'key', key })} />
       ))}
-      {onKeyboard ? <KeyButton label="abc" accessibilityLabel="Keyboard" onPress={onKeyboard} /> : null}
+      {onKeyboard ? <KeyButton compact={compact} label="abc" accessibilityLabel="Keyboard" onPress={onKeyboard} /> : null}
     </View>
   );
 }
@@ -42,9 +44,11 @@ function KeyButton({
   active,
   onPress,
   accessibilityLabel,
+  compact,
 }: {
   label: string;
   active?: boolean;
+  compact?: boolean;
   onPress: () => void;
   accessibilityLabel?: string;
 }) {
@@ -56,7 +60,7 @@ function KeyButton({
       onPress={onPress}
       hitSlop={{ top: (touch - HEIGHT) / 2, bottom: (touch - HEIGHT) / 2 }}
       android_ripple={{ color: colors.ripple }}
-      style={({ pressed }) => [styles.key, pressed && Platform.OS === 'ios' && styles.keyPressed, active && styles.keyActive]}
+      style={({ pressed }) => [styles.key, compact && styles.keyCompact, pressed && Platform.OS === 'ios' && styles.keyPressed, active && styles.keyActive]}
     >
       <Text style={[styles.label, active && { color: colors.brand }]} numberOfLines={1}>
         {label}
@@ -127,6 +131,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceHigh,
     overflow: 'hidden',
   },
+  barCompact: { justifyContent: 'center', paddingTop: space.xs },
+  keyCompact: { flex: 0, flexGrow: 1, maxWidth: 72 },
   keyPressed: { backgroundColor: colors.surfacePressed },
   keyActive: { backgroundColor: colors.brandSoft },
   label: { fontFamily: font.monoSemibold, fontSize: 12, lineHeight: 16, color: colors.fg },

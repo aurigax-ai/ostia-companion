@@ -65,7 +65,7 @@ export function FullscreenTerminal({
         {canType ? (
           <>
             {keyboardOpen ? <RawKeyboard onText={onText} onBackspace={onBackspace} onEnter={onEnter} /> : null}
-            <KeyBar state={keyState} onEvent={onKey} onKeyboard={onKeyboard} bottomInset={insets.bottom} />
+            <KeyBar state={keyState} onEvent={onKey} onKeyboard={onKeyboard} bottomInset={insets.bottom} compact />
           </>
         ) : null}
       </View>
