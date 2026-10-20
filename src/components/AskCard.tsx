@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ask, AskChoice, detailPreview, needsConfirm, waitedFor } from '../model/asks';
-import { colors, font, radius, space, touch, type } from '../theme';
+import { colors, font, radius, space, type } from '../theme';
 import { Button, Card } from './ui';
 
 export function AskCard({
@@ -45,8 +45,7 @@ export function AskCard({
 
   const secondary = ask.choices.filter((choice) => choice.tone !== 'approve');
   const primary = ask.choices.filter((choice) => choice.tone === 'approve');
-  const choiceStyle = { ...styles.choice, ...(useWindowDimensions().fontScale > 1.3 ? styles.choiceStacked : null) };
-  const choiceButton = (choice: AskChoice, variant: 'filled' | 'tonal', inRow: boolean) => (
+  const choiceButton = (choice: AskChoice, variant: 'filled' | 'tonal') => (
     <Button
       key={choice.id}
       label={choice.label}
@@ -54,7 +53,7 @@ export function AskCard({
       loading={pending === choice.id}
       disabled={disabled}
       onPress={() => choose(choice)}
-      style={inRow ? choiceStyle : undefined}
+      compact
     />
   );
 
@@ -102,15 +101,9 @@ export function AskCard({
         </View>
       ) : null}
       <View style={styles.actions}>
-        {secondary.length > 0 || (compact && ask.allowText && onReply) ? (
-          <View style={styles.choiceRow}>
-            {secondary.map((choice) => choiceButton(choice, 'tonal', true))}
-            {compact && ask.allowText && onReply ? (
-              <Button label="Reply" variant="text" disabled={disabled} onPress={onReply} style={choiceStyle} />
-            ) : null}
-          </View>
-        ) : null}
-        {primary.map((choice) => choiceButton(choice, 'filled', false))}
+        {compact && ask.allowText && onReply ? <Button label="Reply" variant="text" compact disabled={disabled} onPress={onReply} /> : null}
+        {secondary.map((choice) => choiceButton(choice, 'tonal'))}
+        {primary.map((choice) => choiceButton(choice, 'filled'))}
       </View>
       {!canRespond ? (
         <Text style={[type.caption, styles.note]}>Turn on Respond for this phone in Settings › Remote.</Text>
@@ -138,18 +131,15 @@ const styles = StyleSheet.create({
   replyRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md },
   reply: {
     flex: 1,
-    minHeight: 40,
-    paddingHorizontal: space.lg,
+    minHeight: 36,
+    paddingHorizontal: space.md,
     borderRadius: radius.full,
     backgroundColor: colors.bgSunken,
     color: colors.fg,
     fontFamily: font.regular,
     fontSize: 14,
   },
-  actions: { gap: space.sm, marginTop: space.lg },
-  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  choice: { flexGrow: 1, flexBasis: '40%', minHeight: touch },
-  choiceStacked: { flexBasis: '100%' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: space.sm, marginTop: space.md },
   note: { marginTop: space.md },
   error: { marginTop: space.sm, color: colors.attn },
 });

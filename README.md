@@ -14,10 +14,9 @@ To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate p
    - **Android (Kotlin)**: Uses OkHttp and configures a custom `X509TrustManager` with `hostnameVerifier` to validate certificate fingerprints for both Rest API (`POST /pair`) and WebSocket connections.
 2. **Standard Cryptography**:
    - Uses `tweetnacl` polyfilled with `expo-crypto`'s secure native random generator to generate Ed25519 device keypairs and format them into the standard **Subject Public Key Info (SPKI)** format for the pairing payload.
-3. **Native Terminal Rendering (`expo-libghostty`)**:
-   - Ghostty's terminal core renders natively: Metal on iOS, libghostty-vt with a Canvas renderer on Android. Its keyboard accessory bar provides Esc, Tab, arrows and sticky Ctrl/Alt.
-   - Binary PTY frames (`0x01`) are captured by the native socket, their type byte stripped, and the Base64 payload written straight into the view. Keystrokes come back as Base64 and go out as `0x02` frames.
-   - Its `postinstall` downloads checksum-pinned native libraries, so `pnpm-workspace.yaml` allows its build script (`allowBuilds`).
+3. **Terminal copy (`src/model/terminalCopy.ts`)**:
+   - The phone never resizes a desktop pane (contract v1.11; it sends no `0x03` frame). `pty.attach` returns the pane's `cols` and `rows`; the phone sizes its own `@xterm/headless` emulator to that grid before the replay is applied, feeds it the binary PTY frames (`0x01`) and follows the `pty.size` event. Keystrokes go out as `0x02` frames.
+   - Shell panes open in Commands: one card per command from the OSC 133 marks in the stream, with its exit code and its output joined across the emulator's wrap flags so it reflows to the phone width, colours kept. A full-screen (alternate screen) program shows as a row that opens a sideways view of the desktop grid. Terminal draws the same copy fitted to the phone width, with pinch and pan.
 
 4. **Artifacts and file viewers (`src/components/viewers`)**:
    - Each workspace has an Artifacts screen: what its agents wrote for the human, newest first, with the Scratch Pad pinned and a dot on files that changed (`artifact.changed`). The phone only reads (`fs.list` / `fs.read` with `root: "artifacts"`, contract v1.7), and reads files over 256 KiB in slices.
@@ -38,7 +37,7 @@ To solve this securely and support **Trust-On-First-Use (TOFU) TLS certificate p
    - An agent (claude or codex) opens as a conversation (`ConversationScreen`): its turns from `turn.list` (contract v1.9), the prompt, one quiet line per step, the agent's last message and a summary; a command step whose output the desktop still keeps opens it through `turn.output`. Messages go through `agent.prompt`; the terminal is one tap away, and a desktop without turns opens the terminal instead. Shells always open the terminal.
    - Typing `/` in a composer lists Ostia's shortcuts, then the human's own snippets from `snippet.list`; a pick only fills the message.
    - When the desktop has a Phone workspace (`hello`'s `phoneWorkspace`), New chat talks to the Phone agent there and Chats pins it first.
-   - No list, scroll view, web view or terminal draws a scroll bar (`NO_SCROLL_BARS`; the Android terminal through `patches/expo-libghostty@0.8.1.patch`). Run the mock gateway with `MOCK_PHONE_WORKSPACE=s-dot` to try the Phone workspace.
+   - No list, scroll view, web view or terminal draws a scroll bar (`NO_SCROLL_BARS`). Run the mock gateway with `MOCK_PHONE_WORKSPACE=s-dot` to try the Phone workspace.
 
 ---
 

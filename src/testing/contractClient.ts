@@ -67,10 +67,12 @@ export function connect(gw: MockGateway) {
     return new Promise<any>((resolve) => pending.set(id, resolve));
   };
   const input = (text: string) => socket.send(Buffer.concat([Buffer.from([0x02]), Buffer.from(text)]));
+  const resize = (cols: number, rows: number) =>
+    socket.send(Buffer.concat([Buffer.from([0x03]), Buffer.from(JSON.stringify({ paneId: 'p-claude', cols, rows }))]));
   const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
   const serve = (handler: typeof serveRequest) => (serveRequest = handler);
   const notify = (type: string, payload: object) =>
     socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type, payload } }));
-  return { socket, call, input, output, unsolicited, closed, settle, serve, notify };
+  return { socket, call, input, resize, output, unsolicited, closed, settle, serve, notify };
 }
 

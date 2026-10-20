@@ -36,13 +36,13 @@ export const elevation = {
 };
 
 export const type = {
-  title: { fontFamily: font.semibold, fontSize: 22, lineHeight: 28, letterSpacing: -0.3, color: colors.fg },
-  headline: { fontFamily: font.semibold, fontSize: 16, lineHeight: 22, letterSpacing: -0.1, color: colors.fg },
-  body: { fontFamily: font.regular, fontSize: 16, lineHeight: 22, color: colors.fg },
+  title: { fontFamily: font.semibold, fontSize: 18, lineHeight: 24, letterSpacing: -0.2, color: colors.fg },
+  headline: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: colors.fg },
+  body: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: colors.fg },
   bodyMuted: { fontFamily: font.regular, fontSize: 14, lineHeight: 20, color: colors.muted },
   label: { fontFamily: font.semibold, fontSize: 14, lineHeight: 20, color: colors.fg },
   caption: { fontFamily: font.regular, fontSize: 12, lineHeight: 16, color: colors.muted },
   captionStrong: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16, color: colors.muted },
   mono: { fontFamily: font.mono, fontSize: 12, lineHeight: 16, color: colors.muted },
-  monoLabel: { fontFamily: font.monoSemibold, fontSize: 14, lineHeight: 20, color: colors.fg },
+  monoLabel: { fontFamily: font.monoSemibold, fontSize: 12, lineHeight: 16, color: colors.fg },
 };

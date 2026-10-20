@@ -4,17 +4,6 @@ import { render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TerminalScreen } from './TerminalScreen';
 
-jest.mock('expo-libghostty', () => {
-  const ReactActual = jest.requireActual<typeof import('react')>('react');
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    TerminalView: ReactActual.forwardRef((_props: object, ref: any) => {
-      ReactActual.useImperativeHandle(ref, () => ({ write: jest.fn(), writeText: jest.fn() }));
-      return <View />;
-    }),
-  };
-});
-
 const mockRpc = {
   canInput: false,
   attach: 'answer' as 'answer' | 'hang',
@@ -36,7 +25,6 @@ jest.mock('../services/rpc', () => ({
     },
     detachPty: () => Promise.resolve(),
     sendInput: jest.fn(),
-    sendResize: jest.fn(),
   },
 }));
 
@@ -60,7 +48,7 @@ async function renderTerminal() {
       />
     </SafeAreaProvider>,
   );
-  const options = (setOptions.mock.calls.at(-1)?.[0] ?? {}) as { headerRight?: () => React.ReactElement<{ label: string }> | null };
+  const options = (setOptions.mock.calls.at(-1)?.[0] ?? {}) as { headerRight?: () => React.ReactElement<{ label: string; value?: string }> | null };
   return { headerRight: options.headerRight?.() ?? null };
 }
 
@@ -73,17 +61,17 @@ test('CRD-C30 a watching terminal shows Watching with Type, and no key row or Do
   expect(screen.getByText('Watching')).toBeTruthy();
   expect(screen.getByText('Type')).toBeTruthy();
   KEYS.forEach((key) => expect(screen.queryByText(key)).toBeNull());
-  expect(headerRight).toBeNull();
+  expect(headerRight?.props.label).not.toBe('Done');
 });
 
-test('CRD-C31 a typing terminal shows the key row and Done, and no Type button', async () => {
+test('CRD-C31 a typing terminal shows the key row and the Commands · Terminal switch, and no Type button', async () => {
   mockRpc.canInput = true;
   mockRpc.attach = 'answer';
   const { headerRight } = await renderTerminal();
   KEYS.forEach((key) => expect(screen.getByText(key)).toBeTruthy());
   expect(screen.queryByText('Type')).toBeNull();
   expect(screen.queryByText('Watching')).toBeNull();
-  expect(headerRight?.props.label).toBe('Done');
+  expect(headerRight?.props.value).toBe('commands');
 });
 
 test('CRD-C32 a terminal still attaching names the pane instead of a bare spinner', async () => {
