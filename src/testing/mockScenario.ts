@@ -7,20 +7,8 @@ export interface Scenario {
   asks: Ask[];
   files: Record<string, Record<string, string>>;
   artifacts: Record<string, Record<string, string>>;
-  turns: Record<string, MockTurn[]>;
-  outputs: Record<string, string>;
+  streams: Record<string, Record<string, unknown>[]>;
   snippets: MockSnippet[];
-}
-
-export interface MockTurn {
-  id: string;
-  startedAt: number;
-  prompt?: string;
-  steps: { id: string; kind: string; target?: string; exitCode?: number; output: boolean }[];
-  final?: string;
-  commands: number;
-  filesEdited: number;
-  ended: boolean;
 }
 
 export interface MockSnippet {
@@ -103,37 +91,46 @@ export function demoScenario(): Scenario {
       },
       's-web': {},
     },
-    turns: {
+    streams: {
       'p-agent': [
-        {
-          id: 't-1',
-          startedAt: Date.now() - 40 * 60_000,
-          prompt: 'Split the ledger export into monthly files and keep the CSV header in each.',
-          steps: [
-            { id: 'st-1', kind: 'read', target: 'src/export/ledger.ts', output: false },
-            { id: 'st-2', kind: 'edit', target: 'src/export/month.ts', output: false },
-            { id: 'st-3', kind: 'command', target: 'pnpm test export', exitCode: 1, output: true },
-            { id: 'st-4', kind: 'command', target: 'pnpm test export', exitCode: 0, output: true },
-          ],
-          final: 'Export now writes one file per month through writeMonth(); each keeps the header. 61 tests pass.',
-          commands: 14,
-          filesEdited: 4,
-          ended: true,
-        },
-        {
-          id: 't-2',
-          startedAt: Date.now() - 2 * 60_000,
-          prompt: 'Run the export tests too, and skip the slow fixtures.',
-          steps: [{ id: 'st-5', kind: 'search', target: 'slow fixtures', output: false }],
-          commands: 0,
-          filesEdited: 0,
-          ended: false,
-        },
+        { type: 'turn.started', turn: 1 },
+        { type: 'prompt', turn: 1, id: 'pr-1', text: 'The month export repeats the totals row. Fix it and run the export tests.' },
+        { type: 'tool', turn: 1, id: 'tl-1', kind: 'read', name: 'Read', target: 'src/export/month.ts' },
+        { type: 'tool', turn: 1, id: 'tl-2', kind: 'command', name: 'Bash', target: 'pnpm test src/export', input: 'pnpm test src/export' },
+        { type: 'tool.result', turn: 1, id: 'tl-2', output: ' FAIL  src/export/month.test.ts\n  × keeps the header in each month (12 ms)\n    expected 10.01, got 10.00\nTests  1 failed | 60 passed\n', exitCode: 1 },
+        { type: 'text', turn: 1, id: 'tx-1', text: "The totals row is pushed again when the header already holds it. I'll guard that push." },
+        { type: 'edit', turn: 1, id: 'ed-1', path: 'src/export/month.ts', change: 'update', diff: '@@ -41,4 +41,6 @@\n   const rows = header(month)\n-  rows.push(total)\n+  if (!rows.includes(total)) {\n+    rows.push(total)\n+  }\n   return rows\n' },
+        { type: 'plan', turn: 1, id: 'pl-1', items: [{ text: 'Guard the totals row in month export', status: 'done' }, { text: 'Apply the same guard to CSV export', status: 'done' }, { text: 'Push the branch and open a PR', status: 'active' }, { text: 'Note the fix in the changelog', status: 'pending' }] },
+        { type: 'tool', turn: 1, id: 'tl-3', kind: 'command', name: 'Bash', target: 'pnpm test src/export', input: 'pnpm test src/export' },
+        { type: 'tool.result', turn: 1, id: 'tl-3', output: ' ✓ src/export/month.test.ts (14 tests)\nTests  61 passed\n', exitCode: 0 },
+        { type: 'text', turn: 1, id: 'tx-2', text: 'All 61 export tests pass now. The CSV export builds rows the same way, so it gets the same guard.' },
+        { type: 'turn.ended', turn: 1, status: 'done' },
+        { type: 'turn.started', turn: 2 },
+        { type: 'prompt', turn: 2, id: 'pr-2', text: 'Run the export tests too, and skip the slow fixtures.' },
+        { type: 'tool', turn: 2, id: 'tl-4', kind: 'search', name: 'Grep', target: 'slow fixtures' },
+        { type: 'text', turn: 2, id: 'tx-3', text: 'Looking for the slow fixtures so the run can skip them' },
       ],
-    },
-    outputs: {
-      'st-3': ' FAIL  src/export/month.test.ts\n  × keeps the header in each month (12 ms)\n    expected 10.01, got 10.00\nTests  1 failed | 60 passed\n',
-      'st-4': ' ✓ src/export/month.test.ts (14 tests)\nTests  61 passed\n',
+      'p-claude': [
+        { type: 'turn.started', turn: 1 },
+        { type: 'prompt', turn: 1, id: 'pr-1', text: 'Add last_seen to users.' },
+        { type: 'tool', turn: 1, id: 'tl-1', kind: 'read', name: 'Read', target: 'db/schema.sql' },
+        { type: 'tool', turn: 1, id: 'tl-2', kind: 'edit', name: 'Write', target: 'db/migrations/0042.sql' },
+        { type: 'edit', turn: 1, id: 'tl-2', path: 'db/migrations/0042.sql', change: 'add', diff: '@@ -0,0 +1,2 @@\n+ALTER TABLE users\n+  ADD COLUMN last_seen timestamptz;\n' },
+        { type: 'text', turn: 1, id: 'tx-1', text: 'The migration is written. Applying it to the dev database next.' },
+      ],
+      'p-codex': [
+        { type: 'turn.started', turn: 1 },
+        { type: 'prompt', turn: 1, id: 'pr-1', text: 'Build the site.' },
+        { type: 'tool', turn: 1, id: 'tl-1', kind: 'command', name: 'shell', target: 'pnpm build' },
+        { type: 'tool.result', turn: 1, id: 'tl-1', output: 'error: Cannot find module ./theme\n', exitCode: 1 },
+        { type: 'turn.ended', turn: 1, status: 'failed' },
+      ],
+      'p-dot': [
+        { type: 'turn.started', turn: 1 },
+        { type: 'prompt', turn: 1, id: 'pr-1', text: 'Tidy my zsh aliases.' },
+        { type: 'text', turn: 1, id: 'tx-1', text: 'Done. I merged the duplicate aliases.' },
+        { type: 'turn.ended', turn: 1, status: 'done' },
+      ],
     },
     snippets: [
       { name: 'standup', description: "Draft my standup from yesterday's work", command: 'Draft my standup for {{day}}', arguments: [{ name: 'day', defaultValue: 'yesterday' }], source: 'user' },
