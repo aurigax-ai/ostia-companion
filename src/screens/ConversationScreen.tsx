@@ -1,99 +1,35 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { Bot, ChevronRight, FileText, Globe, LucideIcon, Pencil, Search, Square, SquareTerminal, Wrench } from 'lucide-react-native';
-import { AskCard } from '../components/AskCard';
-import { AskSheet } from '../components/AskSheet';
+import { Bot, Square } from 'lucide-react-native';
+import { ChatSwitch } from '../components/ChatSwitch';
+import { TurnView } from '../components/ChatBlocks';
 import { ChatComposer } from '../components/ChatComposer';
 import { ComposerTools } from '../components/ComposerTools';
-import { Button, Empty, HeaderTitle, IconButton, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
+import { AskSheet } from '../components/AskSheet';
+import { Button, Empty, HeaderTitle, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
+import { Block, clipTail, toolTarget, toolVerb, Turn, turnRunning } from '../model/agentStream';
 import { ATTACH_FAILED, imageRefusal } from '../model/attachment';
-import { Step, StepKind, stepFailed, stepLine, Turn, TurnList, turnRunning, turnSummary } from '../model/turns';
-import { paneTitle } from '../model/workspaces';
+import { paneTitle, shortPath } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/askStore';
+import { useAgentStream } from '../services/agentStream';
 import { useDictation } from '../services/dictation';
 import { PickedImage, pickImage } from '../services/images';
-import { OstiaRpc } from '../services/rpc';
-import { loadStepOutput, loadTurns } from '../services/turns';
 import { useCaps, useFeatures, useWorkspaces } from '../services/workspaceStore';
-import { colors, font, radius, space, touch, type } from '../theme';
+import { colors, font, radius, space, type } from '../theme';
 
-const POLL_MS = 3000;
-const EVENT_DELAY_MS = 300;
 const NEAR_BOTTOM = 80;
 
-const ICONS: Record<StepKind, LucideIcon> = {
-  edit: Pencil,
-  command: SquareTerminal,
-  search: Search,
-  read: FileText,
-  subagent: Bot,
-  web: Globe,
-  other: Wrench,
-};
+const Gap = () => <View style={{ height: space.xl }} />;
 
-type Output = { step: Step; text: string | null; problem: string | null };
+type ToolBlock = Extract<Block, { kind: 'tool' }>;
+type Detail = { turnId: string; blockId: string };
 
-function StepRow({ step, onOpen }: { step: Step; onOpen: (step: Step) => void }) {
-  const Icon = ICONS[step.kind];
-  const failed = stepFailed(step);
-  const body = (
-    <>
-      <Icon size={14} color={colors.muted} strokeWidth={2.25} />
-      <Text style={[type.mono, styles.stepText]} numberOfLines={1}>
-        {stepLine(step)}
-      </Text>
-      {failed ? <Text style={[type.mono, styles.failed]}>exit {step.exitCode}</Text> : null}
-      {step.output ? <ChevronRight size={14} color={colors.dim} strokeWidth={2.25} /> : null}
-    </>
-  );
-  if (!step.output) return <View style={styles.step}>{body}</View>;
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${stepLine(step)}, show output`} onPress={() => onOpen(step)} style={[styles.step, styles.stepOpen]}>
-      {body}
-    </Pressable>
-  );
-}
-
-function TurnView({ turn, agent, onOpen }: { turn: Turn; agent: string; onOpen: (step: Step) => void }) {
-  const summary = turnSummary(turn);
-  return (
-    <View style={styles.turn}>
-      {turn.prompt ? (
-        <View style={styles.prompt}>
-          <Text style={type.body} selectable>
-            {turn.prompt}
-          </Text>
-        </View>
-      ) : null}
-      {turn.steps.length > 0 ? (
-        <View style={styles.steps}>
-          {turn.steps.map((step) => (
-            <StepRow key={step.id} step={step} onOpen={onOpen} />
-          ))}
-        </View>
-      ) : null}
-      {turn.final ? (
-        <View style={styles.answer}>
-          <Text style={type.caption}>{agent}</Text>
-          <Text style={[type.body, styles.final]} selectable>
-            {turn.final}
-          </Text>
-        </View>
-      ) : null}
-      {!turn.ended ? (
-        <View style={styles.working}>
-          <ActivityIndicator size="small" color={colors.brand} />
-          <Text style={type.caption}>Working</Text>
-        </View>
-      ) : summary ? (
-        <Text style={[type.caption, styles.summary]}>{summary}</Text>
-      ) : null}
-    </View>
-  );
-}
+const renderTurn = (turn: Turn, onOpen: (turnId: string, block: ToolBlock) => void) => (
+  <TurnView turn={turn} onOpen={(block) => onOpen(turn.id, block)} />
+);
 
 export function ConversationScreen({ navigation, route }: ScreenProps<'Conversation'>) {
   const { paneId, title } = route.params;
@@ -103,70 +39,53 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const images = useFeatures().includes('prompt-image');
   const { sessions, panes } = useWorkspaces();
   const asks = useAsks();
+  const [focused, setFocused] = useState(true);
+  const { state, status, problem } = useAgentStream(paneId, focused);
   const pane = panes.find((p) => p.paneId === paneId);
   const workspace = sessions.find((s) => s.sessionId === pane?.sessionId);
   const agent = pane?.agent && pane.agent !== 'other' ? pane.agent : title;
   const heading = pane ? paneTitle(pane) : title;
-  const [list, setList] = useState<TurnList | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
   const [sendProblem, setSendProblem] = useState<string | null>(null);
-  const loaded = useRef(false);
   const nearBottom = useRef(true);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [attached, setAttached] = useState<PickedImage | null>(null);
   const [pickProblem, setPickProblem] = useState<string | null>(null);
   const dictation = useDictation(text, setText);
-  const [output, setOutput] = useState<Output | null>(null);
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const scroll = useRef<ScrollView>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const scroll = useRef<FlatList<Turn>>(null);
   const ownAsks = asks.asks.filter((ask) => ask.paneId === paneId);
-  const running = (list ? turnRunning(list) : false) || pane?.agentState === 'working';
+  const sheetAsk = ownAsks.find((ask) => !dismissed.includes(ask.askId)) ?? null;
+  const waitingAsk = ownAsks.find((ask) => dismissed.includes(ask.askId)) ?? null;
+  const running = turnRunning(state);
 
   const openTerminal = useCallback(() => navigation.navigate('Terminal', { paneId, title }), [navigation, paneId, title]);
 
-  const reload = useCallback(async () => {
-    const result = await loadTurns(paneId, !loaded.current);
-    if (result.kind === 'terminal') return navigation.replace('Terminal', { paneId, title });
-    if (result.kind === 'error') return setProblem(result.text);
-    loaded.current = true;
-    setProblem(null);
-    setList(result.list);
-  }, [navigation, paneId, title]);
-
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: () => <HeaderTitle title={heading} subtitle={workspace?.name} />,
-      headerRight: () => <IconButton icon={SquareTerminal} label="Open the terminal" onPress={openTerminal} />,
+      headerTitle: () => <HeaderTitle title={heading} subtitle={[heading === agent ? null : agent, shortPath(pane?.cwd ?? workspace?.workDir)].filter(Boolean).join(' · ')} />,
+      headerRight: () => <ChatSwitch value="chat" onChange={openTerminal} />,
     });
-  }, [navigation, heading, workspace?.name, openTerminal]);
+  }, [navigation, heading, agent, pane?.cwd, workspace?.workDir, openTerminal]);
 
   useEffect(() => {
-    void reload();
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const remove = OstiaRpc.addEventListener((type, payload) => {
-      const ours = (type === 'pane.state' && payload?.paneId === paneId) || (type === 'session.state' && payload?.sessionId === pane?.sessionId);
-      if (!ours) return;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => void reload(), EVENT_DELAY_MS);
-    });
+    if (status === 'terminal') navigation.replace('Terminal', { paneId, title });
+  }, [status, navigation, paneId, title]);
+
+  useEffect(() => {
+    const removeBlur = navigation.addListener('blur', () => setFocused(false));
+    const removeFocus = navigation.addListener('focus', () => setFocused(true));
     return () => {
-      remove();
-      if (timer) clearTimeout(timer);
+      removeBlur();
+      removeFocus();
     };
-  }, [reload, paneId, pane?.sessionId]);
+  }, [navigation]);
 
-  useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(() => void reload(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [running, reload]);
-
-  const openOutput = async (step: Step) => {
-    setOutput({ step, text: null, problem: null });
-    const result = await loadStepOutput(paneId, step.id);
-    setOutput((shown) => (shown?.step.id === step.id ? { step, text: result.ok ? result.output : null, problem: result.ok ? null : result.text } : shown));
-  };
+  const openDetail = useCallback((turnId: string, block: ToolBlock) => setDetail({ turnId, blockId: block.id }), []);
+  const renderItem = useCallback(({ item }: { item: Turn }) => renderTurn(item, openDetail), [openDetail]);
+  const shown = detail ? state.turns.find((turn) => turn.id === detail.turnId)?.blocks.find((block): block is ToolBlock => block.kind === 'tool' && block.id === detail.blockId) : undefined;
+  const shownText = shown ? clipTail([shown.input, shown.output].filter(Boolean).join('\n\n') || 'No output.') : null;
 
   const attach = async (source: 'gallery' | 'camera') => {
     setPickProblem(null);
@@ -203,53 +122,53 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
       );
     } finally {
       setSending(false);
-      void reload();
     }
   };
 
   return (
     <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={headerHeight}>
-      {list === null && !problem ? (
+      {status === 'opening' ? (
         <Loading />
       ) : (
-        <ScrollView
+        <FlatList
           {...NO_SCROLL_BARS}
           ref={scroll}
+          data={state.turns}
+          keyExtractor={(turn) => turn.id}
+          renderItem={renderItem}
           style={styles.fill}
           contentContainerStyle={styles.thread}
+          ItemSeparatorComponent={Gap}
+          ListEmptyComponent={state.live ? <Empty icon={Bot} title="No turns yet" body="The thread starts at the next prompt this agent gets." /> : null}
+          ListFooterComponent={
+            <View style={styles.footer}>
+              {state.ended ? <Text style={[type.caption, styles.center]}>{state.ended === 'agent-closed' ? 'The agent closed.' : 'This pane was closed on the desktop.'}</Text> : null}
+              {problem ? <Warning text={problem} /> : null}
+              {sendProblem ? <Warning text={sendProblem} /> : null}
+              {pickProblem ? <Warning text={pickProblem} /> : null}
+              {dictation.problem ? <Warning text={dictation.problem} /> : null}
+            </View>
+          }
           onContentSizeChange={() => nearBottom.current && scroll.current?.scrollToEnd({ animated: false })}
           onLayout={() => nearBottom.current && scroll.current?.scrollToEnd({ animated: false })}
           onScroll={({ nativeEvent }) => {
             nearBottom.current = nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height >= nativeEvent.contentSize.height - NEAR_BOTTOM;
           }}
           scrollEventThrottle={100}
+          initialNumToRender={8}
+          windowSize={7}
           keyboardShouldPersistTaps="handled"
-        >
-          {list?.truncated ? <Text style={[type.caption, styles.center]}>Older turns stay on the desktop.</Text> : null}
-          {list && list.turns.length === 0 ? (
-            <Empty icon={Bot} title="No turns yet" body="The thread starts at the next prompt this agent gets." />
-          ) : null}
-          {list?.turns.map((turn) => <TurnView key={turn.id} turn={turn} agent={agent} onOpen={(step) => void openOutput(step)} />)}
-          {ownAsks.map((ask) => (
-            <View key={ask.askId} style={styles.ask}>
-              <AskCard
-              ask={ask}
-              workspace=""
-              canRespond={canRespond}
-              pending={asks.pending[ask.askId]}
-              error={asks.errors[ask.askId]}
-              onAnswer={(answer) => void answerAsk(ask.askId, answer)}
-              onReply={() => setReplyTo(ask.askId)}
-              compact
-              />
-            </View>
-          ))}
-          {problem ? <Warning text={problem} /> : null}
-          {sendProblem ? <Warning text={sendProblem} /> : null}
-          {pickProblem ? <Warning text={pickProblem} /> : null}
-          {dictation.problem ? <Warning text={dictation.problem} /> : null}
-        </ScrollView>
+        />
       )}
+      {waitingAsk ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Review the request" hitSlop={{ top: 8, bottom: 8 }} onPress={() => setDismissed((all) => all.filter((id) => id !== waitingAsk.askId))} style={styles.waiting}>
+          <View style={styles.dot} />
+          <Text style={[type.label, styles.waitingText]} numberOfLines={1}>
+            {waitingAsk.title}
+          </Text>
+          <Text style={[type.label, { color: colors.brand }]}>Review</Text>
+        </Pressable>
+      ) : null}
       {running && canRespond ? (
         <View style={styles.stop}>
           <Button label="Stop" icon={Square} variant="tonal" compact onPress={() => void interruptAgent(paneId, 'esc')} />
@@ -261,7 +180,7 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
         onSend={() => void send()}
         allowEmpty={!!attached}
         placeholder={canRespond ? `Message ${agent}` : 'Turn on Respond in Settings › Remote'}
-        editable={canRespond}
+        editable={canRespond && !state.ended}
         sending={sending}
         snippetsFrom={pane?.sessionId ?? null}
         workspaces={sessions.filter((s) => s.kind !== 'scratch' && s.kind !== 'manager')}
@@ -279,35 +198,26 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
         }
       />
       <AskSheet
-        ask={ownAsks.find((ask) => ask.askId === replyTo) ?? null}
+        ask={sheetAsk}
         workspace={workspace?.name ?? ''}
         canRespond={canRespond}
-        pending={replyTo ? asks.pending[replyTo] : undefined}
-        error={replyTo ? asks.errors[replyTo] : undefined}
-        onAnswer={(answer) => {
-          if (!replyTo) return;
-          void answerAsk(replyTo, answer);
-          setReplyTo(null);
-        }}
-        onClose={() => setReplyTo(null)}
+        pending={sheetAsk ? asks.pending[sheetAsk.askId] : undefined}
+        error={sheetAsk ? asks.errors[sheetAsk.askId] : undefined}
+        onAnswer={(answer) => sheetAsk && void answerAsk(sheetAsk.askId, answer)}
+        onClose={() => sheetAsk && setDismissed((all) => [...all, sheetAsk.askId])}
       />
-      <Sheet visible={output !== null} onClose={() => setOutput(null)}>
-        {output ? (
-          <View>
-            <Text style={[type.captionStrong, styles.sheetTitle]} numberOfLines={2}>
-              {stepLine(output.step)}
+      <Sheet visible={shown !== undefined} onClose={() => setDetail(null)}>
+        {shown && shownText ? (
+          <View style={styles.detail}>
+            <Text style={type.captionStrong} numberOfLines={2}>
+              {`${toolVerb(shown.tool)} ${toolTarget(shown)}`}
             </Text>
-            {output.problem ? (
-              <Warning text={output.problem} />
-            ) : output.text === null ? (
-              <ActivityIndicator color={colors.brand} />
-            ) : (
-              <ScrollView {...NO_SCROLL_BARS} style={styles.output}>
-                <Text style={styles.outputText} selectable>
-                  {output.text || 'No output.'}
-                </Text>
-              </ScrollView>
-            )}
+            <ScrollView {...NO_SCROLL_BARS} style={styles.output}>
+              <Text style={styles.outputText} selectable>
+                {shownText.hidden > 0 ? `… ${shownText.hidden} earlier characters are on the desktop\n` : ''}
+                {shownText.text}
+              </Text>
+            </ScrollView>
           </View>
         ) : null}
       </Sheet>
@@ -317,30 +227,14 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  thread: { paddingHorizontal: space.gutter, paddingTop: space.lg, paddingBottom: space.lg, gap: space.xl, flexGrow: 1 },
+  thread: { paddingHorizontal: space.gutter, paddingTop: space.lg, paddingBottom: space.lg, flexGrow: 1 },
+  footer: { gap: space.md, paddingTop: space.md },
   center: { textAlign: 'center' },
-  turn: { gap: space.md },
-  prompt: {
-    alignSelf: 'flex-end',
-    maxWidth: '85%',
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-    borderRadius: radius.xl,
-    borderCurve: 'continuous',
-    backgroundColor: colors.surfaceHigh,
-  },
-  steps: { gap: 2 },
-  step: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 28 },
-  stepOpen: { minHeight: touch },
-  stepText: { flex: 1 },
-  failed: { color: colors.attn },
-  answer: { gap: space.xs },
-  final: { lineHeight: 24 },
-  working: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  summary: { color: colors.dim },
-  ask: { marginHorizontal: -space.gutter },
   stop: { alignItems: 'flex-start', paddingHorizontal: space.gutter, paddingBottom: space.sm },
-  sheetTitle: { paddingHorizontal: space.xs, paddingBottom: space.md },
+  waiting: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.gutter, marginBottom: space.sm, paddingHorizontal: space.md, minHeight: 36, borderRadius: radius.full, backgroundColor: colors.attnSoft },
+  waitingText: { flex: 1 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.attn },
+  detail: { gap: space.sm },
   output: { maxHeight: 480, borderRadius: radius.md, backgroundColor: colors.bgSunken, padding: space.md },
   outputText: { fontFamily: font.mono, fontSize: 12, lineHeight: 17, color: colors.fg },
 });
