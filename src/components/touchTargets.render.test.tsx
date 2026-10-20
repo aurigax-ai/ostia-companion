@@ -6,6 +6,7 @@ import type { Ask } from '../model/asks';
 import { touch } from '../theme';
 import { AskCard } from './AskCard';
 import { AskHeadsUp } from './AskHeadsUp';
+import { ChatSwitch } from './ChatSwitch';
 import { Button, IconButton, ListRow, Segmented } from './ui';
 
 function size(element: { props: { style?: unknown; hitSlop?: unknown } }): number {
@@ -40,13 +41,14 @@ test('PHA-C30 every control reaches the 48 dp touch size, by its height or its h
       <IconButton icon={Search} label="tonal" variant="tonal" onPress={noop} />
       <IconButton icon={Search} label="filled" variant="filled" onPress={noop} />
       <Segmented label="mode" options={[{ value: 'a', label: 'One' }, { value: 'b', label: 'Two' }]} value="a" onChange={noop} />
+      <ChatSwitch value="chat" onChange={noop} />
       <ListRow title="Row" onPress={noop} />
       <AskHeadsUp ask={ASK} onOpen={noop} />
       <AskCard ask={ASK} workspace="w" canRespond onAnswer={noop} compact onReply={noop} />
     </>,
   );
   const buttons = [...screen.getAllByRole('button'), ...screen.getAllByRole('radio')];
-  expect(buttons.length).toBeGreaterThanOrEqual(12);
+  expect(buttons.length).toBeGreaterThanOrEqual(14);
   const small = buttons.filter((button: (typeof buttons)[number]) => size(button) < touch).map((button: (typeof buttons)[number]) => String(button.props.accessibilityLabel ?? button.props.accessibilityRole));
   expect(small).toEqual([]);
 });

@@ -16,10 +16,6 @@ const mockMedia = {
   onText: null as null | ((text: string) => void),
 };
 
-jest.mock('../services/turns', () => ({
-  loadTurns: async () => ({ kind: 'turns', list: { turns: [], truncated: false } }),
-  loadStepOutput: jest.fn(),
-}));
 jest.mock('../services/askStore', () => ({
   useAsks: () => ({ asks: [], unsupported: false, pending: {}, errors: {} }),
   answerAsk: jest.fn(),
@@ -34,7 +30,9 @@ jest.mock('../services/workspaceStore', () => ({
     panes: [{ paneId: 'p-agent', sessionId: 's-ostia', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: 'done' }],
   }),
 }));
-jest.mock('../services/rpc', () => ({ OstiaRpc: { addEventListener: () => () => {} } }));
+jest.mock('../services/rpc', () => ({
+  OstiaRpc: { addEventListener: () => () => {}, addStatusListener: () => () => {}, getStatus: () => 'connected', call: async () => ({ ok: true }) },
+}));
 jest.mock('../services/snippets', () => ({ useSnippets: () => [] }));
 jest.mock('../services/phoneSession', () => ({ phoneControlSupported: () => true }));
 jest.mock('../services/images', () => ({ pickImage: (...args: unknown[]) => mockMedia.pick(...args) }));

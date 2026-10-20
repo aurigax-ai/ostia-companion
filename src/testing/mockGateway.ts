@@ -28,7 +28,7 @@ export interface MockGatewayOptions {
   onScreen?: (screen: MockScreenLink) => void;
   log?: (line: string) => void;
   phoneWorkspace?: { sessionId: string; agent: 'claude' | 'codex' };
-  redactionFails?: boolean;
+  hooksOff?: string[];
   imagesUnsupported?: boolean;
 }
 
@@ -156,11 +156,13 @@ interface Connection {
   attached: string | null;
   role: 'observer' | 'owner';
   screen: MockScreenLink | null;
+  streams: Map<string, number>;
 }
 
 const SCREEN_LIMITS = [300, 900, 1800];
 const NO_CONTROLLER = -32004;
-const REDACTION_FAILED = -32603;
+const STREAM_FRAME_BYTES = 1024 * 1024;
+const STREAMS_PER_SOCKET = 4;
 const RATE_LIMITED = -32007;
 const AGENT_STARTS_PER_MINUTE = 3;
 const PROMPT_LIMIT = 4000;
@@ -213,7 +215,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     onScreen = () => {},
     log = () => {},
     phoneWorkspace,
-    redactionFails = false,
+    hooksOff = [],
   } = options;
   const screens: MockScreenLink[] = [];
   const { key, cert, fingerprint } = certificate(name);
@@ -253,6 +255,41 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const event = (type: string, payload: object, cap: MockCap = 'read') => {
     const frame = JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type, payload } });
     connections.forEach((c) => c.device?.caps.includes(cap) && c.socket.send(frame));
+  };
+
+  const streamTo = (target: Connection, paneId: string, events: Record<string, unknown>[], backfill: boolean) => {
+    const frames: Record<string, unknown>[][] = [[]];
+    let size = 0;
+    for (const item of events) {
+      const bytes = Buffer.byteLength(JSON.stringify(item));
+      if (size + bytes > STREAM_FRAME_BYTES && frames[frames.length - 1].length > 0) {
+        frames.push([]);
+        size = 0;
+      }
+      frames[frames.length - 1].push(item);
+      size += bytes;
+    }
+    for (const chunk of frames) {
+      const seq = (target.streams.get(paneId) ?? 0) + 1;
+      target.streams.set(paneId, seq);
+      target.socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'event', params: { type: 'agent.stream', payload: { paneId, seq, backfill, events: chunk } } }));
+    }
+  };
+
+  const streamPane = (paneId: string, events: Record<string, unknown>[]) => {
+    const kept = (scenario.streams[paneId] ??= []);
+    kept.push(...events.filter((e) => e.type !== 'ask' && e.type !== 'ask.resolved'));
+    connections.forEach((c) => c.streams.has(paneId) && streamTo(c, paneId, events, false));
+  };
+
+  const replyInStream = (paneId: string, prompt: string) => {
+    const turn = Math.max(0, ...(scenario.streams[paneId] ?? []).map((e) => Number(e.turn) || 0)) + 1;
+    streamPane(paneId, [
+      { type: 'turn.started', turn },
+      { type: 'prompt', turn, id: `pr-${turn}`, text: prompt },
+      { type: 'text', turn, id: `tx-${turn}`, text: 'Noted.' },
+      { type: 'turn.ended', turn, status: 'done' },
+    ]);
   };
 
   const writePane = (paneId: string, text: string) => {
@@ -337,7 +374,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (socket) => {
-    const connection: Connection = { socket, device: null, attached: null, role: 'observer', screen: null };
+    const connection: Connection = { socket, device: null, attached: null, role: 'observer', screen: null, streams: new Map() };
     connections.add(connection);
     const helloTimer = setTimeout(() => socket.close(CLOSE_UNAUTHENTICATED, 'hello timeout'), helloTimeoutMs);
     const respond = (id: unknown, result: object) => socket.send(JSON.stringify({ jsonrpc: '2.0', id, result }));
@@ -463,13 +500,28 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       }
       if (method === 'session.list') return respond(id, { sessions: scenario.sessions.map((s) => (s.sessionId === phoneWorkspace?.sessionId ? { ...s, phone: true } : s)) });
       if (['turn.list', 'turn.output', 'snippet.list'].includes(method) && !has('read')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
-      if (method === 'turn.list' || method === 'turn.output') {
+      if (method === 'agent.stream.open') {
+        if (!has('read')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
+        if (typeof params.paneId !== 'string') return fail(id, INVALID_PARAMS, 'missing paneId');
+        const turns = params.turns === undefined ? 5 : params.turns;
+        if (!Number.isInteger(turns) || turns < 1 || turns > 50) return fail(id, INVALID_PARAMS, 'bad-params');
         const pane = scenario.panes.find((p) => p.paneId === params.paneId);
-        if (!pane) return fail(id, INVALID_PARAMS, 'not-an-agent');
-        if (redactionFails) return fail(id, REDACTION_FAILED, 'redaction-failed');
-        if (method === 'turn.list') return respond(id, { turns: scenario.turns[pane.paneId] ?? [], truncated: false });
-        const output = scenario.outputs[params.stepId];
-        return output === undefined ? fail(id, INVALID_PARAMS, 'unknown-step') : respond(id, { output });
+        if (!pane || (pane.agent !== 'claude' && pane.agent !== 'codex') || hooksOff.includes(pane.paneId)) return fail(id, INVALID_PARAMS, 'not-an-agent');
+        if (!connection.streams.has(pane.paneId) && connection.streams.size >= STREAMS_PER_SOCKET) return fail(id, INVALID_PARAMS, 'too-many-streams');
+        const events = scenario.streams[pane.paneId] ?? [];
+        const kept = new Set([...new Set(events.map((e) => e.turn).filter((turn) => turn !== undefined))].slice(-turns));
+        const backfill = events.filter((e) => e.turn === undefined || kept.has(e.turn));
+        const asks = scenario.asks.filter((a) => a.paneId === pane.paneId).map((a) => ({ type: 'ask', askId: a.askId, kind: a.kind }));
+        connection.streams.set(pane.paneId, 0);
+        respond(id, { ok: true, paneId: pane.paneId, agent: pane.agent, session: `sess-${pane.paneId}`, truncated: kept.size < new Set(events.map((e) => e.turn)).size });
+        streamTo(connection, pane.paneId, [...backfill, ...asks, { type: 'live' }], true);
+        return;
+      }
+      if (method === 'agent.stream.close') {
+        if (!has('read')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'read' });
+        if (typeof params.paneId !== 'string') return fail(id, INVALID_PARAMS, 'missing paneId');
+        connection.streams.delete(params.paneId);
+        return respond(id, { ok: true });
       }
       if (method === 'snippet.list') {
         if (params.sessionId !== undefined && !scenario.sessions.some((s) => s.sessionId === params.sessionId && !REFUSED_KINDS.includes(s.kind))) {
@@ -542,6 +594,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         updatePane(ask.paneId, { agentState: choice?.tone === 'deny' ? 'waiting' : 'working', agentMessage: undefined });
         setSessionState(ask.sessionId, choice?.tone === 'deny' ? 'waiting' : 'working');
         event('ask.resolved', { askId: ask.askId, outcome });
+        streamPane(ask.paneId, [{ type: 'ask.resolved', askId: ask.askId, outcome }]);
         log(`ask: ${ask.askId} answered ${outcome}`);
         return respond(id, { ok: true });
       }
@@ -564,8 +617,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         typed.set(pane.paneId, [...(typed.get(pane.paneId) ?? []), keys]);
         if (method === 'agent.prompt') {
           writePane(pane.paneId, `\r\n\x1b[36m>\x1b[0m ${params.text}\r\n`);
-          const turns = (scenario.turns[pane.paneId] ??= []);
-          turns.push({ id: `${pane.paneId}-t${turns.length + 1}`, startedAt: Date.now(), prompt: params.text, steps: [], final: 'Noted.', commands: 0, filesEdited: 0, ended: true });
+          replyInStream(pane.paneId, params.text);
         }
         else writePane(pane.paneId, '\r\n\x1b[90m(interrupted)\x1b[0m\r\n');
         log(`agent: ${method} ${pane.paneId}${sentImage ? ' with an image' : ''}`);
@@ -596,7 +648,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         const paneId = `p-start-${++startedPanes}`;
         scenario.panes.push({ paneId, sessionId: session.sessionId, kind: 'terminal', title: params.agent, cwd: session.workDir, running: true, blockCount: 1, agent: params.agent, agentState: 'working' });
         writePane(paneId, `$ ${params.agent} '${prompt.replace(/'/g, "'\\''")}'\r\n\x1b[36m>\x1b[0m ${prompt}\r\n`);
-        scenario.turns[paneId] = [{ id: `${paneId}-t1`, startedAt: Date.now(), prompt, steps: [], commands: 0, filesEdited: 0, ended: false }];
+        scenario.streams[paneId] = [{ type: 'turn.started', turn: 1 }, { type: 'prompt', turn: 1, id: 'pr-1', text: prompt }];
         setSessionState(session.sessionId, 'working');
         log(`agent: agent.start ${paneId} in ${session.sessionId}`);
         return respond(id, { paneId, confirmed: true });
