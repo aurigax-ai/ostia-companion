@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import type { DesktopAddress } from '../model/rediscovery';
 import { activeDesktop, addDesktop, chooseDesktop, DesktopList, EMPTY_DESKTOPS, removeDesktop } from '../model/desktops';
 
 export interface PairingData {
@@ -8,6 +9,7 @@ export interface PairingData {
   desktopName: string;
   gatewayHost: string;
   gatewayPort: number;
+  addresses?: DesktopAddress[];
   privateKey: string;
   publicKey: string;
   pairedAt?: number;
@@ -52,11 +54,17 @@ async function saveDesktops(previous: DesktopList, next: DesktopList): Promise<v
   else await SecureStore.deleteItemAsync(ACTIVE);
 }
 
-async function update(change: (list: DesktopList) => DesktopList): Promise<DesktopList> {
-  const previous = await loadDesktops();
-  const next = change(previous);
-  await saveDesktops(previous, next);
-  return next;
+let queue: Promise<unknown> = Promise.resolve();
+
+function update(change: (list: DesktopList) => DesktopList): Promise<DesktopList> {
+  const run = queue.then(async () => {
+    const previous = await loadDesktops();
+    const next = change(previous);
+    await saveDesktops(previous, next);
+    return next;
+  });
+  queue = run.catch(() => {});
+  return run;
 }
 
 export async function savePairingData(data: PairingData): Promise<void> {
@@ -73,4 +81,14 @@ export function chooseSavedDesktop(deviceId: string): Promise<DesktopList> {
 
 export function forgetDesktop(deviceId: string): Promise<DesktopList> {
   return update((list) => removeDesktop(list, deviceId));
+}
+
+export async function saveRoute(
+  deviceId: string,
+  route: Pick<PairingData, 'gatewayHost' | 'gatewayPort' | 'addresses'>,
+): Promise<void> {
+  await update((list) => ({
+    ...list,
+    desktops: list.desktops.map((d) => (d.deviceId === deviceId ? { ...d, ...route } : d)),
+  }));
 }
