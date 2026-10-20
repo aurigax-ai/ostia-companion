@@ -6,15 +6,19 @@ import { Bot, ChevronRight, FileText, Globe, LucideIcon, Pencil, Search, Square,
 import { AskCard } from '../components/AskCard';
 import { AskSheet } from '../components/AskSheet';
 import { ChatComposer } from '../components/ChatComposer';
+import { ComposerTools } from '../components/ComposerTools';
 import { Button, Empty, HeaderTitle, IconButton, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
+import { ATTACH_FAILED, imageRefusal } from '../model/attachment';
 import { Step, StepKind, stepFailed, stepLine, Turn, TurnList, turnRunning, turnSummary } from '../model/turns';
 import { paneTitle } from '../model/workspaces';
 import { ScreenProps } from '../navigation';
 import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/askStore';
+import { useDictation } from '../services/dictation';
+import { PickedImage, pickImage } from '../services/images';
 import { OstiaRpc } from '../services/rpc';
 import { loadStepOutput, loadTurns } from '../services/turns';
-import { useCaps, useWorkspaces } from '../services/workspaceStore';
-import { colors, font, radius, space, type } from '../theme';
+import { useCaps, useFeatures, useWorkspaces } from '../services/workspaceStore';
+import { colors, font, radius, space, touch, type } from '../theme';
 
 const POLL_MS = 3000;
 const EVENT_DELAY_MS = 300;
@@ -47,7 +51,7 @@ function StepRow({ step, onOpen }: { step: Step; onOpen: (step: Step) => void })
   );
   if (!step.output) return <View style={styles.step}>{body}</View>;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${stepLine(step)}, show output`} onPress={() => onOpen(step)} style={styles.step}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${stepLine(step)}, show output`} onPress={() => onOpen(step)} style={[styles.step, styles.stepOpen]}>
       {body}
     </Pressable>
   );
@@ -96,6 +100,7 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const canRespond = useCaps().includes('respond');
+  const images = useFeatures().includes('prompt-image');
   const { sessions, panes } = useWorkspaces();
   const asks = useAsks();
   const pane = panes.find((p) => p.paneId === paneId);
@@ -109,6 +114,9 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
   const nearBottom = useRef(true);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [attached, setAttached] = useState<PickedImage | null>(null);
+  const [pickProblem, setPickProblem] = useState<string | null>(null);
+  const dictation = useDictation(text, setText);
   const [output, setOutput] = useState<Output | null>(null);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const scroll = useRef<ScrollView>(null);
@@ -160,16 +168,39 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
     setOutput((shown) => (shown?.step.id === step.id ? { step, text: result.ok ? result.output : null, problem: result.ok ? null : result.text } : shown));
   };
 
+  const attach = async (source: 'gallery' | 'camera') => {
+    setPickProblem(null);
+    try {
+      const result = await pickImage(source);
+      if (!result) return;
+      if ('problem' in result) setPickProblem(result.problem);
+      else setAttached(result.picked);
+    } catch {
+      setPickProblem(ATTACH_FAILED);
+    }
+  };
+
+  const edit = (next: string) => {
+    dictation.abort();
+    setText(next);
+  };
+
   const send = async () => {
     const prompt = text.trim();
-    if (!prompt) return;
+    if (!prompt && !attached) return;
+    dictation.abort();
     setSending(true);
     setSendProblem(null);
     try {
-      await promptAgent(paneId, prompt);
+      await (attached ? promptAgent(paneId, prompt, attached.image) : promptAgent(paneId, prompt));
       setText('');
+      setAttached(null);
     } catch (err: any) {
-      setSendProblem(err?.message === 'not-submitted' ? `${agent} did not start a turn. Your message is still in its prompt on the desktop.` : err?.message || 'Could not send.');
+      if (err?.message === 'not-submitted') setAttached(null);
+      setSendProblem(
+        imageRefusal(err?.message) ??
+          (err?.message === 'not-submitted' ? `${agent} did not start a turn. Your message is still in its prompt on the desktop.` : err?.message || 'Could not send.'),
+      );
     } finally {
       setSending(false);
       void reload();
@@ -215,6 +246,8 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
           ))}
           {problem ? <Warning text={problem} /> : null}
           {sendProblem ? <Warning text={sendProblem} /> : null}
+          {pickProblem ? <Warning text={pickProblem} /> : null}
+          {dictation.problem ? <Warning text={dictation.problem} /> : null}
         </ScrollView>
       )}
       {running && canRespond ? (
@@ -224,14 +257,26 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
       ) : null}
       <ChatComposer
         value={text}
-        onChangeText={setText}
+        onChangeText={edit}
         onSend={() => void send()}
+        allowEmpty={!!attached}
         placeholder={canRespond ? `Message ${agent}` : 'Turn on Respond in Settings › Remote'}
         editable={canRespond}
         sending={sending}
         snippetsFrom={pane?.sessionId ?? null}
         workspaces={sessions.filter((s) => s.kind !== 'scratch' && s.kind !== 'manager')}
         bottomInset={insets.bottom}
+        tools={
+          <ComposerTools
+            listening={dictation.listening}
+            onMic={dictation.toggle}
+            onPick={(source) => void attach(source)}
+            images={images}
+            imageUri={attached?.uri ?? null}
+            onRemoveImage={() => setAttached(null)}
+            disabled={!canRespond || sending}
+          />
+        }
       />
       <AskSheet
         ask={ownAsks.find((ask) => ask.askId === replyTo) ?? null}
@@ -286,6 +331,7 @@ const styles = StyleSheet.create({
   },
   steps: { gap: 2 },
   step: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 28 },
+  stepOpen: { minHeight: touch },
   stepText: { flex: 1 },
   failed: { color: colors.attn },
   answer: { gap: space.xs },

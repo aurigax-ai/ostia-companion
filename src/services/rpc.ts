@@ -24,6 +24,10 @@ type EventListener = (type: string, payload: any) => void;
 type PtyDataListener = (base64Data: string) => void;
 type StatusListener = (status: ConnectionStatus, reason?: string) => void;
 type CapsListener = (caps: Cap[]) => void;
+type FeaturesListener = () => void;
+
+export type Feature = 'prompt-image';
+const NO_FEATURES: Feature[] = [];
 
 const CLOSE_REVOKED = 4003;
 const CLOSE_CAPS_CHANGED = 4004;
@@ -39,10 +43,12 @@ class OstiaRpcClient {
   private ptyListeners = new Set<PtyDataListener>();
   private statusListeners = new Set<StatusListener>();
   private capsListeners = new Set<CapsListener>();
+  private featuresListeners = new Set<FeaturesListener>();
 
   private pairingData: PairingData | null = null;
   private status: ConnectionStatus = 'disconnected';
   private caps: Cap[] = [];
+  private features: Feature[] = NO_FEATURES;
   private phoneWorkspace: PhoneWorkspace | null = null;
 
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -73,6 +79,10 @@ class OstiaRpcClient {
     return this.caps;
   }
 
+  public getFeatures() {
+    return this.features;
+  }
+
   public getPhoneWorkspace() {
     return this.phoneWorkspace;
   }
@@ -84,6 +94,11 @@ class OstiaRpcClient {
   private setStatus(status: ConnectionStatus, reason?: string) {
     this.status = status;
     this.statusListeners.forEach((listener) => listener(status, reason));
+  }
+
+  private setFeatures(features: Feature[]) {
+    this.features = features.length > 0 ? features : NO_FEATURES;
+    this.featuresListeners.forEach((listener) => listener());
   }
 
   private setCaps(caps: Cap[]) {
@@ -177,6 +192,7 @@ class OstiaRpcClient {
     this.phoneWorkspace = null;
     this.activePaneId = null;
     this.setCaps([]);
+    this.setFeatures([]);
     this.setStatus('revoked', reason);
   }
 
@@ -189,6 +205,7 @@ class OstiaRpcClient {
       });
       this.reconnectDelay = MIN_RECONNECT_DELAY;
       this.setCaps(result.caps ?? []);
+      this.setFeatures(result.features ?? []);
       this.phoneWorkspace = parsePhoneWorkspace(result.phoneWorkspace);
       this.setStatus('connected');
       if (this.activePaneId) {
@@ -333,6 +350,13 @@ class OstiaRpcClient {
     this.statusListeners.add(listener);
     return () => {
       this.statusListeners.delete(listener);
+    };
+  }
+
+  public addFeaturesListener(listener: FeaturesListener) {
+    this.featuresListeners.add(listener);
+    return () => {
+      this.featuresListeners.delete(listener);
     };
   }
 

@@ -206,10 +206,39 @@ export function agentPromptScreen(selected: number, answered: number | null): st
   return `\x1b[2J\x1b[H${lines.join('\r\n')}`;
 }
 
+export function agentTranscriptScreen(): string {
+  const lines = [`\x1b[33m✻${RESET} Claude Code ${DIM}· ~/Personal/ostia${RESET}`, ''];
+  for (let turn = 1; turn <= 14; turn++) {
+    lines.push(
+      `\x1b[36m>${RESET} turn ${turn}: split the ledger export and keep the header`,
+      '',
+      `\x1b[32m●${RESET} Read \x1b[34msrc/export/ledger.ts${RESET}`,
+      `${DIM}  ⎿ Read 212 lines${RESET}`,
+      `\x1b[32m●${RESET} Update \x1b[34msrc/export/month.ts${RESET}`,
+      `${DIM}  ⎿ Updated with 6 additions and 2 removals${RESET}`,
+      `\x1b[32m●${RESET} Bash ${DIM}pnpm test export${RESET}`,
+      `${DIM}  ⎿ Tests  ${turn * 4} passed${RESET}`,
+      `\x1b[32m●${RESET} Turn ${turn} is done; every month keeps its CSV header.`,
+      '',
+    );
+  }
+  lines.push(
+    '╭──────────────────────────────────────────────────────────╮',
+    '│ >                                                        │',
+    '╰──────────────────────────────────────────────────────────╯',
+    `${DIM}  ? for shortcuts${RESET}`,
+  );
+  return `${lines.join('\r\n')}\r\n`;
+}
+
 export function shellScreen(pane: Pane): string {
   if (pane.paneId === 'p-codex') {
     return `${DIM}$${RESET} pnpm build\r\n\x1b[31merror${RESET} TS2322: Type 'string' is not assignable to type 'number'.\r\n  src/pricing.ts:42:7\r\n\x1b[31mBuild failed${RESET} (exit 1)\r\n`;
   }
-  if (pane.paneId === 'p-dev') return `${DIM}$${RESET} pnpm dev\r\n  VITE ready in 312 ms\r\n  ➜  Local:   http://localhost:5173/\r\n`;
+  if (pane.paneId === 'p-dev') {
+    const log = Array.from({ length: 400 }, (_, i) => `${DIM}${String(i + 1).padStart(3, '0')}${RESET} [vite] hmr update /src/components/Row${i % 17}.tsx`);
+    return `${DIM}$${RESET} pnpm dev\r\n  VITE ready in 312 ms\r\n  ➜  Local:   http://localhost:5173/\r\n${log.join('\r\n')}\r\n`;
+  }
+  if (pane.paneId === 'p-agent') return agentTranscriptScreen();
   return `\x1b[32m${(pane.cwd ?? '~').replace('/home/marco', '~')}${RESET} $ `;
 }

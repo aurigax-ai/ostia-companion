@@ -1,7 +1,7 @@
 import type { TerminalPrefs } from './prefs';
 
-export type HapticEvent = 'tap' | 'approved' | 'failed';
-export type HapticKind = 'selection' | 'success' | 'warning';
+export type HapticEvent = 'approved' | 'failed';
+export type HapticKind = 'success' | 'warning';
 
 const LIST_MS = 200;
 const PILL_MS = 150;
@@ -16,7 +16,7 @@ export function pillFadeMs(reduceMotion: boolean): number {
   return reduceMotion ? 0 : PILL_MS;
 }
 
-const HAPTICS: Record<HapticEvent, HapticKind> = { tap: 'selection', approved: 'success', failed: 'warning' };
+export const HAPTICS: Record<HapticEvent, HapticKind> = { approved: 'success', failed: 'warning' };
 
 export function hapticFor(event: HapticEvent, prefs: TerminalPrefs): HapticKind | null {
   return prefs.haptics ? HAPTICS[event] : null;

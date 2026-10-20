@@ -20,7 +20,7 @@ import { AskSheet } from '../components/AskSheet';
 import { PromptComposer } from '../components/PromptComposer';
 import { TerminalSheet } from '../components/TerminalSheet';
 import { answerAsk, interruptAgent, promptAgent, useAsks } from '../services/askStore';
-import { Button, Empty, Loading, tap } from '../components/ui';
+import { Button, Empty, Loading } from '../components/ui';
 import { attentionRank, byAttention } from '../model/order';
 import { acceptsSwipe, afterClose, EDGE_PT, step } from '../model/terminalPager';
 import { Pane, paneTitle } from '../model/workspaces';
@@ -31,7 +31,7 @@ import { useCaps, useWorkspaces } from '../services/workspaceStore';
 import { KeyRowEvent, KeyRowState, RowKey, pressKeyRow } from '../model/terminalKeys';
 import { terminalFontSize } from '../model/prefs';
 import { getPrefs, usePrefs } from '../services/prefsStore';
-import { colors, radius, space, type } from '../theme';
+import { colors, radius, space, touch, type } from '../theme';
 
 const RESIZE_DEBOUNCE_MS = 150;
 const SETTLE_FALLBACK_MS = 400;
@@ -153,7 +153,7 @@ export function TerminalScreen({ navigation, route }: ScreenProps<'Terminal'>) {
           accessibilityRole="button"
           accessibilityLabel={`${title}, list terminals`}
           onPress={() => setSheetOpen(true)}
-          style={{ flexShrink: 1 }}
+          style={styles.headerTitle}
         >
           <Text style={type.headline} numberOfLines={1}>
             {title}
@@ -402,17 +402,20 @@ function RowButton({ label, active, onPress }: { label: string; active?: boolean
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={active === undefined ? undefined : { selected: active }}
-      onPress={() => (tap(), onPress())}
+      onPress={onPress}
       android_ripple={{ color: colors.ripple }}
       style={({ pressed }) => [styles.rowKey, pressed && Platform.OS === 'ios' && styles.rowKeyPressed, active && styles.rowKeyActive]}
     >
-      <Text style={[styles.rowKeyLabel, active && { color: colors.brand }]}>{label}</Text>
+      <Text style={[styles.rowKeyLabel, active && { color: colors.brand }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   inset: { flex: 1, paddingHorizontal: space.gutter, backgroundColor: TERMINAL_THEME.background },
+  headerTitle: { flexShrink: 1, minHeight: touch, justifyContent: 'center' },
   headerSub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dots: { flexDirection: 'row', gap: space.xs },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.lineStrong },
@@ -442,7 +445,7 @@ const styles = StyleSheet.create({
   },
   rowKey: {
     flex: 1,
-    minHeight: 44,
+    minHeight: touch,
     borderRadius: radius.sm + 2,
     borderCurve: 'continuous',
     alignItems: 'center',

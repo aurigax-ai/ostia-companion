@@ -1,6 +1,7 @@
 import { expect, jest, test } from '@jest/globals';
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import { SettingsScreen } from './SettingsScreen';
 
 const mockState = { status: 'connected' as string };
@@ -29,6 +30,12 @@ jest.mock('../services/prefsStore', () => ({
 }));
 jest.mock('../services/connectionLog', () => ({ connectionLogText: () => '' }));
 jest.mock('../services/openTailscaleApp', () => ({ openTailscaleApp: jest.fn() }));
+jest.mock('expo-haptics', () => ({
+  selectionAsync: jest.fn(),
+  impactAsync: jest.fn(),
+  notificationAsync: jest.fn(),
+  NotificationFeedbackType: { Success: 'success', Warning: 'warning' },
+}));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '1.0.0' } } }));
 
 async function renderSettings() {
@@ -50,4 +57,17 @@ test('SET-C12 keeps showing the stored details while the desktop is offline', as
   expect(screen.getByText('Offline')).toBeTruthy();
   expect(screen.getByText('100.87.12.4:8722')).toBeTruthy();
   expect(screen.getByText('ct2Vi9f8LA9T')).toBeTruthy();
+});
+
+test('SET-C13 pressing rows, buttons and the stepper makes no haptic call, and Haptics says what it still covers', async () => {
+  mockState.status = 'connected';
+  await renderSettings();
+  await fireEvent.press(screen.getByText('Desktops'));
+  await fireEvent.press(screen.getByLabelText('Larger text'));
+  await fireEvent.press(screen.getByLabelText('Smaller text'));
+  await fireEvent.press(screen.getByLabelText('Key row'));
+  expect(Haptics.selectionAsync).not.toHaveBeenCalled();
+  expect(Haptics.impactAsync).not.toHaveBeenCalled();
+  expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+  expect(screen.getByText('Buzz when pairing is approved or fails')).toBeTruthy();
 });

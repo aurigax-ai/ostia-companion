@@ -53,6 +53,7 @@ export function MessageField({
   editable = true,
   sending,
   autoFocus,
+  allowEmpty,
   label = 'Message',
   sendLabel = 'Send',
 }: {
@@ -63,10 +64,11 @@ export function MessageField({
   editable?: boolean;
   sending?: boolean;
   autoFocus?: boolean;
+  allowEmpty?: boolean;
   label?: string;
   sendLabel?: string;
 }) {
-  const ready = !!value.trim() && editable && !sending;
+  const ready = (!!value.trim() || !!allowEmpty) && editable && !sending;
   return (
     <View style={styles.field}>
       <TextInput
@@ -104,7 +106,7 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   chips: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  chip: { minHeight: 32, paddingHorizontal: space.md },
+  chip: { paddingHorizontal: space.md },
   field: {
     flexDirection: 'row',
     alignItems: 'flex-end',

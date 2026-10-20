@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import pkg from '../../package.json';
 import { DEFAULT_PREFS } from './prefs';
-import { hapticFor, listAnimation, pillFadeMs } from './motion';
+import { HAPTICS, hapticFor, listAnimation, pillFadeMs } from './motion';
 
 describe('motion', () => {
   it('MOT-C1 animates list changes for 200 ms, easing in and out', () => {
@@ -22,12 +22,12 @@ describe('motion', () => {
   it('MOT-C3 buzzes success when pairing is approved and a warning when it fails', () => {
     expect(hapticFor('approved', DEFAULT_PREFS)).toBe('success');
     expect(hapticFor('failed', DEFAULT_PREFS)).toBe('warning');
-    expect(hapticFor('tap', DEFAULT_PREFS)).toBe('selection');
+    expect(Object.keys(HAPTICS)).toEqual(['approved', 'failed']);
   });
 
   it('MOT-C4 fires no haptic when haptics are off', () => {
     const off = { ...DEFAULT_PREFS, haptics: false };
-    expect([hapticFor('tap', off), hapticFor('approved', off), hapticFor('failed', off)]).toEqual([null, null, null]);
+    expect([hapticFor('approved', off), hapticFor('failed', off)]).toEqual([null, null]);
   });
 
   it('MOT-C5 fades a changed pill word in over 150 ms', () => {
