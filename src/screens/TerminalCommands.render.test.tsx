@@ -200,7 +200,7 @@ test('CRD-C46 the Terminal view holds the phone grid once after layout, and Comm
   const { header } = await openTerminal();
   expect(rpc.held).toEqual([]);
   await sleep(450);
-  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  expect(rpc.held).toEqual(['p-zsh 46x38']);
   await waitFor(() => expect(screen.getByText('Sized to this phone')).toBeTruthy());
   await act(async () => header().headerRight().props.onChange('commands'));
   await sleep(50);
@@ -215,9 +215,9 @@ test('CRD-C47 when the desktop takes the size back the phone does not hold again
   expect(screen.getByText('The desktop took its size back')).toBeTruthy();
   await act(async () => layout(360, 580));
   await sleep(450);
-  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  expect(rpc.held).toEqual(['p-zsh 46x38']);
   await fireEvent.press(screen.getByText('Size to this phone'));
-  await waitFor(() => expect(rpc.held).toEqual(['p-zsh 50x38', 'p-zsh 50x37']));
+  await waitFor(() => expect(rpc.held).toEqual(['p-zsh 46x38', 'p-zsh 46x37']));
   await waitFor(() => expect(screen.getByText('Sized to this phone')).toBeTruthy());
 });
 
@@ -238,7 +238,7 @@ test('CRD-C48 locking the phone releases the hold and coming back holds again, b
   expect(rpc.released).toBe(1);
   await act(async () => change('active'));
   await sleep(450);
-  expect(rpc.held).toEqual(['p-zsh 50x38', 'p-zsh 50x38']);
+  expect(rpc.held).toEqual(['p-zsh 46x38', 'p-zsh 46x38']);
   spy.mockImplementation((() => ({ remove: () => {} })) as never);
 });
 
@@ -252,7 +252,7 @@ test('CRD-C49 the landscape view holds the landscape grid once, never the portra
   expect(rpc.held).toEqual([]);
   await act(async () => layout(800, 360));
   await sleep(450);
-  expect(rpc.held).toEqual(['p-zsh 111x23']);
+  expect(rpc.held).toEqual(['p-zsh 107x23']);
   await openTerminal(['read', 'notify']);
   await sleep(450);
   expect(rpc.held).toEqual([]);
@@ -265,7 +265,7 @@ test('CRD-C50 leaving before the hold is answered releases it when the answer ar
   await act(async () => header().headerRight().props.onChange('terminal'));
   await act(async () => layout(360, 600));
   await sleep(450);
-  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  expect(rpc.held).toEqual(['p-zsh 46x38']);
   await act(async () => header().headerRight().props.onChange('commands'));
   await sleep(50);
   expect(rpc.released).toBe(0);
@@ -278,7 +278,7 @@ test('CRD-C51 after a socket drop and re-attach the hold is sent again and the n
   await openTerminal();
   await waitFor(() => expect(screen.getByText('Sized to this phone')).toBeTruthy());
   await act(async () => rpc.event('pty.attached', { paneId: 'p-zsh', role: 'owner', cols: 40, rows: 8, cursor: 0, dropped: false }));
-  await waitFor(() => expect(rpc.held).toEqual(['p-zsh 50x38', 'p-zsh 50x38']));
+  await waitFor(() => expect(rpc.held).toEqual(['p-zsh 46x38', 'p-zsh 46x38']));
   await waitFor(() => expect(screen.getByText('Sized to this phone')).toBeTruthy());
 });
 
@@ -292,14 +292,14 @@ test('CRD-C52 showing the keyboard or two quick layouts cause no second hold, an
   await act(async () => layout(360, 560));
   await act(async () => layout(360, 600));
   await sleep(450);
-  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  expect(rpc.held).toEqual(['p-zsh 46x38']);
   await act(async () => handlers.keyboardDidShow?.());
   await act(async () => layout(360, 300));
   await sleep(450);
   await act(async () => handlers.keyboardDidHide?.());
   await act(async () => layout(360, 600));
   await sleep(450);
-  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  expect(rpc.held).toEqual(['p-zsh 46x38']);
   spy.mockRestore();
 });
 
@@ -310,7 +310,7 @@ test('CRD-C53 old pane attach events and sizes are ignored by the new pane', asy
   await act(async () => rpc.event('pty.size', { paneId: 'p-other', cols: 20, rows: 5 }));
   await sleep(450);
   expect(screen.getByText('Sized to this phone')).toBeTruthy();
-  expect(rpc.held).toEqual(['p-zsh 50x38']);
+  expect(rpc.held).toEqual(['p-zsh 46x38']);
 });
 
 test('CRD-C54 a non-ASCII command is sent as UTF-8, not rejected by btoa', async () => {

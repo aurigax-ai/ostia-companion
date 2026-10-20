@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { FlatList, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { Bot, Square } from 'lucide-react-native';
+import { Bot } from 'lucide-react-native';
 import { ChatSwitch } from '../components/ChatSwitch';
 import { TurnView } from '../components/ChatBlocks';
 import { ChatComposer } from '../components/ChatComposer';
@@ -170,11 +170,6 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
           <Text style={[type.label, { color: colors.brand }]}>Review</Text>
         </Pressable>
       ) : null}
-      {running && canRespond ? (
-        <View style={styles.stop}>
-          <Button label="Stop" icon={Square} variant="tonal" compact onPress={() => void interruptAgent(paneId, 'esc')} />
-        </View>
-      ) : null}
       <ChatComposer
         value={text}
         onChangeText={edit}
@@ -194,6 +189,7 @@ export function ConversationScreen({ navigation, route }: ScreenProps<'Conversat
             images={images}
             imageUri={attached?.uri ?? null}
             onRemoveImage={() => setAttached(null)}
+            onStop={running && canRespond ? () => void interruptAgent(paneId, 'esc') : undefined}
             disabled={!canRespond || sending}
           />
         }
@@ -231,7 +227,6 @@ const styles = StyleSheet.create({
   thread: { paddingHorizontal: space.gutter, paddingTop: space.lg, paddingBottom: space.lg, flexGrow: 1 },
   footer: { gap: space.md, paddingTop: space.md },
   center: { textAlign: 'center' },
-  stop: { alignItems: 'flex-start', paddingHorizontal: space.gutter, paddingBottom: space.sm },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.gutter, marginBottom: space.sm, paddingHorizontal: space.md, minHeight: 36, borderRadius: radius.full, backgroundColor: colors.attnSoft },
   waitingText: { flex: 1 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.attn },

@@ -90,3 +90,12 @@ describe('Workspaces', () => {
     expect(workspaceSummary([], {}, NOW)).toBe('Empty');
   });
 });
+
+describe('the pi Agent pane', () => {
+  const pi = (patch: Partial<Pane> = {}): Pane => ({ paneId: 'pi', sessionId: 's-ledger', kind: 'agent', title: 'pi', running: true, blockCount: 0, ...patch });
+
+  it('PHP-C5 a running pi pane is Active, an idle one is Idle, as its Running pill says', () => {
+    expect(paneSections([pi()], {}).active.map((p) => p.paneId)).toEqual(['pi']);
+    expect(paneSections([pi({ running: false })], {}).idle.map((p) => p.paneId)).toEqual(['pi']);
+  });
+});
