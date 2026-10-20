@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import type { DesktopAddress } from '../model/rediscovery';
 import { activeDesktop, addDesktop, chooseDesktop, DesktopList, EMPTY_DESKTOPS, removeDesktop } from '../model/desktops';
 
 export interface PairingData {
@@ -8,6 +9,7 @@ export interface PairingData {
   desktopName: string;
   gatewayHost: string;
   gatewayPort: number;
+  addresses?: DesktopAddress[];
   privateKey: string;
   publicKey: string;
   pairedAt?: number;
@@ -73,4 +75,14 @@ export function chooseSavedDesktop(deviceId: string): Promise<DesktopList> {
 
 export function forgetDesktop(deviceId: string): Promise<DesktopList> {
   return update((list) => removeDesktop(list, deviceId));
+}
+
+export async function saveRoute(
+  deviceId: string,
+  route: Pick<PairingData, 'gatewayHost' | 'gatewayPort' | 'addresses'>,
+): Promise<void> {
+  await update((list) => ({
+    ...list,
+    desktops: list.desktops.map((d) => (d.deviceId === deviceId ? { ...d, ...route } : d)),
+  }));
 }
