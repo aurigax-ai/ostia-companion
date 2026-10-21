@@ -26,6 +26,7 @@ export interface Pane {
   hibernated?: boolean;
   waking?: boolean;
   since?: number;
+  waitingSince?: number;
 }
 
 export interface PaneUpdate {

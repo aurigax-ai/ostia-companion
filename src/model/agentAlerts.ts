@@ -14,6 +14,7 @@ export interface AgentAlert {
   paneId: string;
   paneTitle: string;
   askId?: string;
+  key?: string;
   title: string;
   body: string;
   actions: AlertAction[];
@@ -33,11 +34,26 @@ function who(pane: Pane, sessions: Session[]): string {
   return workspace ? `${agent} in ${workspace}` : agent;
 }
 
+export function validWaitingSince(pane: Pane): number | undefined {
+  const since: unknown = pane.waitingSince;
+  return pane.agentState === 'waiting' && typeof since === 'number' && Number.isFinite(since) && since > 0 ? since : undefined;
+}
+
+export function paneAlertId(pane: Pane): string {
+  return `${pane.paneId}:${pane.agentState}`;
+}
+
+export function paneAlertKey(pane: Pane): string | undefined {
+  const since = validWaitingSince(pane);
+  return since === undefined ? undefined : `${paneAlertId(pane)}:${since}`;
+}
+
 export function alertForPane(pane: Pane, sessions: Session[], prefs: AlertPrefs): AgentAlert | null {
   const kind = pane.agentState ? KIND[pane.agentState] : undefined;
   if (!kind || !prefs[kind.pref]) return null;
   return {
-    id: `${pane.paneId}:${pane.agentState}`,
+    id: paneAlertId(pane),
+    key: paneAlertKey(pane),
     paneId: pane.paneId,
     paneTitle: paneTitle(pane),
     title: `${who(pane, sessions)} ${kind.verb}`,
@@ -47,9 +63,9 @@ export function alertForPane(pane: Pane, sessions: Session[], prefs: AlertPrefs)
 }
 
 export function alertsFromChange(before: Pane[], after: Pane[], sessions: Session[], prefs: AlertPrefs): AgentAlert[] {
-  const previous = new Map(before.map((pane) => [pane.paneId, pane.agentState]));
+  const previous = new Map(before.map((pane) => [pane.paneId, paneAlertKey(pane) ?? paneAlertId(pane)]));
   return after.flatMap((pane) => {
-    if (!previous.has(pane.paneId) || previous.get(pane.paneId) === pane.agentState) return [];
+    if (!previous.has(pane.paneId) || previous.get(pane.paneId) === (paneAlertKey(pane) ?? paneAlertId(pane))) return [];
     const alert = alertForPane(pane, sessions, prefs);
     return alert ? [alert] : [];
   });
@@ -67,6 +83,7 @@ export function alertForAsk(ask: Ask, sessions: Session[]): AgentAlert {
   if (ask.allowText) actions.push({ id: 'reply', label: 'Reply', unlock: false, reply: true });
   return {
     id: `ask:${ask.askId}`,
+    key: `ask:${ask.askId}`,
     paneId: ask.paneId,
     paneTitle: ask.agent ?? 'Terminal',
     askId: ask.askId,

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Ask } from './asks';
 import { DEFAULT_ALERT_PREFS as DEFAULT_PREFS } from './alertPrefs';
-import { actionFor, alertForAsk, alertsFromChange, tapTarget, watchState } from './agentAlerts';
+import { actionFor, alertForAsk, alertsFromChange, tapTarget, validWaitingSince, watchState } from './agentAlerts';
 import type { Pane, Session } from './workspaces';
 
 const sessions: Session[] = [{ sessionId: 's', name: 'api-server', kind: 'project', workDir: '/w', state: 'idle' }];
 
-function agent(state: Pane['agentState'], message?: string): Pane {
-  return { paneId: 'p-claude', sessionId: 's', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: state, agentMessage: message };
+function agent(state: Pane['agentState'], message?: string, waitingSince?: number): Pane {
+  return { paneId: 'p-claude', sessionId: 's', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: state, agentMessage: message, waitingSince };
 }
 
 const PERMISSION: Ask = {
@@ -27,6 +27,32 @@ const PERMISSION: Ask = {
 };
 
 describe('agent alerts', () => {
+  it('NTF-C26 remembers a prompt alert per wait, so a new wait alerts again and the same wait does not', () => {
+    const first = alertsFromChange([agent('working')], [agent('waiting', 'x', 100)], sessions, DEFAULT_PREFS);
+    expect(first.map((a) => [a.id, a.key])).toEqual([['p-claude:waiting', 'p-claude:waiting:100']]);
+    expect(alertsFromChange([agent('waiting', 'x', 100)], [agent('waiting', 'x', 100)], sessions, DEFAULT_PREFS)).toEqual([]);
+    const again = alertsFromChange([agent('waiting', 'x', 100)], [agent('waiting', 'x', 200)], sessions, DEFAULT_PREFS);
+    expect(again.map((a) => a.key)).toEqual(['p-claude:waiting:200']);
+  });
+
+  it('NTF-C27 uses one notification id for every wait of a pane, so a new wait replaces the old notification', () => {
+    const first = alertsFromChange([agent('working')], [agent('waiting', 'x', 100)], sessions, DEFAULT_PREFS)[0];
+    const second = alertsFromChange([agent('waiting', 'x', 100)], [agent('waiting', 'x', 200)], sessions, DEFAULT_PREFS)[0];
+    expect(second.id).toBe(first.id);
+    expect(second.key).not.toBe(first.key);
+  });
+
+  it.each([null, 'soon', Number.NaN, Number.POSITIVE_INFINITY, 0, -5, {}])(
+    'NTF-C28 ignores a waitingSince of %j: the alert falls back to the pane alone and is not remembered',
+    (bad) => {
+      const pane = { ...agent('waiting', 'x'), waitingSince: bad as never };
+      expect(validWaitingSince(pane)).toBeUndefined();
+      const [alert] = alertsFromChange([agent('working')], [pane], sessions, DEFAULT_PREFS);
+      expect(alert.id).toBe('p-claude:waiting');
+      expect(alert.key).toBeUndefined();
+    },
+  );
+
   it('NTF-C1 alerts once when an agent starts waiting, with its message', () => {
     const alerts = alertsFromChange([agent('working')], [agent('waiting', 'Apply this migration?')], sessions, DEFAULT_PREFS);
     expect(alerts).toEqual([

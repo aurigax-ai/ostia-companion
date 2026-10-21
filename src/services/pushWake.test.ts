@@ -18,7 +18,7 @@ const ask = (askId: string, paneId = 'p1'): Ask => ({
   since: 1,
 });
 
-const pane = (paneId: string, agentState: string) => ({
+const pane = (paneId: string, agentState: string, waitingSince?: number) => ({
   paneId,
   sessionId: 's1',
   kind: 'agent',
@@ -28,6 +28,7 @@ const pane = (paneId: string, agentState: string) => ({
   agent: 'claude',
   agentState,
   agentMessage: 'Ready for the next prompt',
+  ...(waitingSince === undefined ? {} : { waitingSince }),
 });
 
 interface Setup {
@@ -121,12 +122,34 @@ describe('waking from a push (contract v1.14 §5)', () => {
     expect(posted[1].title).toBe('claude in api-server needs you');
   });
 
-  it('PSH-W9 raises a prompt alert again for a new wait, and not while its alert is still showing', async () => {
-    const wait = deps({ asks: [], panes: [pane('p2', 'waiting')], raised: ['p2:waiting'] });
-    await runWake(wait.value);
-    expect(wait.posted.map((a) => a.id)).toEqual(['p2:waiting']);
-    const showing = deps({ asks: [], panes: [pane('p2', 'waiting')], presented: ['p2:waiting'] });
+  it('PSH-W9 raises a prompt alert once per wait: not while showing and not after it was raised', async () => {
+    const showing = deps({ asks: [], panes: [pane('p2', 'waiting', 100)], presented: ['p2:waiting'] });
     await runWake(showing.value);
     expect(showing.posted).toEqual([]);
+    const dismissed = deps({ asks: [], panes: [pane('p2', 'waiting', 100)], raised: ['p2:waiting:100'] });
+    await runWake(dismissed.value);
+    expect(dismissed.posted).toEqual([]);
+  });
+
+  it('PSH-W12 raises a prompt alert again for a new wait of the same pane', async () => {
+    const { value, posted } = deps({ asks: [], panes: [pane('p2', 'waiting', 200)], raised: ['p2:waiting:100'] });
+    await runWake(value);
+    expect(posted.map((a) => a.key)).toEqual(['p2:waiting:200']);
+    expect(posted[0].id).toBe('p2:waiting');
+  });
+
+  it('PSH-W14 raises a prompt alert for a pane whose waitingSince is not a number, and does not remember it', async () => {
+    const bad = { ...pane('p2', 'waiting'), waitingSince: null as never };
+    const { value, posted } = deps({ asks: [], panes: [bad], raised: ['p2:waiting:null'] });
+    await runWake(value);
+    expect(posted.map((a) => a.id)).toEqual(['p2:waiting']);
+    expect(posted[0].key).toBeUndefined();
+  });
+
+  it('PSH-W13 falls back to the pane id alone when the desktop sends no waitingSince', async () => {
+    const { value, posted } = deps({ asks: [], panes: [pane('p2', 'waiting')] });
+    await runWake(value);
+    expect(posted.map((a) => a.id)).toEqual(['p2:waiting']);
+    expect(posted[0].key).toBeUndefined();
   });
 });
