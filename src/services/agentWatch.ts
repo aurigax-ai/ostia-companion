@@ -1,7 +1,7 @@
 import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { startAgentWatch, stopAgentWatch } from 'agent-watch';
-import { actionFor, AgentAlert, alertForAsk, alertsFromChange, tapTarget, watchState } from '../model/agentAlerts';
+import { actionFor, AgentAlert, alertForAsk, alertsFromChange, paneAlertId, tapTarget, watchState } from '../model/agentAlerts';
 import type { Ask } from '../model/asks';
 import type { Pane, Session } from '../model/workspaces';
 import { getAlertPrefs, onAlertPrefs } from './alertPrefsStore';
@@ -21,7 +21,7 @@ let latestAsks: Ask[] = [];
 let running = false;
 
 export async function post(alert: AgentAlert) {
-  if (alert.askId) void rememberRaised(alert.id);
+  if (alert.once) void rememberRaised(alert.id);
   if (alert.actions.length > 0) {
     await Notifications.setNotificationCategoryAsync(
       alert.id,
@@ -75,7 +75,8 @@ export function startAgentAlerts(openTerminal: OpenTerminal): void {
     for (const id of shownAsks) if (!open.has(id)) void Notifications.dismissNotificationAsync(`ask:${id}`);
     if (getAlertPrefs().waiting) {
       asks.filter((ask) => !shownAsks.has(ask.askId)).forEach((ask) => {
-        void Notifications.dismissNotificationAsync(`${ask.paneId}:waiting`);
+        const waitingPane = panes.find((pane) => pane.paneId === ask.paneId);
+        if (waitingPane) void Notifications.dismissNotificationAsync(paneAlertId(waitingPane));
         void post(alertForAsk(ask, sessions));
       });
     }

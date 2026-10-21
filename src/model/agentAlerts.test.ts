@@ -6,8 +6,8 @@ import type { Pane, Session } from './workspaces';
 
 const sessions: Session[] = [{ sessionId: 's', name: 'api-server', kind: 'project', workDir: '/w', state: 'idle' }];
 
-function agent(state: Pane['agentState'], message?: string): Pane {
-  return { paneId: 'p-claude', sessionId: 's', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: state, agentMessage: message };
+function agent(state: Pane['agentState'], message?: string, waitingSince?: number): Pane {
+  return { paneId: 'p-claude', sessionId: 's', kind: 'terminal', title: 'claude', running: true, blockCount: 1, agent: 'claude', agentState: state, agentMessage: message, waitingSince };
 }
 
 const PERMISSION: Ask = {
@@ -27,6 +27,14 @@ const PERMISSION: Ask = {
 };
 
 describe('agent alerts', () => {
+  it('NTF-C26 keys a prompt alert on the wait, so a new wait alerts again and the same wait does not', () => {
+    const first = alertsFromChange([agent('working')], [agent('waiting', 'x', 100)], sessions, DEFAULT_PREFS);
+    expect(first.map((a) => [a.id, a.once])).toEqual([['p-claude:waiting:100', true]]);
+    expect(alertsFromChange([agent('waiting', 'x', 100)], [agent('waiting', 'x', 100)], sessions, DEFAULT_PREFS)).toEqual([]);
+    const again = alertsFromChange([agent('waiting', 'x', 100)], [agent('waiting', 'x', 200)], sessions, DEFAULT_PREFS);
+    expect(again.map((a) => a.id)).toEqual(['p-claude:waiting:200']);
+  });
+
   it('NTF-C1 alerts once when an agent starts waiting, with its message', () => {
     const alerts = alertsFromChange([agent('working')], [agent('waiting', 'Apply this migration?')], sessions, DEFAULT_PREFS);
     expect(alerts).toEqual([

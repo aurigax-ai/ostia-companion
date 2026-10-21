@@ -65,7 +65,7 @@ describe('switching desktops', () => {
     expect(calls).toEqual(['forget push dev_b']);
   });
 
-  it('DSK-C15 releases nothing when the paired desktop is the active one', async () => {
+  it('DSK-C16 releases nothing when the paired desktop is the active one', async () => {
     await releasePushOfPrevious('dev_b');
     expect(calls).toEqual([]);
   });

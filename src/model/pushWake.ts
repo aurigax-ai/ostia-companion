@@ -12,18 +12,18 @@ export function wakeAlerts(
   sessions: Session[],
   prefs: AlertPrefs,
   presentedIds: string[],
-  raisedAskIds: string[],
+  raisedIds: string[],
 ): AgentAlert[] {
   if (!prefs.waiting) return [];
   const showing = new Set(presentedIds);
-  const raised = new Set(raisedAskIds);
+  const raised = new Set(raisedIds);
   const askAlerts = asks
     .map((ask) => alertForAsk(ask, sessions))
     .filter((alert) => !showing.has(alert.id) && !raised.has(alert.id));
   const promptAlerts = panes
     .filter((pane) => pane.agentState === 'waiting' && !asks.some((ask) => ask.paneId === pane.paneId))
     .flatMap((pane) => alertForPane(pane, sessions, prefs) ?? [])
-    .filter((alert) => !showing.has(alert.id));
+    .filter((alert) => !showing.has(alert.id) && !raised.has(alert.id));
   return [...askAlerts, ...promptAlerts];
 }
 
