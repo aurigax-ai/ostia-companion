@@ -59,6 +59,7 @@ export interface MockDevice {
   deviceId: string;
   deviceToken: string;
   name: string;
+  installId?: string;
   caps: MockCap[];
 }
 
@@ -73,6 +74,7 @@ export interface MockGateway {
   payload: (host: string) => object;
   link: (host: string) => string;
   mintCode: () => string;
+  rename: (deviceId: string, name: string) => void;
   revoke: (deviceId: string) => void;
   setCaps: (deviceId: string, caps: MockCap[]) => void;
   updatePane: (paneId: string, patch: Partial<Pane>) => void;
@@ -155,7 +157,7 @@ function send(res: import('node:http').ServerResponse, status: number, body: obj
 
 interface PendingPair {
   pairCode: string;
-  device: { name: string; pubkey: string };
+  device: { name: string; pubkey: string; installId?: unknown };
   commit: string;
   desktopNonce: Buffer;
   startedAt: number;
@@ -378,11 +380,15 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       const decide = setTimeout(() => {
         clearTimeout(expiry);
         if (decision === 'deny') return send(res, 403, { error: 'declined' });
+        const installId = typeof request.device.installId === 'string' ? request.device.installId : undefined;
+        const replaced = installId ? devices.filter((d) => d.installId === installId) : [];
+        replaced.forEach((old) => gateway.revoke(old.deviceId));
         const device: MockDevice = {
           deviceId: `dev_${randomBytes(6).toString('hex')}`,
           deviceToken: randomBytes(24).toString('base64url'),
-          name: request.device.name,
+          name: replaced[0]?.name ?? request.device.name,
           caps: canonical(caps),
+          ...(installId ? { installId } : {}),
         };
         devices.push(device);
         saveDevices();
@@ -787,6 +793,12 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     payload: (host) => ({ v: 1, host, port: gateway.port, fingerprint, pairCode, name }),
     link: (host) => `ostia-pair://${Buffer.from(JSON.stringify(gateway.payload(host))).toString('base64url')}`,
     mintCode: () => (pairCode = mintCode()),
+    rename: (deviceId, name) => {
+      const device = devices.find((d) => d.deviceId === deviceId);
+      if (!device) return;
+      device.name = name;
+      saveDevices();
+    },
     revoke: (deviceId) => {
       const index = devices.findIndex((d) => d.deviceId === deviceId);
       if (index < 0) return;
