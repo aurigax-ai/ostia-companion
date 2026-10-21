@@ -34,10 +34,12 @@ describe('TerminalCopy', () => {
 
   it('CRD-V4 keeps colours', async () => {
     const copy = new TerminalCopy(40, 6);
-    await copy.write(bytes(run('t', '\x1b[31mred\x1b[0m plain \x1b[38;2;1;2;3mrgb\r\n')));
+    await copy.write(bytes(run('t', '\x1b[31mred\x1b[0m \x1b[91mbright\x1b[0m plain \x1b[38;2;1;2;3mrgb\r\n')));
     const [line] = copy.runs()[0].output;
     expect(line.map((s) => [s.text, s.fg])).toEqual([
-      ['red', '#00dfdb'],
+      ['red', '#ee5396'],
+      [' ', undefined],
+      ['bright', '#ee5396'],
       [' plain ', undefined],
       ['rgb', '#010203'],
     ]);
