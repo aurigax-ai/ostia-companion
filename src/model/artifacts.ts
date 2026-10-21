@@ -3,7 +3,7 @@ import { FileEntry } from './files';
 export const PAD_FILE = 'PAD.md';
 export const PAD_TITLE = 'Scratch Pad';
 export const PAD_EMPTY = 'A working note for this workspace, shared with its agents. It goes away with the workspace; move what you want to keep into the project or your notes.';
-export const ARTIFACT_LIST_LIMIT = 200;
+const ARTIFACT_LIST_LIMIT = 200;
 
 export type ArtifactChange = { sessionId: string; path: string; change: 'added' | 'changed' | 'removed' };
 export type Unread = Record<string, string[]>;

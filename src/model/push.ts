@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 
 export type PushPlatform = 'fcm' | 'apns';
 
-export type PushState = 'off' | 'registering' | 'on' | 'unavailable' | 'refused' | 'busy' | 'notAllowed' | 'waiting';
+type PushState = 'off' | 'registering' | 'on' | 'unavailable' | 'refused' | 'busy' | 'notAllowed' | 'waiting';
 
 export interface PushStatus {
   server: string | null;
@@ -23,7 +23,7 @@ export interface StoredPush {
 
 export const PUSH_OFF: PushStatus = { server: null, state: 'off' };
 
-export function parsePushServer(value: unknown): string | null {
+function parsePushServer(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   try {
     const url = new URL(value);

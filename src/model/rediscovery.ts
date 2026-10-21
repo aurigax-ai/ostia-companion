@@ -1,6 +1,6 @@
 import type { PairingData } from '../services/storage';
 
-export type AddressKind = 'tailnet' | 'phone' | 'lan' | 'relay';
+type AddressKind = 'tailnet' | 'phone' | 'lan' | 'relay';
 
 export interface DesktopAddress {
   kind: AddressKind;
@@ -18,7 +18,7 @@ const KINDS: AddressKind[] = ['tailnet', 'phone', 'lan', 'relay'];
 const HOST = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 
-export function validPort(port: unknown): port is number {
+function validPort(port: unknown): port is number {
   return Number.isInteger(port) && (port as number) >= 1 && (port as number) <= 65535;
 }
 
@@ -32,7 +32,7 @@ export function parseAddresses(value: unknown): DesktopAddress[] | null {
   return usable.length === 0 && value.length > 0 ? null : usable;
 }
 
-export function routeKey(route: Route): string {
+function routeKey(route: Route): string {
   return `${route.host.toLowerCase()}:${route.port}`;
 }
 

@@ -1,4 +1,4 @@
-export type AskKind = 'permission' | 'question' | 'approval';
+type AskKind = 'permission' | 'question' | 'approval';
 
 export interface AskChoice {
   id: string;

@@ -72,7 +72,7 @@ export function utf8Bytes(text: string): string {
   return unescape(encodeURIComponent(text));
 }
 
-export function sliceBytes(piece: FileContent): string {
+function sliceBytes(piece: FileContent): string {
   return piece.base64 !== undefined ? atob(piece.base64) : utf8Bytes(piece.text ?? '');
 }
 

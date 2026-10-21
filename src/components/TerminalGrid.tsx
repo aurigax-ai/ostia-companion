@@ -6,7 +6,7 @@ import { Box, LINE_HEIGHT, MONO_ADVANCE, clampZoom, fitToBox, fitToWidth } from 
 import { colors, font, space } from '../theme';
 
 const ROW_SLACK = 6;
-export const GRID_PAD = space.md;
+const GRID_PAD = space.md;
 const BOTTOM_SLACK_LINES = 1;
 
 function spanStyle(span: Span) {

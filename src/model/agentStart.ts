@@ -1,8 +1,6 @@
 export const AGENTS = ['claude', 'codex'] as const;
 export type AgentName = (typeof AGENTS)[number];
 
-export const PROMPT_LIMIT = 4000;
-
 const NOT_CONNECTED = -1;
 const NEEDS_ELEVATION = -32003;
 const NOT_STARTED = -32006;

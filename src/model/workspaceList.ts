@@ -2,7 +2,7 @@ import type { Ask } from './asks';
 import { ago, changedAt, DAY_MS, isAgent, Seen } from './now';
 import { failedExit, isOpenable, isPiPane, Pane, paneTitle, Session, shortPath } from './workspaces';
 
-export const SLEEP_AFTER_MS = 3 * DAY_MS;
+const SLEEP_AFTER_MS = 3 * DAY_MS;
 
 export interface WorkspaceRow {
   session: Session;
@@ -29,12 +29,12 @@ function busy(pane: Pane): boolean {
   return pane.agentState === 'working' || pane.agentState === 'waiting' || ((!isAgent(pane) || isPiPane(pane)) && pane.running);
 }
 
-export function lastActive(panes: Pane[], seen: Seen): number | null {
+function lastActive(panes: Pane[], seen: Seen): number | null {
   const times = panes.map((pane) => changedAt(pane, seen)).filter((at): at is number => at !== null);
   return times.length > 0 ? Math.max(...times) : null;
 }
 
-export function isSleeping(panes: Pane[], seen: Seen, now: number): boolean {
+function isSleeping(panes: Pane[], seen: Seen, now: number): boolean {
   if (panes.length === 0) return false;
   if (panes.every((pane) => pane.hibernated)) return true;
   if (panes.some((pane) => !pane.hibernated && busy(pane))) return false;

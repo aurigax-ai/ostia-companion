@@ -1,6 +1,6 @@
 export type ToolKind = 'edit' | 'command' | 'search' | 'read' | 'subagent' | 'web' | 'other';
-export type TurnStatus = 'running' | 'done' | 'interrupted' | 'failed';
-export type PlanStatus = 'pending' | 'active' | 'done';
+type TurnStatus = 'running' | 'done' | 'interrupted' | 'failed';
+type PlanStatus = 'pending' | 'active' | 'done';
 export type EditChange = 'add' | 'update' | 'delete';
 
 export interface PlanItem {
@@ -29,7 +29,7 @@ export interface StreamState {
 }
 
 export const MAX_TURNS = 50;
-export const MAX_SHOWN_CHARS = 20_000;
+const MAX_SHOWN_CHARS = 20_000;
 export const MAX_DIFF_LINES = 500;
 
 export const EMPTY_STREAM: StreamState = { turns: [], live: false, ended: null };

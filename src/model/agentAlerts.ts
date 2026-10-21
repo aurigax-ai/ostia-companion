@@ -2,7 +2,7 @@ import type { AlertPrefs } from './alertPrefs';
 import type { Ask } from './asks';
 import { paneTitle, type Pane, type Session } from './workspaces';
 
-export interface AlertAction {
+interface AlertAction {
   id: string;
   label: string;
   unlock: boolean;
@@ -43,7 +43,7 @@ export function paneAlertId(pane: Pane): string {
   return `${pane.paneId}:${pane.agentState}`;
 }
 
-export function paneAlertKey(pane: Pane): string | undefined {
+function paneAlertKey(pane: Pane): string | undefined {
   const since = validWaitingSince(pane);
   return since === undefined ? undefined : `${paneAlertId(pane)}:${since}`;
 }

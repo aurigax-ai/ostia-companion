@@ -50,7 +50,7 @@ export async function requestPairing(
   return result;
 }
 
-export const APPROVAL_WINDOW_MS = 120_000;
+const APPROVAL_WINDOW_MS = 120_000;
 
 export class PairCancelled extends Error {
   constructor() {

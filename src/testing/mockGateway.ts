@@ -12,9 +12,9 @@ import { checkCode } from '../services/pairCheck.ts';
 import { agentPromptScreen, demoScenario, PROMPT_OPTIONS, type Scenario, SHELL_PROMPT, shellScreen, VIM_SCREEN } from './mockScenario.ts';
 
 export type MockCap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
-export type MockDecision = 'approve' | 'deny' | 'never';
+type MockDecision = 'approve' | 'deny' | 'never';
 
-export interface MockAddress {
+interface MockAddress {
   kind: 'tailnet' | 'phone' | 'lan' | 'relay';
   host: string;
   port: number;
@@ -40,7 +40,7 @@ export interface MockGatewayOptions {
   imagesUnsupported?: boolean;
 }
 
-export interface MockScreenFrame {
+interface MockScreenFrame {
   header: { seq: number; width: number; height: number; screenWidth: number; screenHeight: number; blocked: boolean };
   jpeg: Buffer;
 }
@@ -56,7 +56,7 @@ export interface MockScreenLink {
   close: (code?: number, reason?: string) => void;
 }
 
-export interface MockDevice {
+interface MockDevice {
   deviceId: string;
   deviceToken: string;
   name: string;

@@ -1,6 +1,6 @@
-export const TAILSCALE_ANDROID_PACKAGE = 'com.tailscale.ipn';
+const TAILSCALE_ANDROID_PACKAGE = 'com.tailscale.ipn';
 export const TAILSCALE_PLAY_URL = `https://play.google.com/store/apps/details?id=${TAILSCALE_ANDROID_PACKAGE}`;
-export const TAILSCALE_APP_STORE_URL = 'https://apps.apple.com/app/tailscale/id1470499037';
+const TAILSCALE_APP_STORE_URL = 'https://apps.apple.com/app/tailscale/id1470499037';
 
 export interface TailscaleOpener {
   platform: string;

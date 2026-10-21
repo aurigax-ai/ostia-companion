@@ -8,7 +8,7 @@ const DIFF_PREVIEW = 40;
 
 type ToolBlock = Extract<Block, { kind: 'tool' }>;
 
-export function ToolLine({ block, onOpen }: { block: ToolBlock; onOpen: (block: ToolBlock) => void }) {
+function ToolLine({ block, onOpen }: { block: ToolBlock; onOpen: (block: ToolBlock) => void }) {
   const failed = toolFailed(block);
   const target = toolTarget(block);
   const body = (

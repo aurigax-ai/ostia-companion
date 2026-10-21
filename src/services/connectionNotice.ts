@@ -1,7 +1,7 @@
 import type { ConnectionStatus } from './rpc';
 import { isTailnetAddress } from './tailscale';
 
-export type ConnectionAction = 'open-tailscale' | 'retry' | 'pair-again';
+type ConnectionAction = 'open-tailscale' | 'retry' | 'pair-again';
 
 export interface ConnectionNotice {
   text: string;
