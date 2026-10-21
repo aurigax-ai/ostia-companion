@@ -52,7 +52,7 @@ async function renderTerminal() {
   return { headerRight: options.headerRight?.() ?? null };
 }
 
-const KEYS = ['esc', 'tab', 'ctrl', '↑', '↓', '←', '→', '⏎'];
+const KEYS = ['esc', 'tab', 'ctrl', '↑', '↓', '←', '→'];
 
 test('CRD-C30 a watching terminal shows Watching with Type, and no key row or Done', async () => {
   mockRpc.canInput = false;
@@ -69,6 +69,7 @@ test('CRD-C31 a typing terminal shows the key row and the Commands · Terminal s
   mockRpc.attach = 'answer';
   const { headerRight } = await renderTerminal();
   KEYS.forEach((key) => expect(screen.getByText(key)).toBeTruthy());
+  expect(screen.getByLabelText('enter')).toBeTruthy();
   expect(screen.queryByText('Type')).toBeNull();
   expect(screen.queryByText('Watching')).toBeNull();
   expect(headerRight?.props.value).toBe('commands');

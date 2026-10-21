@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { CornerDownLeft } from 'lucide-react-native';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyRowEvent, KeyRowState, RowKey } from '../model/terminalKeys';
 import { colors, font, radius, space, touch } from '../theme';
@@ -8,7 +9,7 @@ const KEYS: { key: RowKey; label: string }[] = [
   { key: 'down', label: '↓' },
   { key: 'left', label: '←' },
   { key: 'right', label: '→' },
-  { key: 'enter', label: '⏎' },
+  { key: 'enter', label: 'enter' },
 ];
 
 const HEIGHT = 32;
@@ -32,7 +33,7 @@ export function KeyBar({
       <KeyButton compact={compact} label="tab" onPress={() => onEvent({ type: 'key', key: 'tab' })} />
       <KeyButton compact={compact} label="ctrl" active={state.ctrl} onPress={() => onEvent({ type: 'ctrl' })} />
       {KEYS.map(({ key, label }) => (
-        <KeyButton key={key} compact={compact} label={label} onPress={() => onEvent({ type: 'key', key })} />
+        <KeyButton key={key} compact={compact} label={label} icon={key === 'enter'} onPress={() => onEvent({ type: 'key', key })} />
       ))}
       {onKeyboard ? <KeyButton compact={compact} label="abc" accessibilityLabel="Keyboard" onPress={onKeyboard} /> : null}
     </View>
@@ -45,8 +46,10 @@ function KeyButton({
   onPress,
   accessibilityLabel,
   compact,
+  icon,
 }: {
   label: string;
+  icon?: boolean;
   active?: boolean;
   compact?: boolean;
   onPress: () => void;
@@ -62,9 +65,13 @@ function KeyButton({
       android_ripple={{ color: colors.ripple }}
       style={({ pressed }) => [styles.key, compact && styles.keyCompact, pressed && Platform.OS === 'ios' && styles.keyPressed, active && styles.keyActive]}
     >
-      <Text style={[styles.label, active && { color: colors.brand }]} numberOfLines={1}>
-        {label}
-      </Text>
+      {icon ? (
+        <CornerDownLeft size={16} color={active ? colors.brand : colors.fg} strokeWidth={2.25} />
+      ) : (
+        <Text style={[styles.label, active && { color: colors.brand }]} numberOfLines={1}>
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -94,7 +101,7 @@ export function RawKeyboard({
       autoCorrect={false}
       value={value}
       accessibilityLabel="Type to the terminal"
-      placeholder="Type, then ⏎ to send"
+      placeholder="Type, then press enter to send"
       placeholderTextColor={colors.dim}
       cursorColor={colors.brand}
       style={styles.raw}

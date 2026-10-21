@@ -63,5 +63,6 @@ test('SET-C8 a typing terminal shows no key row when the key row is off', async 
   mockRpc.canInput = true;
   mockRpc.attach = 'answer';
   await renderTerminal();
-  ['esc', 'tab', 'ctrl', '⏎'].forEach((key) => expect(screen.queryByText(key)).toBeNull());
+  ['esc', 'tab', 'ctrl'].forEach((key) => expect(screen.queryByText(key)).toBeNull());
+  expect(screen.queryByLabelText('enter')).toBeNull();
 });
