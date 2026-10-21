@@ -3,7 +3,7 @@ import { parsePhoneWorkspace, PhoneWorkspace } from '../model/agentStart';
 import { DesktopAddress, parseAddresses, Route, savedRoutes, untried } from '../model/rediscovery';
 import { nextDelay, delayCap, nextScan, scanDue, timing } from '../model/reconnectPolicy';
 import { isActive, onActive } from './appActive';
-import { discoverPairedRoutes, onWifi } from './lanDiscovery';
+import { discoverPairedRoutes, onLocalNetwork } from './lanDiscovery';
 import { PairingData, saveRoute } from './storage';
 
 export type Cap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destructive';
@@ -147,7 +147,7 @@ class OstiaRpcClient {
   }
 
   private async scanLan(): Promise<Route[]> {
-    if (!(await onWifi())) return [];
+    if (!(await onLocalNetwork())) return [];
     const next = nextScan(Date.now(), this.scanDelay);
     this.scanAt = next.scanAt;
     this.scanDelay = next.scanDelay;
@@ -170,12 +170,13 @@ class OstiaRpcClient {
     let opened = false;
     let settled = false;
     const fail = () => {
-      if (opened || settled) return;
+      if (settled) return;
       settled = true;
       if (this.socket !== socket) return;
       this.clearAttemptTimer();
       this.socket = null;
       socket.close();
+      this.rejectPending('The desktop did not answer.');
       failed();
     };
     this.attemptTimer = setTimeout(fail, timing.candidateMs);
@@ -188,6 +189,7 @@ class OstiaRpcClient {
           if (this.socket !== socket) return;
           opened = true;
           this.clearAttemptTimer();
+          this.attemptTimer = setTimeout(fail, timing.candidateMs);
           this.sendHello(route);
         },
         onMessage: (event) => {
@@ -207,7 +209,7 @@ class OstiaRpcClient {
         onError: (event) => {
           if (this.socket !== socket) return;
           console.warn('PinnedWebSocket error:', event.message);
-          fail();
+          if (!opened) fail();
         },
       }
     );
@@ -256,6 +258,7 @@ class OstiaRpcClient {
   }
 
   private handleClose(code: number, reason: string) {
+    this.clearAttemptTimer();
     this.socket = null;
     this.rejectPending(reason || 'WebSocket closed');
     this.awaitingAttach = false;
@@ -304,6 +307,7 @@ class OstiaRpcClient {
         deviceToken: this.pairingData.deviceToken,
         client: 'ostia-companion/1.0',
       });
+      this.clearAttemptTimer();
       this.reconnectDelay = timing.minDelayMs;
       this.cycleFailed = false;
       this.scanAt = 0;
