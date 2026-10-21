@@ -1,4 +1,7 @@
 import { jest } from '@jest/globals';
+import { FlatList, Image, Modal, ScrollView, TextInput } from 'react-native';
+
+void [FlatList, Image, Modal, ScrollView, TextInput];
 
 jest.mock('expo-notifications', () => ({
   getPermissionsAsync: jest.fn(async () => ({ granted: true })),
