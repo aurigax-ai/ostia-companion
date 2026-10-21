@@ -38,6 +38,10 @@ describe('address list (contract v1.10 §1)', () => {
     expect(parseAddresses('x')).toBeNull();
     expect(parseAddresses([])).toEqual([]);
   });
+
+  it('RDS-A4 keeps what is saved when the answer has entries but none usable', () => {
+    expect(parseAddresses([{ kind: 'wifi', host: '10.0.0.2', port: 8722 }, { kind: 'lan', host: '[::1]', port: 8722 }])).toBeNull();
+  });
 });
 
 describe('where to try first (contract v1.10 §4)', () => {

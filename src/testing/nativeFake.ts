@@ -8,11 +8,13 @@ export interface Attempt {
   id: number;
   sent: string[];
   opened: boolean;
+  deaf?: boolean;
+  delayMs?: number;
 }
 
 export const attempts: Attempt[] = [];
 export const trusted: string[] = [];
-export const behavior = { silent: new Set<string>(), errorOnly: new Set<string>() };
+export const behavior = { silent: new Set<string>(), errorOnly: new Set<string>(), deaf: new Set<string>(), slow: new Map<string, number>() };
 
 const bus = new NodeEmitter();
 const sockets = new Map<number, WebSocket>();
@@ -35,6 +37,13 @@ export const nativeModule = {
     attempts.push(attempt);
     const host = new URL(url).host;
     if (behavior.silent.has(host)) return;
+    if (behavior.deaf.has(host)) {
+      attempt.deaf = true;
+      return void queueMicrotask(() => {
+        attempt.opened = true;
+        emit('onOpen', id);
+      });
+    }
     if (behavior.errorOnly.has(host)) return void queueMicrotask(() => emit('onError', id, { message: 'handshake failed' }));
     const socket = new WebSocket(url, {
       ca: trusted,
@@ -43,9 +52,11 @@ export const nativeModule = {
     } as unknown as WebSocket.ClientOptions);
     sockets.set(id, socket);
     let failed = false;
+    attempt.delayMs = behavior.slow.get(host);
     socket.on('open', () => {
       attempt.opened = true;
-      emit('onOpen', id);
+      if (attempt.delayMs) setTimeout(() => emit('onOpen', id), attempt.delayMs);
+      else emit('onOpen', id);
     });
     socket.on('message', (data: Buffer, isBinary: boolean) =>
       emit('onMessage', id, isBinary ? { type: 'binary', data: data.toString('base64') } : { type: 'text', data: data.toString() }),
@@ -60,7 +71,10 @@ export const nativeModule = {
   send(message: string) {
     const attempt = attempts.find((a) => a.id === current);
     attempt?.sent.push(message);
-    sockets.get(current)?.send(message);
+    if (attempt?.deaf) return;
+    const socket = sockets.get(current);
+    if (attempt?.delayMs) setTimeout(() => socket?.send(message), attempt.delayMs);
+    else socket?.send(message);
   },
   sendBinary(base64: string) {
     attempts.find((a) => a.id === current)?.sent.push(base64);
@@ -82,6 +96,8 @@ export function reset() {
   trusted.length = 0;
   behavior.silent.clear();
   behavior.errorOnly.clear();
+  behavior.deaf.clear();
+  behavior.slow.clear();
   sockets.forEach((socket) => socket.terminate());
   sockets.clear();
   bus.removeAllListeners();

@@ -23,11 +23,12 @@ export function validPort(port: unknown): port is number {
 
 export function parseAddresses(value: unknown): DesktopAddress[] | null {
   if (!Array.isArray(value)) return null;
-  return value.flatMap((entry) => {
+  const usable = value.flatMap((entry) => {
     const { kind, host, port } = entry ?? {};
     if (!KINDS.includes(kind) || typeof host !== 'string' || !HOST.test(host) || !validPort(port)) return [];
     return [{ kind, host, port }];
   });
+  return usable.length === 0 && value.length > 0 ? null : usable;
 }
 
 export function routeKey(route: Route): string {

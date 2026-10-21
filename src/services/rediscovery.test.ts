@@ -38,9 +38,9 @@ vi.mock('expo-modules-core', async () => {
   return { requireNativeModule: () => fake.nativeModule, EventEmitter: function () { return fake.emitter; } };
 });
 vi.mock('react-native', () => ({ AppState: appState }));
-vi.mock('expo-network', () => ({ getNetworkStateAsync: async () => ({ type: network.type }), NetworkStateType: { WIFI: 'WIFI' } }));
+vi.mock('expo-network', () => ({ getNetworkStateAsync: async () => ({ type: network.type }), NetworkStateType: { WIFI: 'WIFI', CELLULAR: 'CELLULAR' } }));
 vi.mock('./lanDiscovery', async () => ({
-  onWifi: async () => network.type === 'WIFI',
+  onLocalNetwork: async () => network.type !== 'CELLULAR',
   discoverPairedRoutes: async () => {
     discovery.calls++;
     return discovery.routes;
@@ -133,6 +133,21 @@ describe('saving the address list (contract v1.10 §1, §2)', () => {
     OstiaRpc.initialize(await pairedWith(gw, { addresses: saved }));
     await connected();
     expect(OstiaRpc.getPairing()?.addresses).toEqual(saved);
+  });
+});
+
+describe('an answer with no usable address', () => {
+  it('RDS-P4 keeps the saved list when hello and addresses.changed carry only kinds the phone does not know', async () => {
+    const future = [{ kind: 'mesh', host: 'box.example.org', port: 8722 }];
+    const gw = await desktop({ addresses: future as unknown as DesktopAddress[] });
+    const saved = [lan(gw.port)];
+    OstiaRpc.initialize(await pairedWith(gw, { addresses: saved }));
+    await connected();
+    expect(OstiaRpc.getPairing()?.addresses).toEqual(saved);
+    gw.setAddresses(future as unknown as DesktopAddress[]);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(OstiaRpc.getPairing()?.addresses).toEqual(saved);
+    expect((await getPairingData())?.addresses).toEqual(saved);
   });
 });
 
@@ -273,6 +288,36 @@ describe('a candidate that never answers (review 2)', () => {
   });
 });
 
+describe('a candidate that opens but never answers hello', () => {
+  it('RDS-D3 gives up on it after the deadline and tries the next address', async () => {
+    timing.candidateMs = 100;
+    const gw = await desktop();
+    behavior.deaf.add(`127.0.0.1:${DEAD_PORT}`);
+    OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT, addresses: [lan(gw.port)] }));
+    await connected();
+    expect(urls()).toEqual([at(DEAD_PORT), at(gw.port)]);
+  });
+
+  it('RDS-D5 gives hello its own budget after a slow connect, so a slow valid route is not cut', async () => {
+    timing.candidateMs = 300;
+    const gw = await desktop();
+    behavior.slow.set(`127.0.0.1:${gw.port}`, 200);
+    OstiaRpc.initialize(await pairedWith(gw));
+    await connected();
+    expect(urls()).toEqual([at(gw.port)]);
+  });
+
+  it('RDS-D4 stops waiting once hello is answered, so a live connection is not cut at the deadline', async () => {
+    timing.candidateMs = 100;
+    const gw = await desktop();
+    OstiaRpc.initialize(await pairedWith(gw));
+    await connected();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(OstiaRpc.getStatus()).toBe('connected');
+    expect(attempts).toHaveLength(1);
+  });
+});
+
 describe('saving while the list changes (review 3)', () => {
   const route = { gatewayHost: '10.0.0.9', gatewayPort: 1, addresses: [] };
   const later = (ms: number, run: () => Promise<unknown>) => new Promise((resolve) => setTimeout(resolve, ms)).then(run);
@@ -313,7 +358,7 @@ describe('retrying without wasting the battery (review 4)', () => {
     expect(discovery.calls).toBe(1);
   });
 
-  it('RDS-B2 does not scan when the phone is not on Wi-Fi', async () => {
+  it('RDS-B2 does not scan when the phone has no local network', async () => {
     network.type = 'CELLULAR';
     const gw = await desktop();
     OstiaRpc.initialize(await pairedWith(gw, { gatewayPort: DEAD_PORT }));
