@@ -50,3 +50,6 @@ build/
 
 # built from node_modules by tools/build-mermaid.mjs
 /src/generated/
+
+# Firebase client config, supplied at build time
+google-services.json
