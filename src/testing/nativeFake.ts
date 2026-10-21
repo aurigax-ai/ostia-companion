@@ -8,11 +8,12 @@ export interface Attempt {
   id: number;
   sent: string[];
   opened: boolean;
+  deaf?: boolean;
 }
 
 export const attempts: Attempt[] = [];
 export const trusted: string[] = [];
-export const behavior = { silent: new Set<string>(), errorOnly: new Set<string>() };
+export const behavior = { silent: new Set<string>(), errorOnly: new Set<string>(), deaf: new Set<string>() };
 
 const bus = new NodeEmitter();
 const sockets = new Map<number, WebSocket>();
@@ -35,6 +36,13 @@ export const nativeModule = {
     attempts.push(attempt);
     const host = new URL(url).host;
     if (behavior.silent.has(host)) return;
+    if (behavior.deaf.has(host)) {
+      attempt.deaf = true;
+      return void queueMicrotask(() => {
+        attempt.opened = true;
+        emit('onOpen', id);
+      });
+    }
     if (behavior.errorOnly.has(host)) return void queueMicrotask(() => emit('onError', id, { message: 'handshake failed' }));
     const socket = new WebSocket(url, {
       ca: trusted,
@@ -60,6 +68,7 @@ export const nativeModule = {
   send(message: string) {
     const attempt = attempts.find((a) => a.id === current);
     attempt?.sent.push(message);
+    if (attempt?.deaf) return;
     sockets.get(current)?.send(message);
   },
   sendBinary(base64: string) {
@@ -82,6 +91,7 @@ export function reset() {
   trusted.length = 0;
   behavior.silent.clear();
   behavior.errorOnly.clear();
+  behavior.deaf.clear();
   sockets.forEach((socket) => socket.terminate());
   sockets.clear();
   bus.removeAllListeners();

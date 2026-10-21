@@ -3,9 +3,15 @@ import Zeroconf from 'react-native-zeroconf';
 import { pairedRoute, Route } from '../model/rediscovery';
 import { SEARCH_MS, SERVICE_TYPE } from './discovery';
 
-export async function onWifi(): Promise<boolean> {
+const NO_LOCAL_NETWORK: (Network.NetworkStateType | undefined)[] = [
+  Network.NetworkStateType.NONE,
+  Network.NetworkStateType.UNKNOWN,
+  Network.NetworkStateType.CELLULAR,
+];
+
+export async function onLocalNetwork(): Promise<boolean> {
   try {
-    return (await Network.getNetworkStateAsync()).type === Network.NetworkStateType.WIFI;
+    return !NO_LOCAL_NETWORK.includes((await Network.getNetworkStateAsync()).type);
   } catch {
     return false;
   }

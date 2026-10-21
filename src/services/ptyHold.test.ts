@@ -39,7 +39,7 @@ vi.mock('expo-modules-core', async () => {
 vi.mock('react-native', () => ({ AppState: appState }));
 vi.mock('expo-network', () => ({ getNetworkStateAsync: async () => ({ type: network.type }), NetworkStateType: { WIFI: 'WIFI' } }));
 vi.mock('./lanDiscovery', async () => ({
-  onWifi: async () => network.type === 'WIFI',
+  onLocalNetwork: async () => network.type !== 'CELLULAR',
   discoverPairedRoutes: async () => {
     discovery.calls++;
     return discovery.routes;
