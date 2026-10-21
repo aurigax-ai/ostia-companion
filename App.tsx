@@ -15,8 +15,10 @@ import { loadPhoneIdentity } from './src/services/phoneIdentity';
 import { loadPrefs } from './src/services/prefsStore';
 import { startConnectionLog } from './src/services/connectionLog';
 import { startAgentAlerts } from './src/services/agentWatch';
+import { startPushRegistration } from './src/services/pushRegistration';
+import { registerWakeTask } from './src/services/pushWakeTask';
 import { loadAlertPrefs } from './src/services/alertPrefsStore';
-import { removeDesktopAndReconnect } from './src/services/desktopSession';
+import { releasePushOfPrevious, removeDesktopAndReconnect } from './src/services/desktopSession';
 import { OstiaRpc } from './src/services/rpc';
 import { resetWorkspaces } from './src/services/workspaceStore';
 import { resetAsks } from './src/services/askStore';
@@ -85,6 +87,7 @@ export default function App() {
 
   const connect = useCallback(async () => {
     const data = await getPairingData();
+    await releasePushOfPrevious(data?.deviceId);
     OstiaRpc.disconnect();
     resetWorkspaces();
     resetAsks();
@@ -105,6 +108,8 @@ export default function App() {
     void loadPrefs();
     void loadPhoneIdentity();
     void loadAlertPrefs();
+    startPushRegistration();
+    registerWakeTask().catch(() => {});
     startAgentAlerts((target) => navigationRef.isReady() && navigationRef.navigate(target.screen, target.params));
     void loadBlockedApps();
     void loadPhoneControl();

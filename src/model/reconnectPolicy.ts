@@ -1,11 +1,16 @@
 export const timing = {
   candidateMs: 5000,
+  relayCandidateMs: 8000,
   minDelayMs: 500,
   maxDelayMs: 8000,
   unreachableMaxDelayMs: 60000,
   minScanDelayMs: 10000,
   maxScanDelayMs: 300000,
 };
+
+export function candidateTimeout(kind: string | undefined): number {
+  return kind === 'relay' ? timing.relayCandidateMs : timing.candidateMs;
+}
 
 export function nextDelay(delay: number, max: number): number {
   return Math.min(delay * 2, max);

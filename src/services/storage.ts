@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import type { StoredPush } from '../model/push';
 import type { DesktopAddress } from '../model/rediscovery';
 import { activeDesktop, addDesktop, chooseDesktop, DesktopList, EMPTY_DESKTOPS, removeDesktop } from '../model/desktops';
 
@@ -10,6 +11,7 @@ export interface PairingData {
   gatewayHost: string;
   gatewayPort: number;
   addresses?: DesktopAddress[];
+  push?: StoredPush;
   privateKey: string;
   publicKey: string;
   pairedAt?: number;
@@ -90,5 +92,12 @@ export async function saveRoute(
   await update((list) => ({
     ...list,
     desktops: list.desktops.map((d) => (d.deviceId === deviceId ? { ...d, ...route } : d)),
+  }));
+}
+
+export async function savePush(deviceId: string, push: PairingData['push']): Promise<void> {
+  await update((list) => ({
+    ...list,
+    desktops: list.desktops.map((d) => (d.deviceId === deviceId ? { ...d, push } : d)),
   }));
 }

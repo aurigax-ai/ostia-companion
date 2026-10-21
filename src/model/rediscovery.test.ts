@@ -99,3 +99,32 @@ describe('LAN announce (contract v1.10 §3)', () => {
     expect(pairedRoute({ txt: { v: '1', mode: 'paired', port: '8722' }, addresses: ['fe80::1'] })).toBeNull();
   });
 });
+
+describe('relay addresses (contract v1.14 §2)', () => {
+  it('RLY-M1 accepts the relay kind and still drops one it does not know', () => {
+    expect(
+      parseAddresses([
+        { kind: 'relay', host: 'abcdefghijklmnopqrstuvwxyz.relay.example.com', port: 443 },
+        { kind: 'mesh', host: 'box.example.org', port: 443 },
+      ]),
+    ).toEqual([{ kind: 'relay', host: 'abcdefghijklmnopqrstuvwxyz.relay.example.com', port: 443 }]);
+  });
+
+  it('RLY-M2 tags the last good route as a relay when the saved list says so, and still tries it after the direct addresses', () => {
+    const host = 'abcdefghijklmnopqrstuvwxyz.relay.example.com';
+    const routes = savedRoutes(
+      desktop({
+        gatewayHost: host,
+        gatewayPort: 443,
+        addresses: [
+          { kind: 'lan', host: '192.168.1.5', port: 8722 },
+          { kind: 'relay', host, port: 443 },
+        ],
+      }),
+    );
+    expect(routes.map((route) => `${route.host}:${route.port}:${route.kind}`)).toEqual([
+      '192.168.1.5:8722:undefined',
+      `${host}:443:relay`,
+    ]);
+  });
+});

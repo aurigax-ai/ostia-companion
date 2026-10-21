@@ -27,4 +27,12 @@ describe('connection info', () => {
     expect(titles).not.toContain('Paired');
     expect(connectionRows({ ...desktop, pairedAt: Date.UTC(2026, 9, 6) }).map((row) => row.title)).toContain('Paired');
   });
+
+  it('RLY-C1 names a relay route and lists the relay address as a row', () => {
+    const host = 'abcdefghijklmnopqrstuvwxyz.relay.example.com';
+    const viaRelay = { ...desktop, gatewayHost: host, gatewayPort: 443, addresses: [{ kind: 'relay' as const, host, port: 443 }] };
+    expect(routeLabel(host, viaRelay.addresses)).toBe('Relay');
+    const rows = connectionRows({ ...desktop, addresses: viaRelay.addresses });
+    expect(rows).toContainEqual({ title: 'Relay', value: `${host}:443`, mono: true });
+  });
 });

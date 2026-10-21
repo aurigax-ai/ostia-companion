@@ -33,19 +33,25 @@ function who(pane: Pane, sessions: Session[]): string {
   return workspace ? `${agent} in ${workspace}` : agent;
 }
 
+export function alertForPane(pane: Pane, sessions: Session[], prefs: AlertPrefs): AgentAlert | null {
+  const kind = pane.agentState ? KIND[pane.agentState] : undefined;
+  if (!kind || !prefs[kind.pref]) return null;
+  return {
+    id: `${pane.paneId}:${pane.agentState}`,
+    paneId: pane.paneId,
+    paneTitle: paneTitle(pane),
+    title: `${who(pane, sessions)} ${kind.verb}`,
+    body: pane.agentMessage ?? '',
+    actions: [],
+  };
+}
+
 export function alertsFromChange(before: Pane[], after: Pane[], sessions: Session[], prefs: AlertPrefs): AgentAlert[] {
   const previous = new Map(before.map((pane) => [pane.paneId, pane.agentState]));
   return after.flatMap((pane) => {
-    const kind = pane.agentState ? KIND[pane.agentState] : undefined;
-    if (!kind || !prefs[kind.pref] || !previous.has(pane.paneId) || previous.get(pane.paneId) === pane.agentState) return [];
-    return [{
-      id: `${pane.paneId}:${pane.agentState}`,
-      paneId: pane.paneId,
-      paneTitle: paneTitle(pane),
-      title: `${who(pane, sessions)} ${kind.verb}`,
-      body: pane.agentMessage ?? '',
-      actions: [],
-    }];
+    if (!previous.has(pane.paneId) || previous.get(pane.paneId) === pane.agentState) return [];
+    const alert = alertForPane(pane, sessions, prefs);
+    return alert ? [alert] : [];
   });
 }
 

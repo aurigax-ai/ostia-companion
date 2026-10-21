@@ -13,14 +13,19 @@ vi.mock('expo-secure-store', () => ({
 }));
 vi.mock('./rpc', () => ({
   OstiaRpc: {
+    getPairing: () => ({ deviceId: 'dev_b' }),
     disconnect: () => calls.push('disconnect'),
     initialize: (data: { deviceId: string }) => calls.push(`connect ${data.deviceId}`),
   },
 }));
+vi.mock('./pushRegistration', () => ({
+  unregisterPush: async (id: string) => void calls.push(`unregister push ${id}`),
+  forgetPush: async (id: string) => void calls.push(`forget push ${id}`),
+}));
 vi.mock('./workspaceStore', () => ({ resetWorkspaces: () => calls.push('clear workspaces') }));
 
 const { savePairingData } = await import('./storage');
-const { switchDesktop } = await import('./desktopSession');
+const { releasePushOfPrevious, removeDesktopAndReconnect, switchDesktop } = await import('./desktopSession');
 
 beforeEach(() => {
   store.clear();
@@ -45,6 +50,23 @@ describe('switching desktops', () => {
     await savePairingData(desktop('dev_a'));
     await savePairingData(desktop('dev_b'));
     await switchDesktop('dev_a');
-    expect(calls).toEqual(['disconnect', 'clear workspaces', 'connect dev_a']);
+    expect(calls).toEqual(['forget push dev_b', 'disconnect', 'clear workspaces', 'connect dev_a']);
+  });
+
+  it('DSK-C13 unregisters the handle of a desktop that is removed, then connects the next one', async () => {
+    await savePairingData(desktop('dev_a'));
+    await savePairingData(desktop('dev_b'));
+    expect(await removeDesktopAndReconnect('dev_b')).toBe(true);
+    expect(calls).toEqual(['unregister push dev_b', 'disconnect', 'clear workspaces', 'connect dev_a']);
+  });
+
+  it('DSK-C15 releases the push handle of the previous active desktop when another one is paired', async () => {
+    await releasePushOfPrevious('dev_new');
+    expect(calls).toEqual(['forget push dev_b']);
+  });
+
+  it('DSK-C15 releases nothing when the paired desktop is the active one', async () => {
+    await releasePushOfPrevious('dev_b');
+    expect(calls).toEqual([]);
   });
 });

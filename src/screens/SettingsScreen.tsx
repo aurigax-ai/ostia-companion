@@ -7,6 +7,9 @@ import { Button, Group, IconButton, ListRow, SectionHeader, Sheet, SnackbarHost,
 import { Level } from '../model/phoneControlPrefs';
 import { SESSION_LIMITS, SessionLimit } from '../model/phoneSession';
 import { connectionRows, routeLabel } from '../model/connectionInfo';
+import { CONTRACT_VERSION } from '../model/contract';
+import { pushLine } from '../model/push';
+import { usePushStatus } from '../services/pushRegistration';
 import { MAX_FONT_SIZE, MIN_FONT_SIZE, TerminalPrefs } from '../model/prefs';
 import { TabProps } from '../navigation';
 import { usePhoneControl } from '../services/phoneControlStore';
@@ -25,8 +28,6 @@ import { usePhoneWorkspace } from '../services/phoneWorkspace';
 import { usePhoneName } from '../services/phoneIdentity';
 import { PhoneNameSheet } from '../components/PhoneNameSheet';
 import { colors, space, type } from '../theme';
-
-const CONTRACT_VERSION = '1.13';
 
 const ACCESS: { cap: Cap; title: string }[] = [
   { cap: 'read', title: 'See workspaces and terminals' },
@@ -150,6 +151,7 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
   const phoneWorkspace = usePhoneWorkspace();
   const prefs = usePrefs();
   const alerts = useAlertPrefs();
+  const push = usePushStatus();
   const tabBar = useTabBarInset();
   const [permission, setPermission] = useState<boolean | null>(null);
   useEffect(() => {
@@ -177,7 +179,7 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
               <ListRow key={row.title} title={row.title} trailing={<Value text={row.value} mono={row.mono} />} />
             ))
           : null}
-        {pairing && routeLabel(pairing.gatewayHost) === 'Tailscale' ? (
+        {pairing && routeLabel(pairing.gatewayHost, pairing.addresses) === 'Tailscale' ? (
           <ListRow title="Open Tailscale" onPress={() => void openTailscaleApp()} />
         ) : null}
         {phoneWorkspace ? <ListRow title="Phone workspace" trailing={<Value text={phoneWorkspace.set ? 'Set on the desktop' : 'Not set'} />} /> : null}
@@ -241,6 +243,7 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
             }
           />
       ))}
+        <ListRow title="Notifications through the server" trailing={<Value text={pushLine(push)} />} />
       </Group>
       <Text style={[type.caption, styles.note]}>
         {Platform.OS === 'ios'
