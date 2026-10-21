@@ -30,13 +30,14 @@ describe('mock gateway: pairing (contract §3)', () => {
     const installId = 'a'.repeat(32);
     const first = await pair(gw, { installId, name: 'Pixel 9' });
     gw.rename(gw.devices[0].deviceId, 'Desk phone');
+    gw.setCaps(gw.devices[0].deviceId, ['read', 'notify', 'input']);
     const old = connect(gw);
     await old.call('hello', { deviceToken: first.result.deviceToken, client: 'test' });
 
     const second = await pair(gw, { installId, name: 'Pixel 9' });
     expect(await old.closed).toBe(4003);
     expect(gw.devices).toHaveLength(1);
-    expect(gw.devices[0]).toMatchObject({ deviceToken: second.result.deviceToken, name: 'Desk phone' });
+    expect(gw.devices[0]).toMatchObject({ deviceToken: second.result.deviceToken, name: 'Desk phone', caps: ['read', 'notify', 'input'] });
 
     const stale = connect(gw);
     expect((await stale.call('hello', { deviceToken: first.result.deviceToken, client: 'test' })).error).toBeTruthy();
@@ -45,8 +46,10 @@ describe('mock gateway: pairing (contract §3)', () => {
   it('PID-P6 keeps two rows for two install identities, and for a phone that sends none', async () => {
     const gw = await start();
     await pair(gw, { installId: 'a'.repeat(32) });
+    gw.setCaps(gw.devices[0].deviceId, ['read', 'notify', 'input']);
     await pair(gw, { installId: 'b'.repeat(32) });
     expect(gw.devices).toHaveLength(2);
+    expect(gw.devices[1].caps).toEqual(['read', 'notify']);
     await pair(gw);
     await pair(gw);
     expect(gw.devices).toHaveLength(4);
