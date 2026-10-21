@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { cleanPhoneName } from '../model/phoneIdentity.ts';
 import type { Pane, SessionState } from '../model/workspaces.ts';
 import { checkCode } from '../services/pairCheck.ts';
 import { agentPromptScreen, demoScenario, PROMPT_OPTIONS, type Scenario, SHELL_PROMPT, shellScreen, VIM_SCREEN } from './mockScenario.ts';
@@ -59,6 +60,7 @@ export interface MockDevice {
   deviceId: string;
   deviceToken: string;
   name: string;
+  installId?: string;
   caps: MockCap[];
 }
 
@@ -155,7 +157,7 @@ function send(res: import('node:http').ServerResponse, status: number, body: obj
 
 interface PendingPair {
   pairCode: string;
-  device: { name: string; pubkey: string };
+  device: { name: string; pubkey: string; installId?: unknown };
   commit: string;
   desktopNonce: Buffer;
   startedAt: number;
@@ -346,7 +348,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const server: Server = createServer({ key, cert }, async (req, res) => {
     const body = req.method === 'POST' ? await readJson(req) : null;
     if (req.url === '/pair' && req.method === 'POST') {
-      if (!body?.pairCode || !body.device?.name || !body.device?.pubkey || !body.commit) {
+      if (!body?.pairCode || !cleanPhoneName(body.device?.name) || !body.device?.pubkey || !body.commit) {
         return send(res, 400, { error: 'bad-request' });
       }
       const code = String(body.pairCode).replace(/[\s-]/g, '').toUpperCase();
@@ -378,11 +380,15 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       const decide = setTimeout(() => {
         clearTimeout(expiry);
         if (decision === 'deny') return send(res, 403, { error: 'declined' });
+        const installId = typeof request.device.installId === 'string' ? request.device.installId : undefined;
+        const replaced = installId ? devices.filter((d) => d.installId === installId) : [];
+        replaced.forEach((old) => gateway.revoke(old.deviceId));
         const device: MockDevice = {
           deviceId: `dev_${randomBytes(6).toString('hex')}`,
           deviceToken: randomBytes(24).toString('base64url'),
-          name: request.device.name,
-          caps: canonical(caps),
+          name: cleanPhoneName(request.device.name) ?? 'Phone',
+          caps: replaced[0]?.caps ?? canonical(caps),
+          ...(installId ? { installId } : {}),
         };
         devices.push(device);
         saveDevices();
@@ -548,6 +554,11 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         }
         clearTimeout(helloTimer);
         connection.device = device;
+        const phoneName = params.name === undefined ? null : cleanPhoneName(params.name);
+        if (phoneName && phoneName !== device.name) {
+          device.name = phoneName;
+          saveDevices();
+        }
         return respond(id, { deviceId: device.deviceId, caps: device.caps, ...(options.imagesUnsupported ? {} : { features: ['prompt-image'] }), desktop: { name, version: 'mock' }, ...(addresses ? { addresses } : {}), ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
       }
       if (!connection.device) {

@@ -2,6 +2,7 @@ import { cancelPosts, pinnedPost } from 'websocket-pinning';
 import { generateDeviceKeyPair } from './crypto';
 import { pairFailure } from './pairFailure';
 import { PairCancelled, requestPairing, startPairing } from './pairFlow';
+import type { PhoneIdentity } from '../model/phoneIdentity';
 import { PairingData } from './storage';
 
 export interface PairTarget {
@@ -19,7 +20,7 @@ export interface PairingRun {
 
 export function pairDevice(
   target: PairTarget,
-  deviceName: string,
+  identity: () => Promise<PhoneIdentity>,
   onCheckCode: (code: string, startedAt: number) => void,
   save: (data: PairingData) => Promise<void>,
 ): PairingRun {
@@ -27,10 +28,12 @@ export function pairDevice(
   const keypair = generateDeviceKeyPair();
   const post = (path: string, body: object) => pinnedPost(`https://${host}:${port}${path}`, body, fingerprint);
   const run = startPairing(
-    () =>
-      requestPairing(post, { pairCode, fingerprint, deviceName, pubkey: keypair.publicKeySpki }, (code) =>
+    async () => {
+      const { installId, name: deviceName } = await identity();
+      return requestPairing(post, { pairCode, fingerprint, deviceName, installId, pubkey: keypair.publicKeySpki }, (code) =>
         onCheckCode(code, Date.now()),
-      ),
+      );
+    },
     cancelPosts,
     (result) =>
       save({

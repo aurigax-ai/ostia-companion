@@ -300,13 +300,26 @@ class OstiaRpcClient {
     );
   }
 
+  private phoneName: string | null = null;
+
+  public setPhoneName(name: string) {
+    if (name === this.phoneName) return;
+    this.phoneName = name;
+    if (this.status === 'connected' && this.pairingData) this.call('hello', this.helloParams()).catch(() => {});
+  }
+
+  private helloParams() {
+    return {
+      deviceToken: this.pairingData?.deviceToken,
+      client: 'ostia-companion/1.0',
+      ...(this.phoneName ? { name: this.phoneName } : {}),
+    };
+  }
+
   private async sendHello(route: Route) {
     if (!this.pairingData) return;
     try {
-      const result = await this.call('hello', {
-        deviceToken: this.pairingData.deviceToken,
-        client: 'ostia-companion/1.0',
-      });
+      const result = await this.call('hello', this.helloParams());
       this.clearAttemptTimer();
       this.reconnectDelay = timing.minDelayMs;
       this.cycleFailed = false;

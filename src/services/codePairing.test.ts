@@ -85,11 +85,11 @@ describe('code pairing', () => {
     };
     const result = await requestPairing(
       post,
-      { pairCode: 'ABCDEFGH', fingerprint: 'sha256/desk', deviceName: 'Pixel 9', pubkey: 'pk-phone' },
+      { pairCode: 'ABCDEFGH', fingerprint: 'sha256/desk', deviceName: 'Pixel 9', installId: 'a'.repeat(32), pubkey: 'pk-phone' },
       (code) => shown.push(code),
     );
     expect(calls.map((c) => c.path)).toEqual(['/pair', '/pair/confirm']);
-    expect(calls[0].body).toMatchObject({ pairCode: 'ABCDEFGH', device: { name: 'Pixel 9', pubkey: 'pk-phone' } });
+    expect(calls[0].body).toMatchObject({ pairCode: 'ABCDEFGH', device: { name: 'Pixel 9', pubkey: 'pk-phone', installId: 'a'.repeat(32) } });
     expect(calls[0].body.commit).toBe(toHex(sha256(revealed!)));
     expect(shown).toEqual([checkCode('sha256/desk', 'pk-phone', revealed!, desktopNonce)]);
     expect(result).toEqual({ deviceId: 'dev_1', deviceToken: 'tok', caps: ['read'], expiresAt: null });

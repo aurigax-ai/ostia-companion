@@ -2,7 +2,10 @@ import { expect, jest, test } from '@jest/globals';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SettingsScreen } from './SettingsScreen';
+
+const METRICS = { frame: { x: 0, y: 0, width: 360, height: 800 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
 
 const mockState = { status: 'connected' as string };
 
@@ -28,6 +31,11 @@ jest.mock('../services/prefsStore', () => ({
   usePrefs: () => ({ fontSize: 13, keyRow: true, haptics: true }),
   setPrefs: jest.fn(),
 }));
+const mockRename = jest.fn(async (_text: string) => true);
+jest.mock('../services/phoneIdentity', () => ({
+  usePhoneName: () => 'Pixel 9',
+  renamePhone: (text: string) => mockRename(text),
+}));
 jest.mock('../services/connectionLog', () => ({ connectionLogText: () => '' }));
 jest.mock('../services/openTailscaleApp', () => ({ openTailscaleApp: jest.fn() }));
 jest.mock('expo-haptics', () => ({
@@ -39,7 +47,11 @@ jest.mock('expo-haptics', () => ({
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '1.0.0' } } }));
 
 async function renderSettings() {
-  await render(<SettingsScreen navigation={{ navigate: jest.fn() } as any} route={{} as any} onUnpair={jest.fn(async () => {})} />);
+  await render(
+    <SafeAreaProvider initialMetrics={METRICS}>
+      <SettingsScreen navigation={{ navigate: jest.fn() } as any} route={{} as any} onUnpair={jest.fn(async () => {})} />
+    </SafeAreaProvider>,
+  );
 }
 
 test('SET-C11 shows the desktop, its connection, access, terminal options and the version', async () => {
@@ -70,4 +82,26 @@ test('SET-C13 pressing rows, buttons and the stepper makes no haptic call, and H
   expect(Haptics.impactAsync).not.toHaveBeenCalled();
   expect(Haptics.notificationAsync).not.toHaveBeenCalled();
   expect(screen.getByText('Buzz when pairing is approved or fails')).toBeTruthy();
+});
+
+test('PID-P16 shows the phone name and changes it from a sheet', async () => {
+  mockState.status = 'connected';
+  await renderSettings();
+  expect(screen.getByText('Pixel 9')).toBeTruthy();
+  await fireEvent.press(screen.getByText('Name'));
+  const field = await screen.findByLabelText('Phone name');
+  await fireEvent.changeText(field, 'Desk phone');
+  await fireEvent.press(screen.getByText('Save'));
+  expect(mockRename).toHaveBeenCalledWith('Desk phone');
+});
+
+test('PID-P17 will not save a name with a hidden character', async () => {
+  mockState.status = 'connected';
+  mockRename.mockClear();
+  await renderSettings();
+  await fireEvent.press(screen.getByText('Name'));
+  await fireEvent.changeText(await screen.findByLabelText('Phone name'), 'bad\u202Ename');
+  expect(screen.getByText('Use letters, numbers and punctuation only.')).toBeTruthy();
+  await fireEvent.press(screen.getByText('Save'));
+  expect(mockRename).not.toHaveBeenCalled();
 });

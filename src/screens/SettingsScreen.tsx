@@ -22,9 +22,11 @@ import type { AlertPrefs } from '../model/alertPrefs';
 import { Cap, OstiaRpc } from '../services/rpc';
 import { useCaps, useConnectionStatus } from '../services/workspaceStore';
 import { usePhoneWorkspace } from '../services/phoneWorkspace';
+import { usePhoneName } from '../services/phoneIdentity';
+import { PhoneNameSheet } from '../components/PhoneNameSheet';
 import { colors, space, type } from '../theme';
 
-const CONTRACT_VERSION = '1.9';
+const CONTRACT_VERSION = '1.13';
 
 const ACCESS: { cap: Cap; title: string }[] = [
   { cap: 'read', title: 'See workspaces and terminals' },
@@ -155,6 +157,8 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
   }, []);
   const allow = async () => setPermission((await Notifications.requestPermissionsAsync()).granted);
   const name = pairing?.desktopName || 'Desktop';
+  const phoneName = usePhoneName();
+  const [renaming, setRenaming] = useState(false);
 
   const confirmRemove = () =>
     Alert.alert(`Remove ${name}?`, 'Pair again to use it.', [
@@ -180,6 +184,12 @@ export function SettingsScreen({ navigation, onUnpair }: TabProps<'Settings'> & 
         {phoneWorkspace?.set && phoneWorkspace.agent ? <ListRow title="Default agent" trailing={<Value text={phoneWorkspace.agent} />} /> : null}
         <ListRow title="Desktops" onPress={() => navigation.navigate('Desktops')} />
       </Group>
+
+      <SectionHeader title="This phone" />
+      <Group>
+        <ListRow title="Name" trailing={<Value text={phoneName ?? '…'} />} onPress={() => setRenaming(true)} disabled={!phoneName} />
+      </Group>
+      {phoneName && renaming ? <PhoneNameSheet visible name={phoneName} onClose={() => setRenaming(false)} /> : null}
 
       <SectionHeader title="Access" />
       <Group>
