@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const network = vi.hoisted(() => ({ type: 'WIFI' }));
 const zeroconf = vi.hoisted(() => ({ throwOnScan: false, stopped: 0, removed: 0, scans: 0 }));
 vi.mock('react-native-zeroconf', () => ({
   default: class {
@@ -16,17 +17,31 @@ vi.mock('react-native-zeroconf', () => ({
     }
   },
 }));
-vi.mock('expo-network', () => ({ getNetworkStateAsync: async () => ({ type: 'WIFI' }), NetworkStateType: { WIFI: 'WIFI' } }));
+vi.mock('expo-network', () => ({
+  getNetworkStateAsync: async () => ({ type: network.type }),
+  NetworkStateType: { NONE: 'NONE', UNKNOWN: 'UNKNOWN', CELLULAR: 'CELLULAR', WIFI: 'WIFI', ETHERNET: 'ETHERNET', OTHER: 'OTHER' },
+}));
 
-const { discoverPairedRoutes } = await import('./lanDiscovery');
+const { discoverPairedRoutes, onLocalNetwork } = await import('./lanDiscovery');
 const { SEARCH_MS } = await import('./discovery');
 
 afterEach(() => {
+  network.type = 'WIFI';
   vi.useRealTimers();
   Object.assign(zeroconf, { throwOnScan: false, stopped: 0, removed: 0, scans: 0 });
 });
 
 describe('LAN discovery for a paired phone', () => {
+  it.each(['WIFI', 'ETHERNET', 'OTHER'])('RDS-Z3 looks for the desktop on a %s network', async (type) => {
+    network.type = type;
+    await expect(onLocalNetwork()).resolves.toBe(true);
+  });
+
+  it.each(['CELLULAR', 'NONE', 'UNKNOWN'])('RDS-Z4 does not look for the desktop on a %s network', async (type) => {
+    network.type = type;
+    await expect(onLocalNetwork()).resolves.toBe(false);
+  });
+
   it('RDS-Z1 releases the scanner when starting the scan throws', async () => {
     zeroconf.throwOnScan = true;
     await expect(discoverPairedRoutes()).resolves.toEqual([]);
