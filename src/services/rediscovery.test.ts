@@ -298,6 +298,15 @@ describe('a candidate that opens but never answers hello', () => {
     expect(urls()).toEqual([at(DEAD_PORT), at(gw.port)]);
   });
 
+  it('RDS-D5 gives hello its own budget after a slow connect, so a slow valid route is not cut', async () => {
+    timing.candidateMs = 300;
+    const gw = await desktop();
+    behavior.slow.set(`127.0.0.1:${gw.port}`, 200);
+    OstiaRpc.initialize(await pairedWith(gw));
+    await connected();
+    expect(urls()).toEqual([at(gw.port)]);
+  });
+
   it('RDS-D4 stops waiting once hello is answered, so a live connection is not cut at the deadline', async () => {
     timing.candidateMs = 100;
     const gw = await desktop();
