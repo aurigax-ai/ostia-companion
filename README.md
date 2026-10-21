@@ -107,6 +107,11 @@ To compile the Swift and Kotlin certificate-pinning libraries, generate the nati
 
 ---
 
+### Push (FCM)
+Android push needs the Firebase `google-services.json`, which is never committed. Set `GOOGLE_SERVICES_JSON` to the file's path before `expo prebuild` or `expo run:android`; CI writes it from the `GOOGLE_SERVICES_JSON_BASE64` secret. Without it the app builds with push off (Settings shows "Unavailable (build)").
+
+---
+
 ## 🧪 Compilation Verification
 To check TypeScript compilation and make sure there are no type-safety errors:
 ```bash
