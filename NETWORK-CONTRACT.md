@@ -112,7 +112,7 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 
    Test vector: fingerprint `sha256/q83vEjRWeJCrze8SNFZ4kKvN7xI0VniQq83vEjRWeJA=`, pubkey `MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=`, `Np` = 32 bytes `0x01`, `Nd` = 32 bytes `0x02` → **`396848`**.
 7. **Result:** `deviceToken` is an opaque, revocable bearer credential the phone stores in secure storage; `caps` = the phone's initial capability subset (§5). The desktop lists the device under **Paired devices** with a **revoke** button (revocation is immediate).
-   - **One phone, one row (v1.13):** when the request carries an `installId` that a paired device already holds, the desktop's approval card says it is the same phone as that device. On **Approve** the desktop removes that device (its token stops working at once and its open sockets close with `4003`) and answers with a new `deviceId` and `deviceToken`; the new row keeps the old row's name (so a rename survives) and starts with the default caps, never the old grants. On **Deny**, expiry or a withdrawn request the old device is untouched. A request without an `installId`, or with one no device holds, adds a row. After the replacement the phone's saved pairing for that desktop is the new one.
+   - **One phone, one row (v1.13):** when the request carries an `installId` that a paired device already holds, the desktop's approval card says it is the same phone as that device. On **Approve** the desktop removes that device (its token stops working at once and its open sockets close with `4003`) and answers with a new `deviceId` and `deviceToken`; the new row keeps the old row's name (so a rename survives) and its caps, so a re-paired phone keeps its permission grants. The approval card names the device it replaces, when it was last connected and the permissions that carry over, so the human can deny an impostor; Approve is never automatic. On **Deny**, expiry or a withdrawn request the old device is untouched. A request without an `installId`, or with one no device holds, adds a row. After the replacement the phone's saved pairing for that desktop is the new one.
    - The human can rename a device in Settings › Remote on the desktop; the name is only a label.
 8. **Later connections** use `deviceToken` (§4). Re-pairing is only needed if revoked/expired.
 
@@ -419,7 +419,7 @@ interface CommandDescriptor {
 
 ### v1.13 — 2026-10-20 (one phone, one row)
 - **`POST /pair`** `device` gains optional `installId`; `device.name` is the model name, else a random `adjective-noun` name kept on the phone.
-- **Approval** of a request whose `installId` matches a paired device replaces that device: old token revoked, old sockets closed with `4003`, new `deviceId` and `deviceToken`, name kept, default caps. The desktop can rename a device.
+- **Approval** of a request whose `installId` matches a paired device replaces that device: old token revoked, old sockets closed with `4003`, new `deviceId` and `deviceToken`, name and caps kept (the card shows both). The desktop can rename a device.
 - The identity is a hint only and appears in no TXT record, QR payload, log or `hello`.
 
 ### v1.10 — 2026-10-20 (rediscovery)

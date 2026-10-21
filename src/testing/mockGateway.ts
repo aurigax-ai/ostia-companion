@@ -387,7 +387,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
           deviceId: `dev_${randomBytes(6).toString('hex')}`,
           deviceToken: randomBytes(24).toString('base64url'),
           name: replaced[0]?.name ?? request.device.name,
-          caps: canonical(caps),
+          caps: replaced[0]?.caps ?? canonical(caps),
           ...(installId ? { installId } : {}),
         };
         devices.push(device);
