@@ -18,7 +18,10 @@ const appState = vi.hoisted(() => {
   };
 });
 const network = vi.hoisted(() => ({ type: 'WIFI' }));
-const discovery = vi.hoisted(() => ({ routes: [] as { host: string; port: number }[], calls: 0 }));
+const discovery = vi.hoisted(() => ({
+  routes: [] as { host: string; port: number }[] | Promise<{ host: string; port: number }[]>,
+  calls: 0,
+}));
 vi.mock('expo-secure-store', () => ({
   setItemAsync: async (key: string, value: string) => {
     await new Promise((resolve) => setTimeout(resolve, 1));
@@ -43,7 +46,7 @@ vi.mock('./lanDiscovery', async () => ({
   onLocalNetwork: async () => network.type !== 'CELLULAR',
   discoverPairedRoutes: async () => {
     discovery.calls++;
-    return discovery.routes;
+    return await discovery.routes;
   },
 }));
 
@@ -203,8 +206,9 @@ describe('reconnect order (contract v1.10 §4)', () => {
     const data = await pairedWith(gw);
     OstiaRpc.initialize(data);
     await connected();
-    const moved = await gw.move();
-    discovery.routes = [{ host: '127.0.0.1', port: moved }];
+    const moving = gw.move();
+    discovery.routes = moving.then((port) => [{ host: '127.0.0.1', port }]);
+    const moved = await moving;
     await vi.waitFor(() => expect(attempts.at(-1)?.url).toBe(at(moved)), { timeout: 4000 });
     await connected();
     expect(seen).not.toContain('revoked');

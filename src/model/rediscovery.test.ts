@@ -64,7 +64,7 @@ describe('where to try first (contract v1.10 §4)', () => {
     ]);
   });
 
-  it('RDS-A4 falls back to the paired address when no list was ever saved', () => {
+  it('RDS-A8 falls back to the paired address when no list was ever saved', () => {
     expect(savedRoutes(desktop())).toEqual([{ host: '192.168.1.5', port: 8722 }]);
   });
 
