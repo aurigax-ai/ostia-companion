@@ -188,6 +188,8 @@ class OstiaRpcClient {
         onOpen: () => {
           if (this.socket !== socket) return;
           opened = true;
+          this.clearAttemptTimer();
+          this.attemptTimer = setTimeout(fail, timing.candidateMs);
           this.sendHello(route);
         },
         onMessage: (event) => {
