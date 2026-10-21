@@ -1,9 +1,11 @@
 import { isTailnetAddress } from '../services/tailscale';
+import type { DesktopAddress } from './rediscovery';
 import type { PairingData } from '../services/storage';
 
 const FINGERPRINT_CHARS = 12;
 
-export function routeLabel(host: string): string {
+export function routeLabel(host: string, addresses: DesktopAddress[] = []): string {
+  if (addresses.some((address) => address.kind === 'relay' && address.host.toLowerCase() === host.toLowerCase())) return 'Relay';
   return isTailnetAddress(host) ? 'Tailscale' : 'Local network';
 }
 
@@ -13,8 +15,11 @@ export function shortFingerprint(fingerprint: string): string {
 
 export function connectionRows(desktop: PairingData): { title: string; value: string; mono?: boolean }[] {
   const rows = [
-    { title: 'Route', value: routeLabel(desktop.gatewayHost) },
+    { title: 'Route', value: routeLabel(desktop.gatewayHost, desktop.addresses) },
     { title: 'Address', value: `${desktop.gatewayHost}:${desktop.gatewayPort}`, mono: true },
+    ...(desktop.addresses ?? [])
+      .filter((address) => address.kind === 'relay' && `${address.host}:${address.port}` !== `${desktop.gatewayHost}:${desktop.gatewayPort}`)
+      .map((address) => ({ title: 'Relay', value: `${address.host}:${address.port}`, mono: true })),
     { title: 'Certificate', value: shortFingerprint(desktop.pinnedFingerprint), mono: true },
     { title: 'This phone', value: desktop.deviceId, mono: true },
   ];

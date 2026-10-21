@@ -168,4 +168,4 @@ class WebSocketPinningModule : Module() {
 }
 
 private const val POST_TIMEOUT_SECONDS = 130L
-private const val CONNECT_TIMEOUT_SECONDS = 5L
+private const val CONNECT_TIMEOUT_SECONDS = 10L

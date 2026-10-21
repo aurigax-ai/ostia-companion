@@ -15,7 +15,7 @@ export type MockCap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'des
 export type MockDecision = 'approve' | 'deny' | 'never';
 
 export interface MockAddress {
-  kind: 'tailnet' | 'phone' | 'lan';
+  kind: 'tailnet' | 'phone' | 'lan' | 'relay';
   host: string;
   port: number;
 }
@@ -88,6 +88,9 @@ export interface MockGateway {
   declined: { requestId: string; reason: string }[];
   writeArtifact: (sessionId: string, path: string, content: string | null) => void;
   setAddresses: (next: MockAddress[]) => void;
+  setPushServer: (server: string | null) => void;
+  setPushRegistered: (registered: boolean) => void;
+  push: { tickets: string[]; registered: { handle: string; platform: string }[]; unregistered: number };
   move: (port?: number) => Promise<number>;
   close: () => Promise<void>;
 }
@@ -272,6 +275,9 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const started = Date.now();
   let selected = 0;
   let addresses = options.addresses ?? null;
+  let pushServer: string | null = null;
+  let handleLive = false;
+  const push = { tickets: [] as string[], registered: [] as { handle: string; platform: string }[], unregistered: 0 };
 
   const mintCode = () => {
     const code = newCode();
@@ -559,7 +565,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
           device.name = phoneName;
           saveDevices();
         }
-        return respond(id, { deviceId: device.deviceId, caps: device.caps, ...(options.imagesUnsupported ? {} : { features: ['prompt-image'] }), desktop: { name, version: 'mock' }, ...(addresses ? { addresses } : {}), ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
+        return respond(id, { deviceId: device.deviceId, caps: device.caps, ...(options.imagesUnsupported ? {} : { features: ['prompt-image'] }), desktop: { name, version: 'mock' }, ...(addresses ? { addresses } : {}), ...(pushServer ? { push: { server: pushServer, registered: handleLive } } : {}), ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
       }
       if (!connection.device) {
         fail(id, UNAUTHENTICATED, 'unauthenticated');
@@ -608,6 +614,23 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         return respond(id, { snippets: own.map(({ sessionId: _, ...snippet }) => snippet) });
       }
       if (method === 'ask.list') return respond(id, { asks: scenario.asks });
+      if (['push.ticket', 'push.register', 'push.unregister'].includes(method)) {
+        if (!has('notify')) return fail(id, NEEDS_ELEVATION, 'needs-elevation', { cap: 'notify' });
+        if (!pushServer) return fail(id, INVALID_PARAMS, 'push-off');
+        if (method === 'push.ticket') {
+          const ticket = `ticket-${push.tickets.length + 1}`;
+          push.tickets.push(ticket);
+          return respond(id, { ticket, expiresAt: Date.now() + 600000 });
+        }
+        if (method === 'push.register') {
+          push.registered.push({ handle: params.handle, platform: params.platform });
+          handleLive = true;
+        } else {
+          push.unregistered++;
+          handleLive = false;
+        }
+        return respond(id, { ok: true });
+      }
       if (method === 'fs.list' || method === 'fs.read' || method === 'artifact.open') {
         if (typeof params.sessionId !== 'string' || !params.sessionId) return fail(id, INVALID_PARAMS, 'missing sessionId');
         if (typeof params.path !== 'string') return fail(id, INVALID_PARAMS, 'missing path');
@@ -845,6 +868,16 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
       addresses = next;
       event('addresses.changed', { addresses: next }, null);
     },
+    setPushServer: (server) => {
+      pushServer = server;
+      handleLive = false;
+      event('push.config', server ? { server, registered: false } : { server }, null);
+    },
+    setPushRegistered: (registered) => {
+      handleLive = registered;
+      event('push.config', { server: pushServer, registered }, null);
+    },
+    push,
     move: async (wanted = 0) => {
       connections.forEach((c) => c.socket.terminate());
       server.closeAllConnections();

@@ -5,6 +5,9 @@ import { getRandomValues } from 'expo-crypto';
 (globalThis as { crypto?: object }).crypto ??= { getRandomValues };
 
 import App from './App';
+import { defineWakeTask } from './src/services/pushWakeTask';
+
+defineWakeTask();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

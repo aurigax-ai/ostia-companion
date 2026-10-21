@@ -45,7 +45,7 @@ export function DesktopsScreen({ navigation, onEmpty }: ScreenProps<'Desktops'> 
             key={desktop.deviceId}
             leading={<IconTile icon={Monitor} tone={desktop.deviceId === list.activeId ? 'brand' : 'neutral'} />}
             title={desktop.desktopName}
-            subtitle={`${routeLabel(desktop.gatewayHost)} · ${desktop.gatewayHost}`}
+            subtitle={`${routeLabel(desktop.gatewayHost, desktop.addresses)} · ${desktop.gatewayHost}`}
             mono
             trailing={
               <View style={styles.trailing}>

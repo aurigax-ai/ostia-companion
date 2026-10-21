@@ -1,6 +1,6 @@
 import type { PairingData } from '../services/storage';
 
-export type AddressKind = 'tailnet' | 'phone' | 'lan';
+export type AddressKind = 'tailnet' | 'phone' | 'lan' | 'relay';
 
 export interface DesktopAddress {
   kind: AddressKind;
@@ -11,9 +11,10 @@ export interface DesktopAddress {
 export interface Route {
   host: string;
   port: number;
+  kind?: AddressKind;
 }
 
-const KINDS: AddressKind[] = ['tailnet', 'phone', 'lan'];
+const KINDS: AddressKind[] = ['tailnet', 'phone', 'lan', 'relay'];
 const HOST = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 
@@ -40,9 +41,16 @@ function distinct(routes: Route[]): Route[] {
   return routes.filter((route) => !seen.has(routeKey(route)) && seen.add(routeKey(route)));
 }
 
+function asRoute({ host, port, kind }: Route): Route {
+  return kind === 'relay' ? { host, port, kind } : { host, port };
+}
+
 export function savedRoutes(desktop: PairingData): Route[] {
-  const last = { host: desktop.gatewayHost, port: desktop.gatewayPort };
-  return distinct([last, ...(desktop.addresses ?? []).map(({ host, port }) => ({ host, port }))]);
+  const saved: Route[] = desktop.addresses ?? [];
+  const last: Route = { host: desktop.gatewayHost, port: desktop.gatewayPort };
+  const kind = saved.find((route) => routeKey(route) === routeKey(last))?.kind;
+  const routes = distinct([asRoute({ ...last, kind }), ...saved.map(asRoute)]);
+  return [...routes.filter((route) => route.kind !== 'relay'), ...routes.filter((route) => route.kind === 'relay')];
 }
 
 export function untried(found: Route[], tried: Route[]): Route[] {

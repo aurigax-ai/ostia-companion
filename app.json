@@ -40,6 +40,7 @@
         }
       ],
       "expo-sharing",
+      "./plugins/withPushStrings.js",
       [
         "expo-speech-recognition",
         {

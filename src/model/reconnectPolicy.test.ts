@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { delayCap, nextDelay, nextScan, scanDue, timing } from './reconnectPolicy';
+import { candidateTimeout, delayCap, nextDelay, nextScan, scanDue, timing } from './reconnectPolicy';
 
 describe('reconnect policy', () => {
+  it('RLY-T1 gives a relay candidate more than the 6 s the relay may hold a connection, and a direct one 5 s', () => {
+    expect(candidateTimeout('relay')).toBeGreaterThanOrEqual(6000);
+    expect(candidateTimeout('lan')).toBe(5000);
+    expect(candidateTimeout(undefined)).toBe(5000);
+  });
+
   it('RDS-B4 raises the retry cap after a full failed cycle, and keeps it low otherwise', () => {
     expect(delayCap(false)).toBe(timing.maxDelayMs);
     expect(delayCap(true)).toBe(timing.unreachableMaxDelayMs);

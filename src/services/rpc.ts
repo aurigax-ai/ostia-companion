@@ -1,7 +1,8 @@
 import { PinnedWebSocket } from 'websocket-pinning';
 import { parsePhoneWorkspace, PhoneWorkspace } from '../model/agentStart';
 import { DesktopAddress, parseAddresses, Route, savedRoutes, untried } from '../model/rediscovery';
-import { nextDelay, delayCap, nextScan, scanDue, timing } from '../model/reconnectPolicy';
+import { parsePushConfig, PushConfig } from '../model/push';
+import { candidateTimeout, nextDelay, delayCap, nextScan, scanDue, timing } from '../model/reconnectPolicy';
 import { isActive, onActive } from './appActive';
 import { discoverPairedRoutes, onLocalNetwork } from './lanDiscovery';
 import { PairingData, saveRoute } from './storage';
@@ -52,6 +53,8 @@ class OstiaRpcClient {
   private caps: Cap[] = [];
   private features: Feature[] = NO_FEATURES;
   private phoneWorkspace: PhoneWorkspace | null = null;
+  private pushConfig: PushConfig | null = null;
+  private pushListeners = new Set<() => void>();
 
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = timing.minDelayMs;
@@ -79,6 +82,7 @@ class OstiaRpcClient {
 
   public initialize(pairingData: PairingData) {
     this.pairingData = pairingData;
+    this.setPush(null);
     this.activePaneId = null;
     this.lastCursor = 0;
     this.connect();
@@ -102,6 +106,22 @@ class OstiaRpcClient {
 
   public getPhoneWorkspace() {
     return this.phoneWorkspace;
+  }
+
+  public getPush() {
+    return this.pushConfig;
+  }
+
+  public addPushListener(listener: () => void) {
+    this.pushListeners.add(listener);
+    return () => {
+      this.pushListeners.delete(listener);
+    };
+  }
+
+  private setPush(config: PushConfig | null) {
+    this.pushConfig = config;
+    this.pushListeners.forEach((listener) => listener());
   }
 
   public hasCap(cap: Cap) {
@@ -179,7 +199,7 @@ class OstiaRpcClient {
       this.rejectPending('The desktop did not answer.');
       failed();
     };
-    this.attemptTimer = setTimeout(fail, timing.candidateMs);
+    this.attemptTimer = setTimeout(fail, candidateTimeout(route.kind));
 
     const socket: PinnedWebSocket = new PinnedWebSocket(
       `wss://${route.host}:${route.port}/ws`,
@@ -279,6 +299,7 @@ class OstiaRpcClient {
     this.closeSocket();
     this.pairingData = null;
     this.phoneWorkspace = null;
+    this.setPush(null);
     this.activePaneId = null;
     this.setCaps([]);
     this.setFeatures([]);
@@ -329,6 +350,7 @@ class OstiaRpcClient {
       this.setCaps(result.caps ?? []);
       this.setFeatures(result.features ?? []);
       this.phoneWorkspace = parsePhoneWorkspace(result.phoneWorkspace);
+      this.setPush(parsePushConfig(result.push));
       this.setStatus('connected');
       if (this.activePaneId) {
         this.attachPty(this.activePaneId, this.requestedRole).catch((err) =>
@@ -354,6 +376,7 @@ class OstiaRpcClient {
     if (message.method === 'event' && message.params) {
       const { type, payload } = message.params;
       if (type === 'caps.changed') this.setCaps(payload?.caps ?? []);
+      if (type === 'push.config') this.setPush(parsePushConfig(payload));
       if (type === 'addresses.changed') this.keepRoute(null, parseAddresses(payload?.addresses));
       this.emit(type, payload);
       return;

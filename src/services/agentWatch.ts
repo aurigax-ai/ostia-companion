@@ -6,6 +6,7 @@ import type { Ask } from '../model/asks';
 import type { Pane, Session } from '../model/workspaces';
 import { getAlertPrefs, onAlertPrefs } from './alertPrefsStore';
 import { answerAsk, onAsks } from './askStore';
+import { rememberRaised } from './raisedAlerts';
 import { OstiaRpc } from './rpc';
 import { onWorkspaces } from './workspaceStore';
 
@@ -19,7 +20,8 @@ let shownAsks = new Set<string>();
 let latestAsks: Ask[] = [];
 let running = false;
 
-async function post(alert: AgentAlert) {
+export async function post(alert: AgentAlert) {
+  if (alert.askId) void rememberRaised(alert.id);
   if (alert.actions.length > 0) {
     await Notifications.setNotificationCategoryAsync(
       alert.id,
