@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, posix } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { cleanPhoneName } from '../model/phoneIdentity.ts';
 import type { Pane, SessionState } from '../model/workspaces.ts';
 import { checkCode } from '../services/pairCheck.ts';
 import { agentPromptScreen, demoScenario, PROMPT_OPTIONS, type Scenario, SHELL_PROMPT, shellScreen, VIM_SCREEN } from './mockScenario.ts';
@@ -74,7 +75,6 @@ export interface MockGateway {
   payload: (host: string) => object;
   link: (host: string) => string;
   mintCode: () => string;
-  rename: (deviceId: string, name: string) => void;
   revoke: (deviceId: string) => void;
   setCaps: (deviceId: string, caps: MockCap[]) => void;
   updatePane: (paneId: string, patch: Partial<Pane>) => void;
@@ -348,7 +348,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
   const server: Server = createServer({ key, cert }, async (req, res) => {
     const body = req.method === 'POST' ? await readJson(req) : null;
     if (req.url === '/pair' && req.method === 'POST') {
-      if (!body?.pairCode || !body.device?.name || !body.device?.pubkey || !body.commit) {
+      if (!body?.pairCode || !cleanPhoneName(body.device?.name) || !body.device?.pubkey || !body.commit) {
         return send(res, 400, { error: 'bad-request' });
       }
       const code = String(body.pairCode).replace(/[\s-]/g, '').toUpperCase();
@@ -386,7 +386,7 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         const device: MockDevice = {
           deviceId: `dev_${randomBytes(6).toString('hex')}`,
           deviceToken: randomBytes(24).toString('base64url'),
-          name: replaced[0]?.name ?? request.device.name,
+          name: cleanPhoneName(request.device.name) ?? 'Phone',
           caps: replaced[0]?.caps ?? canonical(caps),
           ...(installId ? { installId } : {}),
         };
@@ -554,6 +554,11 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
         }
         clearTimeout(helloTimer);
         connection.device = device;
+        const phoneName = params.name === undefined ? null : cleanPhoneName(params.name);
+        if (phoneName && phoneName !== device.name) {
+          device.name = phoneName;
+          saveDevices();
+        }
         return respond(id, { deviceId: device.deviceId, caps: device.caps, ...(options.imagesUnsupported ? {} : { features: ['prompt-image'] }), desktop: { name, version: 'mock' }, ...(addresses ? { addresses } : {}), ...(phoneWorkspace ? { phoneWorkspace: { set: true, agent: phoneWorkspace.agent } } : {}) });
       }
       if (!connection.device) {
@@ -793,12 +798,6 @@ export async function startMockGateway(options: MockGatewayOptions = {}): Promis
     payload: (host) => ({ v: 1, host, port: gateway.port, fingerprint, pairCode, name }),
     link: (host) => `ostia-pair://${Buffer.from(JSON.stringify(gateway.payload(host))).toString('base64url')}`,
     mintCode: () => (pairCode = mintCode()),
-    rename: (deviceId, name) => {
-      const device = devices.find((d) => d.deviceId === deviceId);
-      if (!device) return;
-      device.name = name;
-      saveDevices();
-    },
     revoke: (deviceId) => {
       const index = devices.findIndex((d) => d.deviceId === deviceId);
       if (index < 0) return;

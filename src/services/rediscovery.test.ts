@@ -104,6 +104,29 @@ afterEach(async () => {
   await Promise.all(gateways.splice(0).map((gw) => gw.close()));
 });
 
+describe('the phone name in hello (contract v1.13)', () => {
+  it('PID-P8 sends the name in hello, and again when it changes while connected', async () => {
+    const gw = await desktop();
+    OstiaRpc.setPhoneName('Pixel 9');
+    OstiaRpc.initialize(await pairedWith(gw));
+    await connected();
+    await vi.waitFor(() => expect(gw.devices[0].name).toBe('Pixel 9'));
+    OstiaRpc.setPhoneName('Desk phone');
+    await vi.waitFor(() => expect(gw.devices[0].name).toBe('Desk phone'));
+  });
+
+  it('PID-P9 keeps the old name when the new one has a control character', async () => {
+    const gw = await desktop();
+    OstiaRpc.setPhoneName('Pixel 9');
+    OstiaRpc.initialize(await pairedWith(gw));
+    await connected();
+    await vi.waitFor(() => expect(gw.devices[0].name).toBe('Pixel 9'));
+    OstiaRpc.setPhoneName('bad\u202Ename');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(gw.devices[0].name).toBe('Pixel 9');
+  });
+});
+
 describe('saving the address list (contract v1.10 §1, §2)', () => {
   it('RDS-P1 keeps the list from hello with the address that worked, and saves it', async () => {
     const gw = await desktop();

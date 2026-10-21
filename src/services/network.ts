@@ -2,7 +2,7 @@ import { cancelPosts, pinnedPost } from 'websocket-pinning';
 import { generateDeviceKeyPair } from './crypto';
 import { pairFailure } from './pairFailure';
 import { PairCancelled, requestPairing, startPairing } from './pairFlow';
-import { PairingIdentity } from './phoneIdentity';
+import type { PhoneIdentity } from '../model/phoneIdentity';
 import { PairingData } from './storage';
 
 export interface PairTarget {
@@ -20,7 +20,7 @@ export interface PairingRun {
 
 export function pairDevice(
   target: PairTarget,
-  identity: () => Promise<PairingIdentity>,
+  identity: () => Promise<PhoneIdentity>,
   onCheckCode: (code: string, startedAt: number) => void,
   save: (data: PairingData) => Promise<void>,
 ): PairingRun {

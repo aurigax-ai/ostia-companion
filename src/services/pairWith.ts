@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { PairingRun, pairDevice, PairTarget } from './network';
 import { openTailscaleApp } from './openTailscaleApp';
-import { loadPairingIdentity } from './phoneIdentity';
+import { loadPhoneIdentity } from './phoneIdentity';
 import { parsePairingPayload } from './pairing';
 import { logEvent } from './connectionLog';
 import { savePairingData } from './storage';
@@ -9,7 +9,7 @@ import { savePairingData } from './storage';
 export type CheckCodeListener = (code: string, startedAt: number) => void;
 
 export function pairWithTarget(target: PairTarget, onCheckCode: CheckCodeListener): PairingRun {
-  return pairDevice(target, loadPairingIdentity, onCheckCode, savePairingData);
+  return pairDevice(target, loadPhoneIdentity, onCheckCode, savePairingData);
 }
 
 export function pairWith(text: string, onCheckCode: CheckCodeListener): PairingRun {

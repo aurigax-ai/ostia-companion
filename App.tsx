@@ -11,6 +11,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getPairingData, loadDesktops } from './src/services/storage';
+import { loadPhoneIdentity } from './src/services/phoneIdentity';
 import { loadPrefs } from './src/services/prefsStore';
 import { startConnectionLog } from './src/services/connectionLog';
 import { startAgentAlerts } from './src/services/agentWatch';
@@ -102,6 +103,7 @@ export default function App() {
   useEffect(() => {
     startConnectionLog();
     void loadPrefs();
+    void loadPhoneIdentity();
     void loadAlertPrefs();
     startAgentAlerts((target) => navigationRef.isReady() && navigationRef.navigate(target.screen, target.params));
     void loadBlockedApps();

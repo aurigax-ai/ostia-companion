@@ -29,15 +29,14 @@ describe('mock gateway: pairing (contract §3)', () => {
     const gw = await start();
     const installId = 'a'.repeat(32);
     const first = await pair(gw, { installId, name: 'Pixel 9' });
-    gw.rename(gw.devices[0].deviceId, 'Desk phone');
     gw.setCaps(gw.devices[0].deviceId, ['read', 'notify', 'input']);
     const old = connect(gw);
     await old.call('hello', { deviceToken: first.result.deviceToken, client: 'test' });
 
-    const second = await pair(gw, { installId, name: 'Pixel 9' });
+    const second = await pair(gw, { installId, name: 'Pixel 9 Pro' });
     expect(await old.closed).toBe(4003);
     expect(gw.devices).toHaveLength(1);
-    expect(gw.devices[0]).toMatchObject({ deviceToken: second.result.deviceToken, name: 'Desk phone', caps: ['read', 'notify', 'input'] });
+    expect(gw.devices[0]).toMatchObject({ deviceToken: second.result.deviceToken, name: 'Pixel 9 Pro', caps: ['read', 'notify', 'input'] });
 
     const stale = connect(gw);
     expect((await stale.call('hello', { deviceToken: first.result.deviceToken, client: 'test' })).error).toBeTruthy();
@@ -55,11 +54,11 @@ describe('mock gateway: pairing (contract §3)', () => {
     expect(gw.devices).toHaveLength(4);
   });
 
-  it('PID-P7 renames a paired device on the desktop', async () => {
+  it('PID-P7 refuses a pairing name with control, bidi or invisible characters', async () => {
     const gw = await start();
-    await pair(gw, { installId: 'a'.repeat(32), name: 'Pixel 9' });
-    gw.rename(gw.devices[0].deviceId, 'Desk phone');
-    expect(gw.devices[0].name).toBe('Desk phone');
+    for (const name of ['a\nb', 'a\u202Eb', 'a\u200Bb']) {
+      await expect(pair(gw, { name })).rejects.toThrow(/400/);
+    }
   });
 
   it('uses a pairing code once', async () => {
