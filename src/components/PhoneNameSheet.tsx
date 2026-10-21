@@ -29,7 +29,6 @@ export function PhoneNameSheet({ visible, name, onClose }: { visible: boolean; n
           accessibilityLabel="Phone name"
         />
         {text.trim() && !valid ? <Text style={[type.caption, styles.error]}>Use letters, numbers and punctuation only.</Text> : null}
-        <Text style={[type.caption, styles.note]}>Shown on your desktop in Settings › Remote.</Text>
         <Button label="Save" onPress={() => void save()} disabled={!valid} />
       </View>
     </Sheet>
@@ -47,6 +46,5 @@ const styles = StyleSheet.create({
     fontFamily: font.regular,
     fontSize: 16,
   },
-  note: {},
   error: { color: colors.attn },
 });
