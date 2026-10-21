@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SCROLLBACK, SKIPPED_NOTICE, TerminalCopy } from './terminalCopy';
+import { ANSI_PALETTE, DEFAULT_BG, DEFAULT_FG, SCROLLBACK, SKIPPED_NOTICE, TerminalCopy } from './terminalCopy';
 
 const bytes = (text: string) => unescape(encodeURIComponent(text));
 const prompt = '\x1b]133;A\x07$ \x1b]133;B\x07';
@@ -43,6 +43,18 @@ describe('TerminalCopy', () => {
       [' plain ', undefined],
       ['rgb', '#010203'],
     ]);
+  });
+
+  it('CRD-V4b uses the desktop Oxocarbon palette for the 16 ANSI colours', async () => {
+    expect(ANSI_PALETTE).toEqual([
+      '#262626', '#ee5396', '#42be65', '#ffe97b', '#33b1ff', '#ff7eb6', '#3ddbd9', '#dde1e6',
+      '#393939', '#ee5396', '#42be65', '#ffe97b', '#33b1ff', '#ff7eb6', '#3ddbd9', '#ffffff',
+    ]);
+    expect([DEFAULT_BG, DEFAULT_FG]).toEqual(['#161616', '#f2f4f8']);
+    const copy = new TerminalCopy(60, 6);
+    await copy.write(bytes(run('t', '\x1b[30ma\x1b[32mb\x1b[33mc\x1b[34md\x1b[35me\x1b[36mf\x1b[37mg\x1b[90mh\x1b[97mi\r\n')));
+    const [line] = copy.runs()[0].output;
+    expect(line.map((s) => s.fg)).toEqual(['#262626', '#42be65', '#ffe97b', '#33b1ff', '#ff7eb6', '#3ddbd9', '#dde1e6', '#393939', '#ffffff']);
   });
 
   it('CRD-V5 marks a running full-screen program, and drops it when the program leaves the alternate screen', async () => {

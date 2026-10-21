@@ -30,8 +30,8 @@ export const DEFAULT_FG = '#f2f4f8';
 export const DEFAULT_BG = '#161616';
 
 export const ANSI_PALETTE = [
-  '#161616', '#ee5396', '#00b4ff', '#ff4297', '#00c15a', '#c693ff', '#ff74b8', '#f2f4f8',
-  '#585858', '#ee5396', '#00b4ff', '#ff4297', '#00c15a', '#c693ff', '#ff74b8', '#f2f4f8',
+  '#262626', '#ee5396', '#42be65', '#ffe97b', '#33b1ff', '#ff7eb6', '#3ddbd9', '#dde1e6',
+  '#393939', '#ee5396', '#42be65', '#ffe97b', '#33b1ff', '#ff7eb6', '#3ddbd9', '#ffffff',
 ];
 
 export const SCROLLBACK = 5000;
