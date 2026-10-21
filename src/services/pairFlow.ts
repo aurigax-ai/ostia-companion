@@ -6,6 +6,7 @@ export interface PairRequestInput {
   pairCode: string;
   fingerprint: string;
   deviceName: string;
+  installId?: string;
   pubkey: string;
 }
 
@@ -35,7 +36,7 @@ export async function requestPairing(
   const phoneNonce = randomBytes(NONCE_BYTES);
   const started = await post('/pair', {
     pairCode: input.pairCode,
-    device: { name: input.deviceName, pubkey: input.pubkey },
+    device: { name: input.deviceName, pubkey: input.pubkey, installId: input.installId },
     commit: commitOf(phoneNonce),
   });
   if (typeof started?.requestId !== 'string' || typeof started.nonce !== 'string') {

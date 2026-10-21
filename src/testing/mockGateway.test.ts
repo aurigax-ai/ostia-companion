@@ -25,6 +25,42 @@ describe('mock gateway: pairing (contract §3)', () => {
     expect(gw.devices.map((d) => d.deviceToken)).toEqual([result.deviceToken]);
   });
 
+  it('PID-P5 leaves one row when the same install identity pairs again, and closes the old socket', async () => {
+    const gw = await start();
+    const installId = 'a'.repeat(32);
+    const first = await pair(gw, { installId, name: 'Pixel 9' });
+    gw.setCaps(gw.devices[0].deviceId, ['read', 'notify', 'input']);
+    const old = connect(gw);
+    await old.call('hello', { deviceToken: first.result.deviceToken, client: 'test' });
+
+    const second = await pair(gw, { installId, name: 'Pixel 9 Pro' });
+    expect(await old.closed).toBe(4003);
+    expect(gw.devices).toHaveLength(1);
+    expect(gw.devices[0]).toMatchObject({ deviceToken: second.result.deviceToken, name: 'Pixel 9 Pro', caps: ['read', 'notify', 'input'] });
+
+    const stale = connect(gw);
+    expect((await stale.call('hello', { deviceToken: first.result.deviceToken, client: 'test' })).error).toBeTruthy();
+  });
+
+  it('PID-P6 keeps two rows for two install identities, and for a phone that sends none', async () => {
+    const gw = await start();
+    await pair(gw, { installId: 'a'.repeat(32) });
+    gw.setCaps(gw.devices[0].deviceId, ['read', 'notify', 'input']);
+    await pair(gw, { installId: 'b'.repeat(32) });
+    expect(gw.devices).toHaveLength(2);
+    expect(gw.devices[1].caps).toEqual(['read', 'notify']);
+    await pair(gw);
+    await pair(gw);
+    expect(gw.devices).toHaveLength(4);
+  });
+
+  it('PID-P7 refuses a pairing name with control, bidi or invisible characters', async () => {
+    const gw = await start();
+    for (const name of ['a\nb', 'a\u202Eb', 'a\u200Bb']) {
+      await expect(pair(gw, { name })).rejects.toThrow(/400/);
+    }
+  });
+
   it('uses a pairing code once', async () => {
     const gw = await start();
     const used = gw.pairCode;

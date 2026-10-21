@@ -29,11 +29,11 @@ export function pinnedPost(port: number, fingerprint: string) {
     });
 }
 
-export async function pair(gw: MockGateway) {
+export async function pair(gw: MockGateway, identity: { installId?: string; name?: string } = {}) {
   let phoneCode = '';
   const result = await requestPairing(
     pinnedPost(gw.port, gw.fingerprint),
-    { pairCode: gw.pairCode, fingerprint: gw.fingerprint, deviceName: 'Test phone', pubkey: PUBKEY },
+    { pairCode: gw.pairCode, fingerprint: gw.fingerprint, deviceName: identity.name ?? 'Test phone', installId: identity.installId, pubkey: PUBKEY },
     (code) => (phoneCode = code),
   );
   return { result, phoneCode };
