@@ -33,6 +33,7 @@
     "expo-speech-recognition": "^57.1.1",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "human-id": "^4.2.2",
     "lucide-react-native": "^1.59.0",
     "marked": "^18.1.1",
     "mermaid": "^12.2.0",
@@ -83,7 +84,7 @@
       "^lucide-react-native$": "<rootDir>/node_modules/lucide-react-native/dist/cjs/lucide-react-native.js"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|@noble|marked|phone-control))",
+      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|@noble|marked|human-id|phone-control))",
       "/node_modules/react-native-reanimated/plugin/",
       "/node_modules/@react-native/babel-preset/"
     ],

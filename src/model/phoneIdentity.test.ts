@@ -1,3 +1,4 @@
+import { adjectives, nouns } from 'human-id';
 import { describe, expect, it } from 'vitest';
 import { cleanPhoneName, newPhoneIdentity, parsePhoneIdentity } from './phoneIdentity';
 
@@ -24,15 +25,11 @@ describe('phone identity', () => {
     expect(parsePhoneIdentity(JSON.stringify({ installId: identity.installId, name: 'a‮b' }))).toBeNull();
   });
 
-  it('PID-P4 always names the phone with a generated adjective-noun name, from a list of at least 1000 pairs', () => {
+  it('PID-P4 always names the phone with a generated adjective-noun name, from at least 50000 pairs', () => {
+    expect(adjectives.length * nouns.length).toBeGreaterThanOrEqual(50_000);
     const names = new Set<string>();
-    for (let adjective = 0; adjective < 32; adjective++) {
-      for (let noun = 0; noun < 32; noun++) {
-        let call = 0;
-        names.add(newPhoneIdentity((n) => Uint8Array.from({ length: n }, () => (call++ < 16 ? 1 : call === 18 ? adjective : noun))).name);
-      }
-    }
-    expect(names.size).toBeGreaterThanOrEqual(1000);
+    for (let i = 0; i < 200; i++) names.add(newPhoneIdentity(() => crypto.getRandomValues(new Uint8Array(16))).name);
+    expect(names.size).toBeGreaterThan(190);
     for (const name of names) expect(name).toMatch(/^[a-z]+-[a-z]+$/);
   });
 
