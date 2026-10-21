@@ -123,7 +123,7 @@ describe('waking from a push (contract v1.14 §5)', () => {
   });
 
   it('PSH-W9 raises a prompt alert once per wait: not while showing and not after it was raised', async () => {
-    const showing = deps({ asks: [], panes: [pane('p2', 'waiting', 100)], presented: ['p2:waiting:100'] });
+    const showing = deps({ asks: [], panes: [pane('p2', 'waiting', 100)], presented: ['p2:waiting'] });
     await runWake(showing.value);
     expect(showing.posted).toEqual([]);
     const dismissed = deps({ asks: [], panes: [pane('p2', 'waiting', 100)], raised: ['p2:waiting:100'] });
@@ -134,14 +134,22 @@ describe('waking from a push (contract v1.14 §5)', () => {
   it('PSH-W12 raises a prompt alert again for a new wait of the same pane', async () => {
     const { value, posted } = deps({ asks: [], panes: [pane('p2', 'waiting', 200)], raised: ['p2:waiting:100'] });
     await runWake(value);
-    expect(posted.map((a) => a.id)).toEqual(['p2:waiting:200']);
-    expect(posted[0].once).toBe(true);
+    expect(posted.map((a) => a.key)).toEqual(['p2:waiting:200']);
+    expect(posted[0].id).toBe('p2:waiting');
+  });
+
+  it('PSH-W14 raises a prompt alert for a pane whose waitingSince is not a number, and does not remember it', async () => {
+    const bad = { ...pane('p2', 'waiting'), waitingSince: null as never };
+    const { value, posted } = deps({ asks: [], panes: [bad], raised: ['p2:waiting:null'] });
+    await runWake(value);
+    expect(posted.map((a) => a.id)).toEqual(['p2:waiting']);
+    expect(posted[0].key).toBeUndefined();
   });
 
   it('PSH-W13 falls back to the pane id alone when the desktop sends no waitingSince', async () => {
     const { value, posted } = deps({ asks: [], panes: [pane('p2', 'waiting')] });
     await runWake(value);
     expect(posted.map((a) => a.id)).toEqual(['p2:waiting']);
-    expect(posted[0].once).toBe(false);
+    expect(posted[0].key).toBeUndefined();
   });
 });

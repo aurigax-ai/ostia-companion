@@ -15,4 +15,12 @@ describe('remembering raised alerts', () => {
     expect(kept[`ask:${RAISED_MAX_IDS + 49}`]).toBeDefined();
     expect(kept['ask:0']).toBeUndefined();
   });
+
+  it('PSH-W15 caps prompt keys apart from ask ids, so prompts never evict a dismissed ask', () => {
+    const now = 10 * RAISED_MEMORY_MS;
+    const prompts = Object.fromEntries(Array.from({ length: RAISED_MAX_IDS + 100 }, (_, i) => [`p${i}:waiting:${i}`, now - 10 + i]));
+    const kept = pruneRaised({ 'ask:old': now - RAISED_MEMORY_MS + 1000, ...prompts }, now);
+    expect(kept['ask:old']).toBeDefined();
+    expect(Object.keys(kept).filter((key) => key.startsWith('p'))).toHaveLength(RAISED_MAX_IDS);
+  });
 });

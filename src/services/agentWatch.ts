@@ -21,7 +21,7 @@ let latestAsks: Ask[] = [];
 let running = false;
 
 export async function post(alert: AgentAlert) {
-  if (alert.once) void rememberRaised(alert.id);
+  if (alert.key) void rememberRaised(alert.key);
   if (alert.actions.length > 0) {
     await Notifications.setNotificationCategoryAsync(
       alert.id,
