@@ -2,7 +2,6 @@ import { useSyncExternalStore } from 'react';
 import * as Crypto from 'expo-crypto';
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 import { cleanPhoneName, newPhoneIdentity, parsePhoneIdentity, PhoneIdentity } from '../model/phoneIdentity';
 import { OstiaRpc } from './rpc';
 
@@ -24,7 +23,7 @@ async function loadOrCreate(): Promise<PhoneIdentity> {
   const reinstalled = !marker.exists;
   const stored = reinstalled ? null : parsePhoneIdentity(await SecureStore.getItemAsync(KEY, OPTIONS));
   if (stored) return stored;
-  const created = newPhoneIdentity(Crypto.getRandomBytes, (Platform.constants as { Model?: unknown }).Model);
+  const created = newPhoneIdentity(Crypto.getRandomBytes);
   await SecureStore.setItemAsync(KEY, JSON.stringify(created), OPTIONS);
   if (reinstalled) marker.create({ overwrite: true });
   return created;
