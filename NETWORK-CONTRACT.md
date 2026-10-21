@@ -1,4 +1,6 @@
-# Ostia Companion — Network Contract (v1.10, contract-first)
+# Ostia Companion — Network Contract (v1.13, contract-first)
+
+> **v1.13 (2026-10-20)** makes one phone one row on the desktop. The phone creates a random install identity once (32 hex characters from a secure random source, kept in secure storage, never a hardware id) and sends it as `device.installId` when it pairs, with a readable `device.name`. After the human approves, the desktop revokes the paired device that holds the same identity and issues a new token, so re-pairing leaves one row; the human can rename a device on the desktop. The identity is only a hint for merging rows: the pin, the pairing code, the check code and the token stay the pairing and the identity is never authentication. Additive. See §3 step 4 and step 7, and §11. Source: ostia #1316. The full text is the vault spec `specs/phone-control/device-identity-contract`.
 
 > **v1.10 (2026-10-20)** lets a paired phone find the desktop again after its address changes, without pairing again. `hello` carries `addresses`, the event `addresses.changed` replaces that list, and the desktop announces `_ostia._tcp` with TXT `v=1`, `mode=paired`, `port` while remote access is on with a LAN bind. The phone tries the last address that worked, then the saved list, then LAN discovery, and sends the token only on a connection whose certificate matches its pin. Additive. See §4, §7 and §11. Source: ostia #1257, #1258.
 
@@ -93,10 +95,12 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 4. **Request (`POST https://<host>:<port>/pair`, pinning `fingerprint`):** the phone generates a **device keypair** (Ed25519) and 32 random bytes `Np`, and sends:
    ```json
    { "pairCode": "ABCDEFGH",
-     "device": { "name": "Pixel 9", "pubkey": "BASE64-SPKI" },
+     "device": { "name": "Pixel 9", "pubkey": "BASE64-SPKI", "installId": "0123456789abcdef0123456789abcdef" },
      "commit": "hex(SHA-256(Np))" }
    ```
-   - `400 bad-request` for a missing or malformed field (including a body without `commit`), `401 invalid-pair-code` for an unknown, used or expired code, `429 rate-limited`.
+   - `device.name` is the phone's model name when the OS gives one, else a random `adjective-noun` name (for example `brave-apple`) the phone generated once and kept. 1-64 characters; the desktop trims it and cuts it at 64.
+   - `device.installId` is optional: 16-64 characters from `A-Za-z0-9_-` (the phone sends 32 hex characters). It is created once on the phone from a secure random source and kept in secure storage; it is not derived from the hardware, the account or the pubkey, and a reinstall makes a new one. Anything else answers `400 bad-request`. It is a hint only: it never replaces the pin, code, check code or token. It is not put in TXT records, QR payloads, logs or `hello`.
+   - `400 bad-request` for a missing or malformed field (including a body without `commit` or an `installId` that is not a plain id), `401 invalid-pair-code` for an unknown, used or expired code, `429 rate-limited`.
    - On success the code is used up and the desktop answers `200 { "requestId": "…", "nonce": "base64(Nd)" }` (`Nd`: 32 random bytes).
 5. **Confirm (`POST https://<host>:<port>/pair/confirm`):** the phone sends `{ "requestId": "…", "nonce": "base64(Np)" }` and shows the **check code**; the desktop checks `SHA-256(Np)` against the commit (else `400 commit-mismatch`, and the request ends), shows the phone's name and its own check code, and holds the response until the human decides:
    - **Approve** → `200 { "deviceId": "dev_01J...", "deviceToken": "OPAQUE-BEARER", "caps": ["read", "notify"], "expiresAt": null }`
@@ -108,6 +112,8 @@ Pairing establishes a **long-lived, revocable, per-device credential**. Flow:
 
    Test vector: fingerprint `sha256/q83vEjRWeJCrze8SNFZ4kKvN7xI0VniQq83vEjRWeJA=`, pubkey `MCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=`, `Np` = 32 bytes `0x01`, `Nd` = 32 bytes `0x02` → **`396848`**.
 7. **Result:** `deviceToken` is an opaque, revocable bearer credential the phone stores in secure storage; `caps` = the phone's initial capability subset (§5). The desktop lists the device under **Paired devices** with a **revoke** button (revocation is immediate).
+   - **One phone, one row (v1.13):** when the request carries an `installId` that a paired device already holds, the desktop's approval card says it is the same phone as that device. On **Approve** the desktop removes that device (its token stops working at once and its open sockets close with `4003`) and answers with a new `deviceId` and `deviceToken`; the new row keeps the old row's name (so a rename survives) and starts with the default caps, never the old grants. On **Deny**, expiry or a withdrawn request the old device is untouched. A request without an `installId`, or with one no device holds, adds a row. After the replacement the phone's saved pairing for that desktop is the new one.
+   - The human can rename a device in Settings › Remote on the desktop; the name is only a label.
 8. **Later connections** use `deviceToken` (§4). Re-pairing is only needed if revoked/expired.
 
 > **Optional hardening (recommended, can be phase-2):** step-up biometric (Face ID/passkey) on the phone before enabling *input* (owner) mode or destructive actions.
@@ -410,6 +416,11 @@ interface CommandDescriptor {
 *This is v1.2. The desktop gateway (Ostia Phase C) is being implemented to this contract; changes will be versioned (`v` field in payloads). Raise mismatches against this file.*
 
 ## 11. Changelog
+
+### v1.13 — 2026-10-20 (one phone, one row)
+- **`POST /pair`** `device` gains optional `installId`; `device.name` is the model name, else a random `adjective-noun` name kept on the phone.
+- **Approval** of a request whose `installId` matches a paired device replaces that device: old token revoked, old sockets closed with `4003`, new `deviceId` and `deviceToken`, name kept, default caps. The desktop can rename a device.
+- The identity is a hint only and appears in no TXT record, QR payload, log or `hello`.
 
 ### v1.10 — 2026-10-20 (rediscovery)
 - **`hello`** gains `addresses`; **`addresses.changed`** event replaces it.
