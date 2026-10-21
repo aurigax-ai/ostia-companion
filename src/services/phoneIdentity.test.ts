@@ -5,7 +5,6 @@ const env = vi.hoisted(() => ({
   options: [] as unknown[],
   marker: false,
   names: [] as string[],
-  model: 'Pixel 9' as string | undefined,
   counter: 0,
 }));
 
@@ -26,7 +25,6 @@ vi.mock('expo-file-system', () => ({
     }
   },
 }));
-vi.mock('react-native', () => ({ Platform: { get constants() { return { Model: env.model }; } } }));
 vi.mock('react', () => ({ useSyncExternalStore: () => null }));
 vi.mock('./rpc', () => ({ OstiaRpc: { setPhoneName: (name: string) => env.names.push(name) } }));
 
@@ -36,26 +34,19 @@ beforeEach(() => {
   env.options.length = 0;
   env.names.length = 0;
   env.marker = false;
-  env.model = 'Pixel 9';
   env.counter = 0;
 });
 
 describe('phone identity service', () => {
-  it('PID-P11 creates the identity once, names it by the model, and keeps it on the next launch', async () => {
+  it('PID-P11 creates the identity once, with a generated name, and keeps it on the next launch', async () => {
     const { loadPhoneIdentity } = await import('./phoneIdentity');
     const first = await loadPhoneIdentity();
-    expect(first.name).toBe('Pixel 9');
-    expect(env.names).toEqual(['Pixel 9']);
+    expect(first.name).toMatch(/^[a-z]+-[a-z]+$/);
+    expect(env.names).toEqual([first.name]);
 
     vi.resetModules();
     const again = await (await import('./phoneIdentity')).loadPhoneIdentity();
     expect(again).toEqual(first);
-  });
-
-  it('PID-P12 names the phone by a generated name when the OS gives no model', async () => {
-    env.model = undefined;
-    const { loadPhoneIdentity } = await import('./phoneIdentity');
-    expect((await loadPhoneIdentity()).name).toMatch(/^[a-z]+-[a-z]+$/);
   });
 
   it('PID-P13 keeps the identity on this device only, out of backups and other phones', async () => {

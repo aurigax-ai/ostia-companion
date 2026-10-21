@@ -27,11 +27,10 @@ export function cleanPhoneName(text: unknown): string | null {
   return kept.join('').trim() || null;
 }
 
-export function newPhoneIdentity(randomBytes: (n: number) => Uint8Array, model: unknown): PhoneIdentity {
+export function newPhoneIdentity(randomBytes: (n: number) => Uint8Array): PhoneIdentity {
   const installId = [...randomBytes(16)].map((b) => b.toString(16).padStart(2, '0')).join('');
   const [adjective, noun] = randomBytes(2);
-  const generated = `${ADJECTIVES[adjective % ADJECTIVES.length]}-${NOUNS[noun % NOUNS.length]}`;
-  return { installId, name: cleanPhoneName(model) ?? generated };
+  return { installId, name: `${ADJECTIVES[adjective % ADJECTIVES.length]}-${NOUNS[noun % NOUNS.length]}` };
 }
 
 export function parsePhoneIdentity(text: string | null): PhoneIdentity | null {
