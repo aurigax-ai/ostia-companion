@@ -37,7 +37,7 @@ export function PhoneNameSheet({ visible, name, onClose }: { visible: boolean; n
 }
 
 const styles = StyleSheet.create({
-  body: { gap: space.md, paddingHorizontal: space.gutter, paddingTop: space.md },
+  body: { gap: space.md, paddingTop: space.md },
   input: {
     minHeight: 44,
     paddingHorizontal: space.md,
