@@ -3,13 +3,13 @@ import { ActivityIndicator, Animated, Modal, Platform, Pressable, ScrollView, St
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bot, Check, ChevronDown, ChevronRight, LucideIcon, Search, SquareTerminal, TriangleAlert, X } from 'lucide-react-native';
 import { Pane, Status } from '../model/workspaces';
-import { pillFade, prefersReducedMotion } from '../services/motion';
+import { pillFade } from '../services/motion';
 import { hideSnackbar, useSnackbar } from '../services/snackbar';
 import { colors, font, radius, space, touch, type } from '../theme';
 
 export const NO_SCROLL_BARS = { showsVerticalScrollIndicator: false, showsHorizontalScrollIndicator: false } as const;
 
-export const ROW_INSET = space.lg;
+const ROW_INSET = space.lg;
 export const TILE_INSET = space.lg + 36 + space.md;
 
 const TAB_BAR = Platform.OS === 'ios' ? 49 : 80;
@@ -518,39 +518,6 @@ export function Loading({ label }: { label?: string }) {
   );
 }
 
-export function Skeleton({ rows = 4 }: { rows?: number }) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (prefersReducedMotion()) return;
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [opacity]);
-  return (
-    <Animated.View style={{ opacity }} accessibilityLabel="Loading" accessibilityRole="progressbar">
-      <View style={styles.section}>
-        <View style={[styles.bar, { width: 96 }]} />
-      </View>
-      <Group>
-        {Array.from({ length: rows }, (_, index) => (
-          <View key={index} style={[styles.row, styles.rowTall]}>
-            <View style={styles.rowText}>
-              <View style={[styles.bar, { width: `${60 - index * 8}%` }]} />
-              <View style={[styles.bar, styles.barSmall, { width: `${40 + index * 6}%` }]} />
-            </View>
-            <View style={[styles.bar, { width: 56 }]} />
-          </View>
-        ))}
-      </Group>
-    </Animated.View>
-  );
-}
-
 const styles = StyleSheet.create({
   row: {
     minHeight: touch,
@@ -698,6 +665,4 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xxl },
   emptyIcon: { marginBottom: space.lg },
   center: { textAlign: 'center' },
-  bar: { height: 12, borderRadius: 6, backgroundColor: colors.surfaceHigh },
-  barSmall: { height: 8, marginTop: space.sm },
 });

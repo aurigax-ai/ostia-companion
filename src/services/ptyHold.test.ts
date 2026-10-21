@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pair } from '../testing/contractClient';
 import { startMockGateway, type MockGateway } from '../testing/mockGateway';
 import { reset, trusted } from '../testing/nativeFake';
-import type { ConnectionStatus } from './rpc';
 
 const store = vi.hoisted(() => new Map<string, string>());
 const appState = vi.hoisted(() => {

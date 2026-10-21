@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopAddress } from '../model/rediscovery';
 import { pair } from '../testing/contractClient';
 import { startMockGateway, type MockGateway } from '../testing/mockGateway';
-import { attempts, behavior, lateEvent, listenerCount, nativeModule, reset, trusted, emitter } from '../testing/nativeFake';
+import { attempts, reset, trusted } from '../testing/nativeFake';
 import type { ConnectionStatus } from './rpc';
 
 const store = vi.hoisted(() => new Map<string, string>());
@@ -48,7 +48,7 @@ vi.mock('./lanDiscovery', async () => ({
 }));
 
 const { OstiaRpc } = await import('./rpc');
-const { forgetDesktop, getPairingData, loadDesktops, saveRoute, savePairingData } = await import('./storage');
+const { getPairingData, savePairingData } = await import('./storage');
 const { timing } = await import('../model/reconnectPolicy');
 const defaults = { ...timing };
 

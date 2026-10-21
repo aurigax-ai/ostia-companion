@@ -11,12 +11,6 @@ export type Cap = 'read' | 'notify' | 'respond' | 'command' | 'input' | 'destruc
 export type Role = 'observer' | 'owner';
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'revoked';
 
-export interface RpcError {
-  code: number;
-  message: string;
-  data?: any;
-}
-
 export interface AttachResult {
   cursor: number;
   dropped: boolean;
@@ -31,7 +25,7 @@ type StatusListener = (status: ConnectionStatus, reason?: string) => void;
 type CapsListener = (caps: Cap[]) => void;
 type FeaturesListener = () => void;
 
-export type Feature = 'prompt-image';
+type Feature = 'prompt-image';
 const NO_FEATURES: Feature[] = [];
 
 const CLOSE_REVOKED = 4003;
@@ -521,7 +515,7 @@ class OstiaRpcClient {
   }
 }
 
-export function utf16Length(utf8Binary: string): number {
+function utf16Length(utf8Binary: string): number {
   let length = 0;
   for (let i = 0; i < utf8Binary.length; i++) {
     const byte = utf8Binary.charCodeAt(i);

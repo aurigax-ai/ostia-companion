@@ -1,5 +1,5 @@
 const PACKAGE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/;
-export const MAX_BLOCKED = 500;
+const MAX_BLOCKED = 500;
 
 export function parseBlocked(text: string | null): string[] {
   try {

@@ -1,5 +1,5 @@
 export type SessionState = 'idle' | 'working' | 'waiting' | 'done' | 'error';
-export type AgentState = 'working' | 'waiting' | 'done' | 'error';
+type AgentState = 'working' | 'waiting' | 'done' | 'error';
 
 export interface Session {
   sessionId: string;
@@ -48,7 +48,7 @@ export function failedExit(pane: Pane): number | null {
   return pane.lastExitCode;
 }
 
-export type StatusKind = 'waiting' | 'error' | 'running' | 'done' | 'idle';
+type StatusKind = 'waiting' | 'error' | 'running' | 'done' | 'idle';
 
 export interface Status {
   kind: StatusKind;

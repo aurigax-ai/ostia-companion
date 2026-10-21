@@ -2,7 +2,7 @@ import { paneStatus, Pane, Status } from './workspaces';
 
 const BAND: Record<Status['kind'], number> = { waiting: 0, error: 0, running: 1, done: 2, idle: 2 };
 
-export function rankStatus(status: Status): number {
+function rankStatus(status: Status): number {
   return BAND[status.kind];
 }
 

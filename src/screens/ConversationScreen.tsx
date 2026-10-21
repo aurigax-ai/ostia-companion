@@ -8,7 +8,7 @@ import { TurnView } from '../components/ChatBlocks';
 import { ChatComposer } from '../components/ChatComposer';
 import { ComposerTools } from '../components/ComposerTools';
 import { AskSheet } from '../components/AskSheet';
-import { Button, Empty, HeaderTitle, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
+import { Empty, HeaderTitle, Loading, NO_SCROLL_BARS, Sheet, Warning } from '../components/ui';
 import { Block, clipTail, toolTarget, toolVerb, Turn, turnRunning } from '../model/agentStream';
 import { ATTACH_FAILED, imageRefusal } from '../model/attachment';
 import { isPiPane, paneTitle, shortPath } from '../model/workspaces';

@@ -10,7 +10,7 @@ const TURNS = 20;
 
 export type StreamStatus = 'opening' | 'open' | 'terminal' | 'error';
 
-export function streamFailure(err: any, firstOpen: boolean): { status: 'terminal' } | { status: 'error'; text: string } {
+function streamFailure(err: any, firstOpen: boolean): { status: 'terminal' } | { status: 'error'; text: string } {
   if (err?.message === NOT_AN_AGENT && firstOpen) return { status: 'terminal' };
   if (err?.message === NOT_AN_AGENT) return { status: 'error', text: 'This agent is no longer on the desktop.' };
   if (err?.code === METHOD_NOT_FOUND) return { status: 'error', text: "This desktop's Ostia is too old for chat. Open the terminal, or update Ostia on the desktop." };

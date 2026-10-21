@@ -67,7 +67,7 @@ async function postRegistration(server: string, platform: string, token: string,
   }
 }
 
-export async function sync(): Promise<void> {
+async function sync(): Promise<void> {
   const run = ++generation;
   clearRetry();
   const pairing = OstiaRpc.getPairing();

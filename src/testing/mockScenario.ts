@@ -11,7 +11,7 @@ export interface Scenario {
   snippets: MockSnippet[];
 }
 
-export interface MockSnippet {
+interface MockSnippet {
   name: string;
   description?: string;
   command: string;
@@ -212,7 +212,7 @@ export function agentPromptScreen(selected: number, answered: number | null): st
   return `\x1b[2J\x1b[H${lines.join('\r\n')}`;
 }
 
-export function agentTranscriptScreen(): string {
+function agentTranscriptScreen(): string {
   const lines = [`\x1b[33m✻${RESET} Claude Code ${DIM}· ~/Personal/ostia${RESET}`, ''];
   for (let turn = 1; turn <= 14; turn++) {
     lines.push(
@@ -239,7 +239,7 @@ export function agentTranscriptScreen(): string {
 
 export const SHELL_PROMPT = '\x1b]133;A\x07$ \x1b]133;B\x07';
 
-export function ranCommand(command: string, output: string, exitCode: number): string {
+function ranCommand(command: string, output: string, exitCode: number): string {
   return `${SHELL_PROMPT}${command}\r\n\x1b]133;C\x07${output}\x1b]133;D;${exitCode}\x07`;
 }
 

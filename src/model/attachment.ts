@@ -1,4 +1,4 @@
-export type ImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
+type ImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
 
 export interface PromptImage {
   mime: ImageMime;
@@ -6,7 +6,6 @@ export interface PromptImage {
 }
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-export const IMAGE_MIMES: ImageMime[] = ['image/png', 'image/jpeg', 'image/webp'];
 
 const START_SIDE = 2048;
 const MIN_SIDE = 256;

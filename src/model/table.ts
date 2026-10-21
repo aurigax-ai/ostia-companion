@@ -1,7 +1,7 @@
 import Papa from 'papaparse';
 
 export const TABLE_ROW_LIMIT = 1000;
-export const TABLE_COLUMN_LIMIT = 50;
+const TABLE_COLUMN_LIMIT = 50;
 const CHAR_WIDTH = 7.5;
 const CELL_PADDING = 24;
 const MIN_WIDTH = 56;

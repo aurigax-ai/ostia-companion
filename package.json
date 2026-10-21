@@ -53,7 +53,6 @@
   "devDependencies": {
     "@expo/dom-webview": "~57.0.1",
     "@jest/globals": "~29.7.0",
-    "@react-native/metro-config": "0.86.3",
     "@testing-library/react-native": "^14.1.0",
     "@types/node": "^26.6.5",
     "@types/papaparse": "^5.5.2",
