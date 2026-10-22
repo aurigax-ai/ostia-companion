@@ -143,6 +143,14 @@ describe('reconnect order with a relay entry (contract v1.14 §2)', () => {
     expect(urls()).toEqual([at(gw.port)]);
   });
 
+  it('RLY-R5 treats a paired relay hostname as a relay route before hello lists addresses', async () => {
+    const data = { deviceToken: 't', deviceId: 'd', pinnedFingerprint: 'f', desktopName: 'x', privateKey: 'p', publicKey: 'q', gatewayPort: 443 };
+    const { savedRoutes } = await import('../model/rediscovery');
+    const host = 'abcdefghijklmnopqrstuvwxyz.relay.ostia.apogex.dev';
+    expect(savedRoutes({ ...data, gatewayHost: host })).toEqual([{ host, port: 443, kind: 'relay' }]);
+    expect(savedRoutes({ ...data, gatewayHost: '192.168.1.5', addresses: [{ kind: 'relay', host, port: 443 }] }).map((r) => r.host)).toEqual(['192.168.1.5', host]);
+  });
+
   it('RLY-R2 never reaches the relay while a direct address answers', async () => {
     const gw = await desktop();
     OstiaRpc.initialize(await pairedWith(gw, { addresses: [lan(gw.port), relay(DEAD_PORT)] }));

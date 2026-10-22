@@ -1,11 +1,11 @@
 import { isTailnetAddress } from '../services/tailscale';
-import type { DesktopAddress } from './rediscovery';
+import { isRelayHost, type DesktopAddress } from './rediscovery';
 import type { PairingData } from '../services/storage';
 
 const FINGERPRINT_CHARS = 12;
 
 export function routeLabel(host: string, addresses: DesktopAddress[] = []): string {
-  if (addresses.some((address) => address.kind === 'relay' && address.host.toLowerCase() === host.toLowerCase())) return 'Relay';
+  if (isRelayHost(host) || addresses.some((address) => address.kind === 'relay' && address.host.toLowerCase() === host.toLowerCase())) return 'Relay';
   return isTailnetAddress(host) ? 'Tailscale' : 'Local network';
 }
 

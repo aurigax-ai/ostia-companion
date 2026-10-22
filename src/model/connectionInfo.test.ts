@@ -18,6 +18,11 @@ describe('connection info', () => {
     expect(routeLabel('192.168.1.20')).toBe('Local network');
   });
 
+  it('RLY-C1 names a relay host from its label before hello lists any address', () => {
+    expect(routeLabel('abcdefghijklmnopqrstuvwxyz.relay.ostia.apogex.dev')).toBe('Relay');
+    expect(routeLabel('desk.local')).toBe('Local network');
+  });
+
   it('SET-C2 shortens the fingerprint to its first 12 characters', () => {
     expect(shortFingerprint(desktop.pinnedFingerprint)).toBe('ct2Vi9f8LA9T');
   });

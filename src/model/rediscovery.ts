@@ -32,6 +32,12 @@ export function parseAddresses(value: unknown): DesktopAddress[] | null {
   return usable.length === 0 && value.length > 0 ? null : usable;
 }
 
+const RELAY_HOST = /^[a-z2-7]{26}\.[a-z0-9.-]+$/i;
+
+export function isRelayHost(host: string): boolean {
+  return RELAY_HOST.test(host);
+}
+
 function routeKey(route: Route): string {
   return `${route.host.toLowerCase()}:${route.port}`;
 }
@@ -48,7 +54,7 @@ function asRoute({ host, port, kind }: Route): Route {
 export function savedRoutes(desktop: PairingData): Route[] {
   const saved: Route[] = desktop.addresses ?? [];
   const last: Route = { host: desktop.gatewayHost, port: desktop.gatewayPort };
-  const kind = saved.find((route) => routeKey(route) === routeKey(last))?.kind;
+  const kind = saved.find((route) => routeKey(route) === routeKey(last))?.kind ?? (isRelayHost(last.host) ? 'relay' : undefined);
   const routes = distinct([asRoute({ ...last, kind }), ...saved.map(asRoute)]);
   return [...routes.filter((route) => route.kind !== 'relay'), ...routes.filter((route) => route.kind === 'relay')];
 }

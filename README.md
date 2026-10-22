@@ -1,6 +1,6 @@
 # Ostia Companion — Mobile App (Expo / React Native)
 
-The mobile companion app for **Ostia** (a desktop terminal & agent workspace). It allows you to monitor and control your Ostia terminal sessions, answer agent prompts, execute commands, and view a live terminal mirror from your phone (iOS and Android) over your local network or Tailscale.
+The mobile companion app for **Ostia** (a desktop terminal & agent workspace). It allows you to monitor and control your Ostia terminal sessions, answer agent prompts, execute commands, and view a live terminal mirror from your phone (iOS and Android) over your local network, Tailscale, or an opt-in relay server.
 
 ---
 
