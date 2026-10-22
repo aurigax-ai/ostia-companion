@@ -1,5 +1,5 @@
 import { adjectives, nouns } from 'human-id';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { cleanPhoneName, newPhoneIdentity, parsePhoneIdentity } from './phoneIdentity';
 
 const bytes = (...values: number[]) => (n: number) => Uint8Array.from({ length: n }, (_, i) => values[i % values.length]);
@@ -42,5 +42,17 @@ describe('phone identity', () => {
     const emoji = cleanPhoneName('\u{1F600}'.repeat(70)) ?? '';
     expect(Array.from(emoji)).toHaveLength(64);
     expect(() => encodeURIComponent(emoji)).not.toThrow();
+  });
+
+  it('PID-P18 loads and cleans a name when the runtime has no Intl.Segmenter', async () => {
+    vi.stubGlobal('Intl', { ...Intl, Segmenter: undefined });
+    vi.resetModules();
+    try {
+      const fresh = await import('./phoneIdentity');
+      expect(fresh.cleanPhoneName('  kitchen-phone  ')).toBe('kitchen-phone');
+      expect(Array.from(fresh.cleanPhoneName('\u{1F600}'.repeat(70)) ?? '')).toHaveLength(64);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
