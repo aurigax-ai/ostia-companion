@@ -9,11 +9,10 @@ export const PHONE_NAME_MAX = 64;
 
 const INSTALL_ID = /^[0-9a-f]{32}$/;
 const UNSAFE = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
-const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 export function cleanPhoneName(text: unknown): string | null {
   if (typeof text !== 'string' || UNSAFE.test(text)) return null;
-  const kept = Array.from(graphemes.segment(text.trim()), (g) => g.segment).slice(0, PHONE_NAME_MAX);
+  const kept = Array.from(text.trim()).slice(0, PHONE_NAME_MAX);
   return kept.join('').trim() || null;
 }
 
